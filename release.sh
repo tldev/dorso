@@ -148,7 +148,7 @@ echo -e "${GREEN}[1/7] Building app...${NC}"
 
 # Step 2: Code sign with Developer ID
 echo -e "${GREEN}[2/7] Signing app with Developer ID...${NC}"
-codesign --force --options runtime --sign "$DEVELOPER_ID" --timestamp "build/Posturr.app"
+codesign --force --options runtime --entitlements "build/Posturr.entitlements" --sign "$DEVELOPER_ID" --timestamp "build/Posturr.app"
 
 # Verify signature
 echo "Verifying signature..."

@@ -8,7 +8,7 @@ set -e
 # Configuration
 APP_NAME="Posturr"
 BUNDLE_ID="com.posturr.posturr"
-VERSION="1.0.7"
+VERSION="1.0.8"
 MIN_MACOS="13.0"
 
 # Directories
@@ -122,6 +122,19 @@ elif [ -d "$SCRIPT_DIR/Posturr.iconset" ]; then
 else
     echo -e "${YELLOW}Warning: No app icon found. The app will use default icon.${NC}"
 fi
+
+# Create entitlements file (needed for hardened runtime with camera access)
+echo "Creating entitlements..."
+cat > "$BUILD_DIR/Posturr.entitlements" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.device.camera</key>
+    <true/>
+</dict>
+</plist>
+EOF
 
 # Set executable permission
 chmod +x "$MACOS_DIR/$APP_NAME"
