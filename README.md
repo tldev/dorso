@@ -8,6 +8,7 @@ Posturr uses your Mac's camera and Apple's Vision framework to monitor your post
 
 - **Real-time posture detection** - Uses Apple's Vision framework for body pose and face tracking
 - **Progressive screen blur** - Gentle visual reminder that intensifies with worse posture
+- **Menu bar controls** - Easy access to settings, calibration, and status from the menu bar
 - **Multi-display support** - Works across all connected monitors
 - **Privacy-focused** - All processing happens locally on your Mac
 - **Lightweight** - Runs as a background app with minimal resource usage
@@ -42,12 +43,18 @@ If you accidentally denied permission, you can grant it later:
 
 ## Usage
 
-Once launched, Posturr runs in the background. The app:
+Once launched, Posturr appears in your menu bar with a spine icon. The app continuously monitors your posture and applies screen blur when slouching is detected.
 
-- Continuously monitors your posture through the camera
-- Applies screen blur when poor posture is detected
-- Automatically clears the blur when you correct your posture
-- Press **Escape** anywhere to quit the app
+### Menu Bar Controls
+
+Click the menu bar icon to access:
+
+- **Status** - Shows current state (Monitoring, Slouching, Good Posture, etc.)
+- **Enabled** - Toggle posture monitoring on/off
+- **Recalibrate** - Reset your baseline posture (sit up straight, then click)
+- **Sensitivity** - Adjust how sensitive the slouch detection is (Low, Medium, High, Very High)
+- **Dead Zone** - Set the tolerance before blur kicks in (None, Small, Medium, Large)
+- **Quit** - Exit the application (or press **Escape** anywhere)
 
 ### Tips for Best Results
 
@@ -111,7 +118,6 @@ swiftc -O \
 - **No code signing**: Requires manual Gatekeeper bypass on first launch
 - **Camera dependency**: Requires a working camera with adequate lighting
 - **Detection accuracy**: Works best with clear view of upper body/face
-- **No preferences UI**: Currently no graphical settings interface
 
 ## Command Interface
 
