@@ -44,3 +44,4 @@ Posturr.iconset/
 # Release artifacts
 *.zip
 *.dmg
+build-appstore/

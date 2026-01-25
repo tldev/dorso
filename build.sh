@@ -2,14 +2,28 @@
 
 # Posturr Build Script
 # Compiles the app and creates the app bundle
+#
+# Usage:
+#   ./build.sh              # Build with private APIs (GitHub release)
+#   ./build.sh --appstore   # Build for App Store (no private APIs)
+#   ./build.sh --release    # Build with private APIs and create release archive
 
 set -e
 
 # Configuration
 APP_NAME="Posturr"
-BUNDLE_ID="com.posturr.posturr"
+BUNDLE_ID="com.thelazydeveloper.posturr"
 VERSION="1.0.8"
 MIN_MACOS="13.0"
+
+# Check for App Store build flag
+APP_STORE_BUILD=false
+SWIFT_FLAGS=""
+if [[ "$*" == *"--appstore"* ]]; then
+    APP_STORE_BUILD=true
+    SWIFT_FLAGS="-D APP_STORE"
+    echo "Building for App Store (no private APIs)..."
+fi
 
 # Directories
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -44,6 +58,7 @@ echo "Compiling main.swift..."
 swiftc \
     -O \
     -whole-module-optimization \
+    $SWIFT_FLAGS \
     -target arm64-apple-macos$MIN_MACOS \
     -sdk $(xcrun --show-sdk-path) \
     -framework AppKit \
@@ -59,6 +74,7 @@ if [[ $(uname -m) == "arm64" ]]; then
     swiftc \
         -O \
         -whole-module-optimization \
+        $SWIFT_FLAGS \
         -target x86_64-apple-macos$MIN_MACOS \
         -sdk $(xcrun --show-sdk-path) \
         -framework AppKit \
@@ -102,6 +118,8 @@ cat > "$CONTENTS/Info.plist" << EOF
     <string>$MIN_MACOS</string>
     <key>LSUIElement</key>
     <true/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.healthcare-fitness</string>
     <key>NSCameraUsageDescription</key>
     <string>Posturr needs camera access to monitor your posture and blur the screen when you slouch.</string>
     <key>NSHighResolutionCapable</key>
@@ -123,9 +141,25 @@ else
     echo -e "${YELLOW}Warning: No app icon found. The app will use default icon.${NC}"
 fi
 
-# Create entitlements file (needed for hardened runtime with camera access)
+# Create entitlements file
 echo "Creating entitlements..."
-cat > "$BUILD_DIR/Posturr.entitlements" << EOF
+if [ "$APP_STORE_BUILD" = true ]; then
+    # App Store entitlements (requires App Sandbox)
+    cat > "$BUILD_DIR/Posturr.entitlements" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <key>com.apple.security.device.camera</key>
+    <true/>
+</dict>
+</plist>
+EOF
+else
+    # Direct distribution entitlements (hardened runtime, no sandbox)
+    cat > "$BUILD_DIR/Posturr.entitlements" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -135,6 +169,7 @@ cat > "$BUILD_DIR/Posturr.entitlements" << EOF
 </dict>
 </plist>
 EOF
+fi
 
 # Set executable permission
 chmod +x "$MACOS_DIR/$APP_NAME"

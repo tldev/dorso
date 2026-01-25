@@ -4,7 +4,8 @@ import Vision
 import CoreImage
 
 // MARK: - Dynamic Private API Loading
-// Use dlsym for private CoreGraphics APIs to avoid dyld failures on newer macOS versions
+// Private CoreGraphics APIs for enhanced blur effect (not available in App Store builds)
+#if !APP_STORE
 private let cgsMainConnectionID: (@convention(c) () -> UInt32)? = {
     guard let handle = dlopen(nil, RTLD_LAZY) else { return nil }
     guard let sym = dlsym(handle, "CGSMainConnectionID") else { return nil }
@@ -20,6 +21,10 @@ private let cgsSetWindowBackgroundBlurRadius: (@convention(c) (UInt32, UInt32, I
 private var privateAPIsAvailable: Bool {
     return cgsMainConnectionID != nil && cgsSetWindowBackgroundBlurRadius != nil
 }
+#else
+// App Store build: no private APIs available
+private var privateAPIsAvailable: Bool { return false }
+#endif
 
 // MARK: - Calibration View
 class CalibrationView: NSView {
@@ -532,7 +537,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Compatibility Mode
+        #if !APP_STORE
+        // Compatibility Mode (only shown in direct download builds with private API support)
         compatibilityModeMenuItem = NSMenuItem(title: "Compatibility Mode", action: #selector(toggleCompatibilityMode), keyEquivalent: "")
         compatibilityModeMenuItem.target = self
         compatibilityModeMenuItem.state = useCompatibilityMode ? .on : .off
@@ -554,6 +560,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(hintItem)
 
         menu.addItem(NSMenuItem.separator())
+        #endif
 
         // Quit
         let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
@@ -747,6 +754,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         for blurView in blurViews {
             blurView.alphaValue = 0
         }
+        #if !APP_STORE
         for window in windows {
             if let getConnectionID = cgsMainConnectionID,
                let setBlurRadius = cgsSetWindowBackgroundBlurRadius {
@@ -755,6 +763,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             window.backgroundColor = .clear
         }
+        #endif
     }
 
     @objc func quit() {
@@ -796,6 +805,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             currentBlurRadius = max(currentBlurRadius - 3, targetBlurRadius)
         }
 
+        #if APP_STORE
+        // App Store build: always use NSVisualEffectView (public API)
+        let alpha = CGFloat(currentBlurRadius) / 64.0
+        for blurView in blurViews {
+            blurView.alphaValue = alpha
+        }
+        #else
         if useCompatibilityMode {
             // Compatibility mode: use NSVisualEffectView alphaValue (public API)
             let alpha = CGFloat(currentBlurRadius) / 64.0
@@ -816,6 +832,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 blurView.alphaValue = alpha
             }
         }
+        #endif
     }
 
     func setupCamera() {
