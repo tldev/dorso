@@ -442,6 +442,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         checkCameraPermissionAndStart()
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // Show menu dropdown when user Cmd+Tabs to the app
+        if showInAppSwitcher {
+            statusItem.button?.performClick(nil)
+        }
+    }
+
     var cameraSetupComplete = false
     var waitingForPermission = false
 
