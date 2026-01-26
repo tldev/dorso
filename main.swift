@@ -320,6 +320,47 @@ class CalibrationWindowController: NSObject {
     }
 }
 
+// MARK: - Icon Masking
+func applyMacOSIconMask(to image: NSImage) -> NSImage {
+    let size = NSSize(width: 512, height: 512)
+
+    // Create a new image with alpha
+    guard let bitmapRep = NSBitmapImageRep(
+        bitmapDataPlanes: nil,
+        pixelsWide: Int(size.width),
+        pixelsHigh: Int(size.height),
+        bitsPerSample: 8,
+        samplesPerPixel: 4,
+        hasAlpha: true,
+        isPlanar: false,
+        colorSpaceName: .deviceRGB,
+        bytesPerRow: 0,
+        bitsPerPixel: 0
+    ) else { return image }
+
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmapRep)
+
+    // macOS icon corner radius is approximately 22.37% of the icon size
+    let cornerRadius = size.width * 0.2237
+    let rect = NSRect(origin: .zero, size: size)
+
+    // Clear to transparent
+    NSColor.clear.setFill()
+    rect.fill()
+
+    // Clip to rounded rect and draw
+    let path = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
+    path.addClip()
+    image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1.0)
+
+    NSGraphicsContext.restoreGraphicsState()
+
+    let result = NSImage(size: size)
+    result.addRepresentation(bitmapRep)
+    return result
+}
+
 // MARK: - App Delegate
 class AppDelegate: NSObject, NSApplicationDelegate {
     var windows: [NSWindow] = []
@@ -356,6 +397,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var useCompatibilityMode = false
     var blurWhenAway = false
     var blurWhenAwayMenuItem: NSMenuItem!
+    var showInAppSwitcher = false
+    var showInAppSwitcherMenuItem: NSMenuItem!
 
     // Detection state
     var lastDetectionTime = Date()
@@ -381,6 +424,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let frameInterval: TimeInterval = 0.1  // 10fps
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Load app icon for Dock/app switcher (needed when switching to .regular policy)
+        if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
+           let icon = NSImage(contentsOfFile: iconPath) {
+            NSApp.applicationIconImage = applyMacOSIconMask(to: icon)
+        }
+
         setupMenuBar()
         setupOverlayWindows()
 
@@ -547,6 +596,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         blurWhenAwayMenuItem.state = blurWhenAway ? .on : .off
         menu.addItem(blurWhenAwayMenuItem)
 
+        // Show in App Switcher toggle
+        showInAppSwitcherMenuItem = NSMenuItem(title: "Show in App Switcher", action: #selector(toggleShowInAppSwitcher), keyEquivalent: "")
+        showInAppSwitcherMenuItem.target = self
+        showInAppSwitcherMenuItem.state = showInAppSwitcher ? .on : .off
+        menu.addItem(showInAppSwitcherMenuItem)
+
         menu.addItem(NSMenuItem.separator())
 
         #if !APP_STORE
@@ -604,6 +659,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Reset no-detection state when disabled
             consecutiveNoDetectionFrames = 0
         }
+    }
+
+    @objc func toggleShowInAppSwitcher() {
+        showInAppSwitcher.toggle()
+        showInAppSwitcherMenuItem.state = showInAppSwitcher ? .on : .off
+
+        // .regular shows in Cmd+Tab and Dock, .accessory hides from both
+        NSApp.setActivationPolicy(showInAppSwitcher ? .regular : .accessory)
     }
 
     @objc func recalibrate() {
