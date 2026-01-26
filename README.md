@@ -12,6 +12,7 @@ Posturr uses your Mac's camera and Apple's Vision framework to monitor your post
 - **Multi-display support** - Works across all connected monitors
 - **Privacy-focused** - All processing happens locally on your Mac
 - **Lightweight** - Runs as a background app with minimal resource usage
+- **Optional Dock visibility** - Show in Dock and Cmd+Tab app switcher when preferred
 - **No account required** - No signup, no cloud, no tracking
 
 ## Installation
@@ -50,6 +51,7 @@ Click the menu bar icon to access:
 - **Recalibrate** - Reset your baseline posture (sit up straight, then click)
 - **Sensitivity** - Adjust how sensitive the slouch detection is (Low, Medium, High, Very High)
 - **Dead Zone** - Set the tolerance before blur kicks in (None, Small, Medium, Large)
+- **Show in Dock/App Switcher** - Toggle visibility in Dock and Cmd+Tab (auto-opens menu when switching)
 - **Compatibility Mode** - Use public macOS APIs for blur (try this if blur doesn't appear)
 - **Quit** - Exit the application (or press **Escape** anywhere)
 
@@ -154,5 +156,5 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 ### Contributors
 
 - [@wklm](https://github.com/wklm) - Compatibility mode implementation
-- [@cam-br0wn](https://github.com/cam-br0wn) - Architecture-agnostic build improvements
+- [@cam-br0wn](https://github.com/cam-br0wn) - Dock/App Switcher visibility toggle
 - [@einsteinx2](https://github.com/einsteinx2) - SwiftPM/Xcode support
