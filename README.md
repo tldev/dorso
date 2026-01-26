@@ -16,22 +16,18 @@ Posturr uses your Mac's camera and Apple's Vision framework to monitor your post
 
 ## Installation
 
-### Download
+### Homebrew (Recommended)
 
-1. Download the latest `Posturr-vX.X.X.zip` from the [Releases](../../releases) page
-2. Unzip the downloaded file
-3. Drag `Posturr.app` to your Applications folder
+```bash
+brew tap tldev/tap
+brew install --cask posturr
+```
 
-### First Launch (Important)
+### Manual Download
 
-Since Posturr is not signed with an Apple Developer certificate, macOS Gatekeeper will initially block it:
-
-1. **Right-click** (or Control-click) on `Posturr.app`
-2. Select **"Open"** from the context menu
-3. Click **"Open"** in the dialog that appears
-4. Grant **camera access** when prompted
-
-You only need to do this once. After the first launch, you can open Posturr normally.
+1. Download the latest `Posturr-vX.X.X.dmg` or `.zip` from the [Releases](../../releases) page
+2. Open the DMG and drag `Posturr.app` to your Applications folder
+3. Launch normally - no Gatekeeper warnings (app is signed and notarized)
 
 ### Camera Permission
 
@@ -116,7 +112,6 @@ swiftc -O \
 
 ## Known Limitations
 
-- **No code signing**: Requires manual Gatekeeper bypass on first launch
 - **Camera dependency**: Requires a working camera with adequate lighting
 - **Detection accuracy**: Works best with clear view of upper body/face
 
@@ -155,4 +150,9 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 - Built with Apple's Vision framework for body pose detection
 - Uses private CoreGraphics API for blur, with NSVisualEffectView fallback
 - Inspired by the need for better posture during long coding sessions
-- Thanks to [@wklm](https://github.com/wklm) for the compatibility mode implementation
+
+### Contributors
+
+- [@wklm](https://github.com/wklm) - Compatibility mode implementation
+- [@cam-br0wn](https://github.com/cam-br0wn) - Architecture-agnostic build improvements
+- [@einsteinx2](https://github.com/einsteinx2) - SwiftPM/Xcode support

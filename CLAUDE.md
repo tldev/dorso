@@ -46,6 +46,24 @@ EOF
 
 The release notes should describe what changed since the previous version, not generic feature lists.
 
+### Update Homebrew Cask
+After each GitHub release, update the Homebrew tap at https://github.com/tldev/homebrew-tap:
+
+```bash
+# Get the SHA256 of the new release ZIP
+gh release view vX.Y.Z --repo tldev/posturr --json assets --jq '.assets[] | select(.name | endswith(".zip")) | .digest'
+
+# Clone, update, and push
+cd /tmp && rm -rf homebrew-tap && gh repo clone tldev/homebrew-tap
+cd homebrew-tap
+
+# Edit Casks/posturr.rb - update version and sha256
+# version "X.Y.Z"
+# sha256 "<new-sha256-without-sha256:-prefix>"
+
+git add . && git commit -m "Update Posturr to vX.Y.Z" && git push
+```
+
 ### App Store Release
 For App Store submissions, run these steps after the GitHub release:
 
