@@ -802,8 +802,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         blurWhenAwayMenuItem.state = blurWhenAway ? .on : .off
         menu.addItem(blurWhenAwayMenuItem)
 
-        // Show in App Switcher toggle
-        showInAppSwitcherMenuItem = NSMenuItem(title: "Show in App Switcher", action: #selector(toggleShowInAppSwitcher), keyEquivalent: "")
+        // Show in Dock/App Switcher toggle
+        showInAppSwitcherMenuItem = NSMenuItem(title: "Show in Dock/App Switcher", action: #selector(toggleShowInAppSwitcher), keyEquivalent: "")
         showInAppSwitcherMenuItem.target = self
         showInAppSwitcherMenuItem.state = showInAppSwitcher ? .on : .off
         menu.addItem(showInAppSwitcherMenuItem)
