@@ -91,7 +91,7 @@ The screen blur uses macOS's private CoreGraphics API by default for efficient, 
 ### Build
 
 ```bash
-git clone https://github.com/yourusername/posturr.git
+git clone https://github.com/tldev/posturr.git
 cd posturr
 ./build.sh
 ```
