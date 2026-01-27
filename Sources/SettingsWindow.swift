@@ -151,6 +151,8 @@ struct SettingsView: View {
     @State private var warningMode: WarningMode = .blur
     @State private var warningColor: Color = Color(WarningDefaults.color)
     @State private var warningOnsetDelay: Double = 0.0
+    @State private var useReducedResolution: Bool = false
+    @State private var useReducedFrameRate: Bool = false
 
     let intensityValues: [Double] = [0.08, 0.15, 0.35, 0.65, 1.2]
     let intensityLabels = ["Gentle", "Easy", "Medium", "Firm", "Aggressive"]
@@ -354,6 +356,33 @@ struct SettingsView: View {
                 }
                 #endif
 
+                GroupBox("Experimental") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SettingToggle(
+                            title: "Reduced resolution",
+                            isOn: $useReducedResolution,
+                            helpText: "Uses 352x288 instead of default resolution. Reduces CPU usage but may affect detection accuracy."
+                        )
+                        .onChange(of: useReducedResolution) { newValue in
+                            appDelegate.useReducedResolution = newValue
+                            appDelegate.saveSettings()
+                            appDelegate.applyResolutionSetting()
+                        }
+
+                        Divider()
+
+                        SettingToggle(
+                            title: "Reduced frame rate",
+                            isOn: $useReducedFrameRate,
+                            helpText: "Processes 4 frames/sec instead of 10. Reduces CPU usage but may affect detection responsiveness."
+                        )
+                        .onChange(of: useReducedFrameRate) { newValue in
+                            appDelegate.useReducedFrameRate = newValue
+                            appDelegate.saveSettings()
+                        }
+                    }
+                }
+
                 Spacer()
             }
             .frame(width: 280)
@@ -371,6 +400,8 @@ struct SettingsView: View {
         showInDock = appDelegate.showInDock
         pauseOnTheGo = appDelegate.pauseOnTheGo
         useCompatibilityMode = appDelegate.useCompatibilityMode
+        useReducedResolution = appDelegate.useReducedResolution
+        useReducedFrameRate = appDelegate.useReducedFrameRate
         warningMode = appDelegate.warningMode
         warningColor = Color(appDelegate.warningColor)
         warningOnsetDelay = appDelegate.warningOnsetDelay

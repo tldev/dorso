@@ -81,6 +81,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var blurWhenAway = false
     var showInDock = false
     var pauseOnTheGo = false
+    var useReducedResolution = false
+    var useReducedFrameRate = false
     var settingsWindowController = SettingsWindowController()
     var analyticsWindowController: AnalyticsWindowController?
 
@@ -119,7 +121,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Frame throttling
     var lastFrameTime: Date = .distantPast
-    let frameInterval: TimeInterval = 0.1
+    var frameInterval: TimeInterval { useReducedFrameRate ? 0.25 : 0.1 }
 
     var cameraSetupComplete = false
     var waitingForPermission = false
@@ -456,6 +458,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         state = .paused(.noProfile)
     }
 
+    func applyResolutionSetting() {
+        guard let session = captureSession else { return }
+        let newPreset: AVCaptureSession.Preset = useReducedResolution ? .cif352x288 : .low
+
+        if session.canSetSessionPreset(newPreset) {
+            session.beginConfiguration()
+            session.sessionPreset = newPreset
+            session.commitConfiguration()
+        }
+    }
+
     private func switchCameraInput() {
         let wasRunning = captureSession?.isRunning ?? false
         print("[Camera] switchCameraInput called, wasRunning=\(wasRunning), selectedCameraID=\(selectedCameraID ?? "nil")")
@@ -518,7 +531,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func setupCamera() {
         captureSession = AVCaptureSession()
-        captureSession?.sessionPreset = .low
+        captureSession?.sessionPreset = useReducedResolution ? .cif352x288 : .low
 
         let cameras = getAvailableCameras()
         let camera: AVCaptureDevice?
@@ -769,6 +782,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         defaults.set(blurWhenAway, forKey: SettingsKeys.blurWhenAway)
         defaults.set(showInDock, forKey: SettingsKeys.showInDock)
         defaults.set(pauseOnTheGo, forKey: SettingsKeys.pauseOnTheGo)
+        defaults.set(useReducedResolution, forKey: SettingsKeys.useReducedResolution)
+        defaults.set(useReducedFrameRate, forKey: SettingsKeys.useReducedFrameRate)
         defaults.set(warningMode.rawValue, forKey: SettingsKeys.warningMode)
         defaults.set(warningOnsetDelay, forKey: SettingsKeys.warningOnsetDelay)
         if let colorData = try? NSKeyedArchiver.archivedData(withRootObject: warningColor, requiringSecureCoding: false) {
@@ -792,6 +807,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         blurWhenAway = defaults.bool(forKey: SettingsKeys.blurWhenAway)
         showInDock = defaults.bool(forKey: SettingsKeys.showInDock)
         pauseOnTheGo = defaults.bool(forKey: SettingsKeys.pauseOnTheGo)
+        useReducedResolution = defaults.bool(forKey: SettingsKeys.useReducedResolution)
+        useReducedFrameRate = defaults.bool(forKey: SettingsKeys.useReducedFrameRate)
         selectedCameraID = defaults.string(forKey: SettingsKeys.lastCameraID)
         if let modeString = defaults.string(forKey: SettingsKeys.warningMode),
            let mode = WarningMode(rawValue: modeString) {

@@ -29,6 +29,8 @@ enum SettingsKeys {
     static let warningMode = "warningMode"
     static let warningColor = "warningColor"
     static let warningOnsetDelay = "blurOnsetDelay"  // Keep key for backward compatibility
+    static let useReducedResolution = "useReducedResolution"
+    static let useReducedFrameRate = "useReducedFrameRate"
 }
 
 // MARK: - Profile Data
