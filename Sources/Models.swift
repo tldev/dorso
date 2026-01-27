@@ -15,6 +15,15 @@ enum WarningMode: String, CaseIterable {
     case vignette = "vignette"
     case border = "border"
     case none = "none"
+
+    /// Whether this mode uses the WarningOverlayManager for posture warnings.
+    /// Vignette and border use the overlay system; blur and none do not.
+    var usesWarningOverlay: Bool {
+        switch self {
+        case .vignette, .border: return true
+        case .blur, .none: return false
+        }
+    }
 }
 
 // MARK: - Settings Keys

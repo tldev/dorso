@@ -321,10 +321,8 @@ class WarningOverlayManager {
                 let view = BorderOverlayView(frame: NSRect(origin: .zero, size: frame.size))
                 view.warningColor = warningColor
                 overlayView = view
-            case .blur:
-                // Blur is handled separately in AppDelegate
-                overlayView = NSView(frame: NSRect(origin: .zero, size: frame.size))
-            case .none:
+            case .blur, .none:
+                // Blur is handled separately in AppDelegate, none has no visual
                 overlayView = NSView(frame: NSRect(origin: .zero, size: frame.size))
             }
 

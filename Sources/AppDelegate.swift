@@ -246,7 +246,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupMenuBar()
         setupOverlayWindows()
-        if warningMode != .blur && warningMode != .none {
+        if warningMode.usesWarningOverlay {
             warningOverlayManager.mode = warningMode
             warningOverlayManager.warningColor = warningColor
             warningOverlayManager.setupOverlayWindows()
@@ -965,7 +965,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         blurViews.removeAll()
         setupOverlayWindows()
 
-        if warningMode != .blur && warningMode != .none {
+        if warningMode.usesWarningOverlay {
             warningOverlayManager.rebuildOverlayWindows()
         }
     }
@@ -1015,7 +1015,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Set new mode and rebuild if needed
         warningMode = newMode
-        if warningMode != .blur && warningMode != .none {
+        if warningMode.usesWarningOverlay {
             warningOverlayManager.mode = warningMode
             warningOverlayManager.warningColor = warningColor
             warningOverlayManager.setupOverlayWindows()
@@ -1028,40 +1028,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func updateBlur() {
-        if warningMode == .none {
-            postureWarningIntensity = 0
-            if currentBlurRadius != 0 || targetBlurRadius != 0 {
-                clearBlur()
-            } else {
-                for blurView in blurViews {
-                    blurView.alphaValue = 0
-                }
-            }
-            warningOverlayManager.targetIntensity = 0
-            warningOverlayManager.updateWarning()
-            return
-        }
-
         // Two independent concerns:
         // 1. Privacy blur: full blur when away (always uses blur overlay)
-        // 2. Posture warning: user's chosen style (blur/vignette/border)
+        // 2. Posture warning: user's chosen style (blur/vignette/border/none)
 
         let privacyBlurIntensity: CGFloat = isCurrentlyAway ? 1.0 : 0.0
 
-        // Compute target blur radius from both sources
-        if warningMode == .blur {
+        // Compute target blur radius and warning overlay intensity based on mode
+        switch warningMode {
+        case .blur:
             // Both privacy and posture use blur - take the higher value
             let combinedIntensity = max(privacyBlurIntensity, postureWarningIntensity)
             targetBlurRadius = Int32(combinedIntensity * 64)
-            // Ensure warning overlay is cleared
             warningOverlayManager.targetIntensity = 0
-            warningOverlayManager.updateWarning()
-        } else {
-            // Privacy uses blur, posture uses vignette/border
+        case .none:
+            // Only privacy blur, no posture warning visual
+            targetBlurRadius = Int32(privacyBlurIntensity * 64)
+            warningOverlayManager.targetIntensity = 0
+        case .vignette, .border:
+            // Privacy uses blur, posture uses vignette/border overlay
             targetBlurRadius = Int32(privacyBlurIntensity * 64)
             warningOverlayManager.targetIntensity = postureWarningIntensity
-            warningOverlayManager.updateWarning()
         }
+        warningOverlayManager.updateWarning()
 
         // Animate blur toward target
         if currentBlurRadius < targetBlurRadius {
