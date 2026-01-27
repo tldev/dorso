@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ServiceManagement
 
 // MARK: - Settings Window Controller
 
@@ -152,6 +153,7 @@ struct SettingsView: View {
     @State private var warningMode: WarningMode = .blur
     @State private var warningColor: Color = Color(WarningDefaults.color)
     @State private var warningOnsetDelay: Double = 0.0
+    @State private var launchAtLogin: Bool = false
 
     let intensityValues: [Double] = [0.08, 0.15, 0.35, 0.65, 1.2]
     let intensityLabels = ["Gentle", "Easy", "Medium", "Firm", "Aggressive"]
@@ -349,6 +351,27 @@ struct SettingsView: View {
                                 appDelegate.state = .monitoring
                             }
                         }
+
+                        Divider()
+
+                        SettingToggle(
+                            title: "Launch at login",
+                            isOn: $launchAtLogin,
+                            helpText: "Automatically start Posturr when you log in to your Mac"
+                        )
+                        .onChange(of: launchAtLogin) { newValue in
+                            do {
+                                if newValue {
+                                    try SMAppService.mainApp.register()
+                                } else {
+                                    try SMAppService.mainApp.unregister()
+                                }
+                            } catch {
+                                print("Failed to toggle launch at login: \(error)")
+                                // Revert toggle if operation failed
+                                launchAtLogin = SMAppService.mainApp.status == .enabled
+                            }
+                        }
                     }
                 }
 
@@ -400,5 +423,8 @@ struct SettingsView: View {
         let cameras = appDelegate.getAvailableCameras()
         availableCameras = cameras.map { (id: $0.uniqueID, name: $0.localizedName) }
         selectedCameraID = appDelegate.selectedCameraID ?? cameras.first?.uniqueID ?? ""
+
+        // Load launch at login state from system
+        launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 }
