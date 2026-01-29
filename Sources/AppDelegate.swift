@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Vision
+import Carbon.HIToolbox
 
 // MARK: - Icon Masking Utility
 
@@ -121,6 +122,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Blur onset delay
     var warningOnsetDelay: Double = 0.0
     var badPostureStartTime: Date?
+
+    // Global keyboard shortcut (Carbon API)
+    var toggleShortcutEnabled = true
+    var toggleShortcut = KeyboardShortcut.defaultShortcut
+    var carbonHotKeyRef: EventHotKeyRef?
+    var carbonEventHandler: EventHandlerRef?
 
     // Frame throttling
     var lastFrameTime: Date = .distantPast
@@ -256,6 +263,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         registerCameraChangeNotifications()
         registerScreenLockNotifications()
 
+        registerGlobalHotKey()
+
         Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
             self?.updateBlur()
         }
@@ -286,9 +295,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        enabledMenuItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "e")
+        enabledMenuItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
         enabledMenuItem.target = self
         enabledMenuItem.state = .on
+        updateEnabledMenuItemShortcut()
         menu.addItem(enabledMenuItem)
 
         recalibrateMenuItem = NSMenuItem(title: "Recalibrate", action: #selector(recalibrate), keyEquivalent: "r")
@@ -684,6 +694,99 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - Global Keyboard Shortcut (Carbon API)
+
+    func registerGlobalHotKey() {
+        // Unregister existing hotkey if any
+        unregisterGlobalHotKey()
+
+        guard toggleShortcutEnabled else { return }
+
+        // Convert NSEvent modifier flags to Carbon modifiers
+        let carbonModifiers = carbonModifiersFromNSEvent(toggleShortcut.modifiers)
+
+        // Create hotkey ID
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = OSType(0x504F5354)  // 'POST' for Posturr
+        hotKeyID.id = 1
+
+        // Install event handler if not already installed
+        if carbonEventHandler == nil {
+            var eventType = EventTypeSpec(
+                eventClass: OSType(kEventClassKeyboard),
+                eventKind: UInt32(kEventHotKeyPressed)
+            )
+
+            let status = InstallEventHandler(
+                GetApplicationEventTarget(),
+                { (_, event, _) -> OSStatus in
+                    // Get the AppDelegate and call toggleEnabled
+                    if let appDelegate = NSApp.delegate as? AppDelegate {
+                        DispatchQueue.main.async {
+                            appDelegate.toggleEnabled()
+                        }
+                    }
+                    return noErr
+                },
+                1,
+                &eventType,
+                nil,
+                &(NSApp.delegate as! AppDelegate).carbonEventHandler
+            )
+
+            if status != noErr {
+                print("[Shortcut] Failed to install event handler: \(status)")
+                return
+            }
+        }
+
+        // Register the hotkey
+        let status = RegisterEventHotKey(
+            UInt32(toggleShortcut.keyCode),
+            carbonModifiers,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &carbonHotKeyRef
+        )
+
+        if status != noErr {
+            print("[Shortcut] Failed to register hotkey: \(status)")
+        }
+    }
+
+    func unregisterGlobalHotKey() {
+        if let hotKeyRef = carbonHotKeyRef {
+            UnregisterEventHotKey(hotKeyRef)
+            carbonHotKeyRef = nil
+        }
+    }
+
+    func carbonModifiersFromNSEvent(_ flags: NSEvent.ModifierFlags) -> UInt32 {
+        var carbonMods: UInt32 = 0
+        if flags.contains(.command) { carbonMods |= UInt32(cmdKey) }
+        if flags.contains(.option) { carbonMods |= UInt32(optionKey) }
+        if flags.contains(.control) { carbonMods |= UInt32(controlKey) }
+        if flags.contains(.shift) { carbonMods |= UInt32(shiftKey) }
+        return carbonMods
+    }
+
+    func updateGlobalKeyMonitor() {
+        registerGlobalHotKey()
+        updateEnabledMenuItemShortcut()
+    }
+
+    func updateEnabledMenuItemShortcut() {
+        guard let menuItem = enabledMenuItem else { return }
+
+        if toggleShortcutEnabled {
+            // Show shortcut hint in the menu item title
+            menuItem.title = "Enabled (\(toggleShortcut.displayString))"
+        } else {
+            menuItem.title = "Enabled"
+        }
+    }
+
     // MARK: - Calibration
 
     func startCalibration() {
@@ -771,6 +874,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         defaults.set(pauseOnTheGo, forKey: SettingsKeys.pauseOnTheGo)
         defaults.set(warningMode.rawValue, forKey: SettingsKeys.warningMode)
         defaults.set(warningOnsetDelay, forKey: SettingsKeys.warningOnsetDelay)
+        defaults.set(toggleShortcutEnabled, forKey: SettingsKeys.toggleShortcutEnabled)
+        defaults.set(Int(toggleShortcut.keyCode), forKey: SettingsKeys.toggleShortcutKeyCode)
+        defaults.set(Int(toggleShortcut.modifiers.rawValue), forKey: SettingsKeys.toggleShortcutModifiers)
         if let colorData = try? NSKeyedArchiver.archivedData(withRootObject: warningColor, requiringSecureCoding: false) {
             defaults.set(colorData, forKey: SettingsKeys.warningColor)
         }
@@ -803,6 +909,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if defaults.object(forKey: SettingsKeys.warningOnsetDelay) != nil {
             warningOnsetDelay = defaults.double(forKey: SettingsKeys.warningOnsetDelay)
+        }
+        // Shortcut settings - default to enabled if not set
+        if defaults.object(forKey: SettingsKeys.toggleShortcutEnabled) != nil {
+            toggleShortcutEnabled = defaults.bool(forKey: SettingsKeys.toggleShortcutEnabled)
+        }
+        if defaults.object(forKey: SettingsKeys.toggleShortcutKeyCode) != nil {
+            let keyCode = UInt16(defaults.integer(forKey: SettingsKeys.toggleShortcutKeyCode))
+            let modifiers = NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: SettingsKeys.toggleShortcutModifiers)))
+            toggleShortcut = KeyboardShortcut(keyCode: keyCode, modifiers: modifiers)
         }
     }
 

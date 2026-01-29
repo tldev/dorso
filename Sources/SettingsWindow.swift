@@ -269,6 +269,8 @@ struct SettingsView: View {
     @State private var warningColor: Color = Color(WarningDefaults.color)
     @State private var warningOnsetDelay: Double = 0.0
     @State private var launchAtLogin: Bool = false
+    @State private var toggleShortcutEnabled: Bool = true
+    @State private var toggleShortcut: KeyboardShortcut = .defaultShortcut
 
     let intensityValues: [Double] = [0.08, 0.15, 0.35, 0.65, 1.2]
     let intensityLabels = ["Gentle", "Easy", "Medium", "Firm", "Aggressive"]
@@ -518,6 +520,19 @@ struct SettingsView: View {
                                         appDelegate.state = .monitoring
                                     }
                                 }
+
+                                SubtleDivider()
+
+                                ShortcutRecorderView(
+                                    shortcut: $toggleShortcut,
+                                    isEnabled: $toggleShortcutEnabled,
+                                    onShortcutChange: {
+                                        appDelegate.toggleShortcutEnabled = toggleShortcutEnabled
+                                        appDelegate.toggleShortcut = toggleShortcut
+                                        appDelegate.saveSettings()
+                                        appDelegate.updateGlobalKeyMonitor()
+                                    }
+                                )
                             }
                         }
 
@@ -568,7 +583,7 @@ struct SettingsView: View {
 
             }
         .padding(24)
-        .frame(width: 640)
+        .frame(width: 720)
         .fixedSize(horizontal: false, vertical: true)
         .onAppear {
             loadFromAppDelegate()
@@ -585,6 +600,8 @@ struct SettingsView: View {
         warningMode = appDelegate.warningMode
         warningColor = Color(appDelegate.warningColor)
         warningOnsetDelay = appDelegate.warningOnsetDelay
+        toggleShortcutEnabled = appDelegate.toggleShortcutEnabled
+        toggleShortcut = appDelegate.toggleShortcut
 
         // Set slider indices based on loaded values
         intensitySlider = Double(intensityValues.firstIndex(of: intensity) ?? 2)
@@ -786,6 +803,99 @@ struct HelpButton: View {
                 .font(.system(size: 12))
                 .padding(12)
                 .frame(width: 220)
+        }
+    }
+}
+
+// MARK: - Shortcut Recorder View
+
+struct ShortcutRecorderView: View {
+    @Binding var shortcut: KeyboardShortcut
+    @Binding var isEnabled: Bool
+    var onShortcutChange: () -> Void
+
+    @State private var isRecording = false
+    @State private var localMonitor: Any?
+
+    var body: some View {
+        HStack {
+            Text("Shortcut")
+                .font(.system(size: 13))
+
+            HelpButton(text: "Global keyboard shortcut to quickly enable or disable Posturr from anywhere. Click the shortcut field and press your desired key combination.")
+
+            Spacer()
+
+            Toggle("", isOn: $isEnabled)
+                .toggleStyle(.switch)
+                .tint(.brandCyan)
+                .labelsHidden()
+                .onChange(of: isEnabled) { _ in
+                    onShortcutChange()
+                }
+
+            Button(action: {
+                isRecording.toggle()
+                if isRecording {
+                    startRecording()
+                } else {
+                    stopRecording()
+                }
+            }) {
+                Text(isRecording ? "Press keys..." : shortcut.displayString)
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(isRecording ? .secondary : (isEnabled ? .primary : .secondary))
+                    .lineLimit(1)
+                    .frame(minWidth: 90)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(isRecording ? Color.brandCyan.opacity(0.15) : Color.primary.opacity(0.06))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(isRecording ? Color.brandCyan : Color.primary.opacity(0.1), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!isEnabled)
+            .opacity(isEnabled ? 1.0 : 0.5)
+        }
+        .onDisappear {
+            stopRecording()
+        }
+    }
+
+    private func startRecording() {
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Ignore modifier-only keys
+            let modifierKeyCodes: Set<UInt16> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]  // Cmd, Shift, Ctrl, Option, Fn, etc.
+            if modifierKeyCodes.contains(event.keyCode) {
+                return event
+            }
+
+            // Require at least one modifier
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let hasModifier = modifiers.contains(.command) || modifiers.contains(.control) ||
+                             modifiers.contains(.option) || modifiers.contains(.shift)
+
+            if hasModifier {
+                shortcut = KeyboardShortcut(keyCode: event.keyCode, modifiers: modifiers)
+                stopRecording()
+                onShortcutChange()
+                return nil  // Consume the event
+            }
+
+            return event
+        }
+    }
+
+    private func stopRecording() {
+        isRecording = false
+        if let monitor = localMonitor {
+            NSEvent.removeMonitor(monitor)
+            localMonitor = nil
         }
     }
 }
