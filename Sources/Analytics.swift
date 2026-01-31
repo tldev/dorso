@@ -42,6 +42,7 @@ class AnalyticsManager: ObservableObject {
         // Ensure directory exists
         try? fileManager.createDirectory(at: appDir, withIntermediateDirectories: true)
         self.fileURL = appDir.appendingPathComponent("analytics.json")
+        print("[Analytics] Initializing. Storage: \(fileURL.path)")
         
         // Initialize with default
         let today = Date()
@@ -143,7 +144,9 @@ class AnalyticsManager: ObservableObject {
             let data = try JSONEncoder().encode(history)
             try data.write(to: fileURL)
             hasUnsavedChanges = false
+            print("[Analytics] History saved")
         } catch {
+            print("[Analytics] Failed to save history: \(error)")
         }
     }
     
@@ -158,7 +161,9 @@ class AnalyticsManager: ObservableObject {
             if let existingToday = history[todayString] {
                 todayStats = existingToday
             }
+            print("[Analytics] Loaded history: \(history.count) days recorded")
         } catch {
+            print("[Analytics] Failed to load history: \(error)")
         }
     }
 }
