@@ -121,18 +121,13 @@ struct ProfileData: Codable {
     let cameraID: String
 }
 
-struct AirPodsProfile: Codable {
-    let pitch: Double
-    let roll: Double
-    let yaw: Double
-}
-
 // MARK: - Pause Reason
 enum PauseReason: Equatable {
     case noProfile
     case onTheGo
     case cameraDisconnected
     case screenLocked
+    case airPodsRemoved
 }
 
 // MARK: - App State
@@ -150,15 +145,3 @@ enum AppState: Equatable {
     }
 }
 
-// MARK: - Tracking Source
-enum TrackingSource: String, Codable, CaseIterable {
-    case camera = "Camera"
-    case airpods = "AirPods"
-    
-    var displayName: String {
-        switch self {
-        case .camera: return "Camera"
-        case .airpods: return "AirPods"
-        }
-    }
-}

@@ -148,6 +148,31 @@ pkill -x Posturr; rm -rf /Applications/Posturr.app && cp -r build/Posturr.app /A
 
 This prevents file locking issues and permission errors from code signing.
 
+## Clearing Settings (Reset to Onboarding)
+
+To reset the app and trigger the onboarding flow again:
+```bash
+pkill -x Posturr
+rm -f ~/Library/Preferences/com.thelazydeveloper.posturr.plist
+killall cfprefsd
+```
+
+Note: The bundle ID is `com.thelazydeveloper.posturr`, NOT `com.posturr`.
+
+## Start Fresh (Rebuild + Reset + Launch)
+
+To rebuild, reinstall, clear settings and permissions, and launch the app:
+```bash
+pkill -x Posturr; ./build.sh && rm -rf /Applications/Posturr.app && cp -r build/Posturr.app /Applications/ && rm -f ~/Library/Preferences/com.thelazydeveloper.posturr.plist && killall cfprefsd 2>/dev/null && tccutil reset Camera com.thelazydeveloper.posturr 2>/dev/null && tccutil reset Motion com.thelazydeveloper.posturr 2>/dev/null && tccutil reset Bluetooth com.thelazydeveloper.posturr 2>/dev/null; open /Applications/Posturr.app
+```
+
+## Code Quality Rules
+
+**NEVER use delays/timeouts to solve timing problems.** They are hacks that hide the real issue. Instead:
+- Fix the actual sequencing/state management
+- Use proper callbacks or completion handlers
+- Wait for actual events, not arbitrary time periods
+
 ## Workflow for Bug Fixes and Features
 
 **IMPORTANT: Never commit or push until the user explicitly asks you to.** After making changes:

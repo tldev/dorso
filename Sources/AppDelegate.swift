@@ -2,6 +2,9 @@ import AppKit
 import AVFoundation
 import Vision
 import Carbon.HIToolbox
+import os.log
+
+private let log = OSLog(subsystem: "com.posturr", category: "AppDelegate")
 
 // MARK: - Icon Masking Utility
 
@@ -61,44 +64,61 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var warningMode: WarningMode = .blur
     var warningColor: NSColor = WarningDefaults.color
 
-    // Camera
-    var captureSession: AVCaptureSession?
-    var videoOutput: AVCaptureVideoDataOutput?
-    let captureQueue = DispatchQueue(label: "capture.queue")
-    var selectedCameraID: String?
+    // MARK: - Posture Detectors
+
+    let cameraDetector = CameraPostureDetector()
+    let airPodsDetector = AirPodsPostureDetector()
+
+    var trackingSource: TrackingSource = .camera {
+        didSet {
+            if oldValue != trackingSource {
+                syncDetectorToState()
+            }
+        }
+    }
+
+    var activeDetector: PostureDetector {
+        trackingSource == .camera ? cameraDetector : airPodsDetector
+    }
+
+    // Calibration data storage
+    var cameraCalibration: CameraCalibrationData?
+    var airPodsCalibration: AirPodsCalibrationData?
+
+    var currentCalibration: CalibrationData? {
+        trackingSource == .camera ? cameraCalibration : airPodsCalibration
+    }
+
+    // Legacy camera ID accessor for settings
+    var selectedCameraID: String? {
+        get { cameraDetector.selectedCameraID }
+        set { cameraDetector.selectedCameraID = newValue }
+    }
 
     // Calibration
     var calibrationController: CalibrationWindowController?
-    var isCalibrated = false
-    var goodPostureY: CGFloat = 0.6
-    var badPostureY: CGFloat = 0.4
-    var neutralY: CGFloat = 0.5
-    var postureRange: CGFloat = 0.2
+    var isCalibrated: Bool {
+        currentCalibration?.isValid ?? false
+    }
 
     // Settings
     var intensity: CGFloat = 1.0
     var deadZone: CGFloat = 0.03
     var useCompatibilityMode = false
-    var blurWhenAway = false
+    var blurWhenAway = false {
+        didSet {
+            cameraDetector.blurWhenAway = blurWhenAway
+            if !blurWhenAway {
+                handleAwayStateChange(false)
+            }
+        }
+    }
     var showInDock = false
     var pauseOnTheGo = false
     var detectionMode: DetectionMode = .balanced
     var settingsWindowController = SettingsWindowController()
     var analyticsWindowController: AnalyticsWindowController?
-
-    // Tracking Source (Camera or AirPods)
-    var trackingSource: TrackingSource = .camera {
-        didSet {
-            syncCameraToState()
-            syncAirPodsToState()
-            
-            DispatchQueue.main.async { [weak self] in
-                 self?.updateTrackingMenu()
-            }
-        }
-    }
-    var headphoneMotionManager = HeadphoneMotionManager()
-    var airPodsProfile: AirPodsProfile?
+    var onboardingWindowController: OnboardingWindowController?
 
     // Display management
     var displayDebounceTimer: Timer?
@@ -113,26 +133,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var stateBeforeLock: AppState?
 
     // Detection state
-    var lastDetectionTime = Date()
     var consecutiveBadFrames = 0
     var consecutiveGoodFrames = 0
-    var consecutiveNoDetectionFrames = 0
     let frameThreshold = 8
-    let awayFrameThreshold = 15
-
-    // Smoothing
-    var noseYHistory: [CGFloat] = []
-    let smoothingWindow = 5
-    var smoothedNoseY: CGFloat = 0.5
-    var currentNoseY: CGFloat = 0.5
 
     // Hysteresis
     var isCurrentlySlouching = false
     var isCurrentlyAway = false
 
     // Separate intensities for different concerns (0.0 to 1.0)
-    var postureWarningIntensity: CGFloat = 0  // Posture-based warning
-    // Privacy blur is derived from isCurrentlyAway (always full blur when away)
+    var postureWarningIntensity: CGFloat = 0
 
     // Blur onset delay
     var warningOnsetDelay: Double = 0.0
@@ -145,14 +155,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var carbonEventHandler: EventHandlerRef?
 
     // Frame throttling
-    var lastFrameTime: Date = .distantPast
-    // Use fast polling (10 fps) when slouching for quick recovery detection
     var frameInterval: TimeInterval {
         isCurrentlySlouching ? 0.1 : (1.0 / detectionMode.frameRate)
     }
 
-    var cameraSetupComplete = false
-    var waitingForPermission = false
+    var setupComplete = false
 
     // MARK: - State Machine
 
@@ -168,57 +175,55 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleStateTransition(from oldState: AppState, to newState: AppState) {
-        syncCameraToState()
-        syncAirPodsToState()
+        os_log(.info, log: log, "State transition: %{public}@ -> %{public}@", String(describing: oldState), String(describing: newState))
+        syncDetectorToState()
         if !newState.isActive {
             targetBlurRadius = 0
-            postureWarningIntensity = 0  // Clear any active posture warning
+            postureWarningIntensity = 0
         }
         syncUIToState()
     }
 
-    private func syncAirPodsToState() {
-        let shouldRun: Bool
+    private func syncDetectorToState() {
+        var shouldRun: Bool
         switch state {
         case .calibrating, .monitoring:
-            shouldRun = (trackingSource == .airpods)
+            shouldRun = true
         case .disabled, .paused:
             shouldRun = false
         }
-        
-        if shouldRun {
-            if !headphoneMotionManager.isActive {
-                headphoneMotionManager.startTracking()
+
+        // Special case: Keep AirPods detector running when paused due to removal
+        // so we can detect when they're put back in ears
+        if case .paused(.airPodsRemoved) = state, trackingSource == .airpods {
+            shouldRun = true
+        }
+
+        // Stop the other detector
+        if trackingSource == .camera {
+            if airPodsDetector.isActive {
+                airPodsDetector.stop()
             }
         } else {
-            if headphoneMotionManager.isActive {
-                headphoneMotionManager.stopTracking()
+            if cameraDetector.isActive {
+                cameraDetector.stop()
             }
         }
-    }
 
-    private func syncCameraToState() {
-        let shouldRun: Bool
-        switch state {
-        case .calibrating, .monitoring:
-            shouldRun = (trackingSource == .camera)
-        case .disabled, .paused:
-            shouldRun = false
-        }
-
-
+        // Start/stop the active detector
         if shouldRun {
-            ensureCameraInput()
-
-            if !(captureSession?.isRunning ?? false) {
-                DispatchQueue.global(qos: .userInitiated).async {
-                    self.captureSession?.startRunning()
-                    DispatchQueue.main.async {
+            if !activeDetector.isActive {
+                activeDetector.start { [weak self] success, error in
+                    if !success, let error = error {
+                        os_log(.error, log: log, "Failed to start detector: %{public}@", error)
+                        self?.state = .paused(.cameraDisconnected)
                     }
                 }
             }
-        } else if captureSession?.isRunning ?? false {
-            captureSession?.stopRunning()
+        } else {
+            if activeDetector.isActive {
+                activeDetector.stop()
+            }
         }
     }
 
@@ -248,26 +253,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .onTheGo:
                 statusMenuItem.title = "Status: Paused (on the go - recalibrate)"
             case .cameraDisconnected:
-                statusMenuItem.title = "Status: Camera disconnected"
+                statusMenuItem.title = trackingSource == .camera ? "Status: Camera disconnected" : "Status: AirPods disconnected"
             case .screenLocked:
                 statusMenuItem.title = "Status: Paused (screen locked)"
+            case .airPodsRemoved:
+                statusMenuItem.title = "Status: Paused (put in AirPods)"
             }
             statusItem.button?.image = NSImage(systemSymbolName: "pause.circle", accessibilityDescription: "Paused")
         }
 
         enabledMenuItem.state = (state != .disabled) ? .on : .off
-
-        let cameras = getAvailableCameras()
-        let hasCamera = !cameras.isEmpty && (selectedCameraID == nil || cameras.contains { $0.uniqueID == selectedCameraID })
-        if hasCamera && state != .calibrating {
-            recalibrateMenuItem.title = "Recalibrate"
-            recalibrateMenuItem.action = #selector(recalibrate)
-            recalibrateMenuItem.isEnabled = true
-        } else {
-            recalibrateMenuItem.title = hasCamera ? "Recalibrate" : "Recalibrate (no camera)"
-            recalibrateMenuItem.action = nil
-            recalibrateMenuItem.isEnabled = false
-        }
+        recalibrateMenuItem.isEnabled = state != .calibrating
     }
 
     // MARK: - App Lifecycle
@@ -284,18 +280,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.applicationIconImage = applyMacOSIconMask(to: icon)
         }
 
+        setupDetectors()
         setupMenuBar()
         setupOverlayWindows()
-        setupAirPodsTracking()
+
         if warningMode.usesWarningOverlay {
             warningOverlayManager.mode = warningMode
             warningOverlayManager.warningColor = warningColor
             warningOverlayManager.setupOverlayWindows()
         }
+
         registerDisplayChangeCallback()
         registerCameraChangeNotifications()
         registerScreenLockNotifications()
-
         registerGlobalHotKey()
 
         Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
@@ -308,6 +305,126 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         statusItem.button?.performClick(nil)
         return false
+    }
+
+    // MARK: - Detector Setup
+
+    private func setupDetectors() {
+        // Configure camera detector
+        cameraDetector.blurWhenAway = blurWhenAway
+        cameraDetector.baseFrameInterval = 1.0 / detectionMode.frameRate
+
+        cameraDetector.onPostureReading = { [weak self] reading in
+            self?.handlePostureReading(reading)
+        }
+
+        cameraDetector.onAwayStateChange = { [weak self] isAway in
+            self?.handleAwayStateChange(isAway)
+        }
+
+        // Configure AirPods detector
+        airPodsDetector.onPostureReading = { [weak self] reading in
+            self?.handlePostureReading(reading)
+        }
+
+        airPodsDetector.onConnectionStateChange = { [weak self] isConnected in
+            self?.handleConnectionStateChange(isConnected)
+        }
+    }
+
+    private func handleConnectionStateChange(_ isConnected: Bool) {
+        // Only AirPods uses connection state changes currently
+        guard trackingSource == .airpods else { return }
+
+        if isConnected {
+            // AirPods back in ears - resume if we were paused due to removal
+            if state == .paused(.airPodsRemoved) {
+                os_log(.info, log: log, "AirPods back in ears - resuming monitoring")
+                startMonitoring()
+            }
+        } else {
+            // AirPods removed - pause monitoring
+            if state == .monitoring {
+                os_log(.info, log: log, "AirPods removed - pausing monitoring")
+                state = .paused(.airPodsRemoved)
+                isCurrentlySlouching = false
+                postureWarningIntensity = 0
+                updateBlur()
+                syncUIToState()
+            }
+        }
+    }
+
+    private func handlePostureReading(_ reading: PostureReading) {
+        guard state == .monitoring else { return }
+
+        // Track analytics
+        AnalyticsManager.shared.trackTime(interval: frameInterval, isSlouching: isCurrentlySlouching)
+
+        if reading.isBadPosture {
+            consecutiveBadFrames += 1
+            consecutiveGoodFrames = 0
+
+            if consecutiveBadFrames >= frameThreshold {
+                // Start tracking when bad posture began
+                if badPostureStartTime == nil {
+                    badPostureStartTime = Date()
+                }
+
+                // Check onset delay
+                let elapsedTime = Date().timeIntervalSince(badPostureStartTime!)
+                guard elapsedTime >= warningOnsetDelay else { return }
+
+                // Record slouch event only once when transitioning
+                if !isCurrentlySlouching {
+                    AnalyticsManager.shared.recordSlouchEvent()
+                }
+
+                isCurrentlySlouching = true
+
+                // Adjust severity by intensity setting
+                let adjustedSeverity = pow(reading.severity, 1.0 / Double(intensity))
+                postureWarningIntensity = CGFloat(adjustedSeverity)
+
+                DispatchQueue.main.async {
+                    self.statusMenuItem.title = "Status: Slouching"
+                    self.statusItem.button?.image = NSImage(systemSymbolName: "figure.fall", accessibilityDescription: "Bad Posture")
+                }
+            }
+        } else {
+            consecutiveGoodFrames += 1
+            consecutiveBadFrames = 0
+            badPostureStartTime = nil
+            postureWarningIntensity = 0
+
+            if consecutiveGoodFrames >= 5 {
+                isCurrentlySlouching = false
+                DispatchQueue.main.async {
+                    self.syncUIToState()
+                }
+            }
+        }
+
+        DispatchQueue.main.async {
+            self.updateBlur()
+        }
+    }
+
+    private func handleAwayStateChange(_ isAway: Bool) {
+        guard state == .monitoring else { return }
+
+        isCurrentlyAway = isAway
+
+        if isAway {
+            DispatchQueue.main.async {
+                self.statusMenuItem.title = "Status: Away"
+                self.statusItem.button?.image = NSImage(systemSymbolName: "figure.walk", accessibilityDescription: "Away")
+            }
+        } else {
+            DispatchQueue.main.async {
+                self.syncUIToState()
+            }
+        }
     }
 
     // MARK: - Menu Bar
@@ -338,22 +455,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         recalibrateMenuItem.target = self
         menu.addItem(recalibrateMenuItem)
 
-        // Tracking Mode submenu
-        let trackingMenu = NSMenu()
-        let trackingItem = NSMenuItem(title: "Tracking Mode", action: nil, keyEquivalent: "")
-        trackingItem.submenu = trackingMenu
-        menu.addItem(trackingItem)
-        
-        let cameraItem = NSMenuItem(title: "Camera", action: #selector(setTrackingToCamera), keyEquivalent: "")
-        cameraItem.target = self
-        trackingMenu.addItem(cameraItem)
-        
-        let airpodsItem = NSMenuItem(title: "AirPods", action: #selector(setTrackingToAirPods), keyEquivalent: "")
-        airpodsItem.target = self
-        trackingMenu.addItem(airpodsItem)
-
         menu.addItem(NSMenuItem.separator())
-        
+
         let statsItem = NSMenuItem(title: "Statistics", action: #selector(showAnalytics), keyEquivalent: "s")
         statsItem.target = self
         statsItem.image = NSImage(systemSymbolName: "chart.bar.xaxis", accessibilityDescription: "Statistics")
@@ -370,40 +473,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
-        
-        // Initialize checkmarks
-        updateTrackingMenu()
-    }
-    
-    // Update Tracking Mode menu checkmarks
-    func updateTrackingMenu() {
-        guard let menu = statusItem.menu,
-              let trackingItem = menu.items.first(where: { $0.title == "Tracking Mode" }),
-              let submenu = trackingItem.submenu else { return }
-              
-        if let cameraItem = submenu.items.first(where: { $0.title == "Camera" }) {
-            cameraItem.state = (trackingSource == .camera) ? .on : .off
-        }
-        
-        if let airpodsItem = submenu.items.first(where: { $0.title == "AirPods" }) {
-            airpodsItem.state = (trackingSource == .airpods) ? .on : .off
-        }
     }
 
     // MARK: - Menu Actions
 
     @objc func toggleEnabled() {
         if state == .disabled {
-            // Note: We intentionally don't check pauseOnTheGo here.
-            // "Pause on the go" should only trigger when display config *changes*
-            // to laptop-only (e.g., unplugging external monitor), not when the
-            // user explicitly enables the app via menu or keyboard shortcut.
             if !isCalibrated {
                 state = .paused(.noProfile)
-            } else if !isCameraAvailable() {
+            } else if trackingSource == .camera && !cameraDetector.isAvailable {
+                state = .paused(.cameraDisconnected)
+            } else if trackingSource == .airpods && !airPodsDetector.isAvailable {
                 state = .paused(.cameraDisconnected)
             } else {
-                state = .monitoring
+                startMonitoring()
             }
         } else {
             state = .disabled
@@ -419,7 +502,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if analyticsWindowController == nil {
             analyticsWindowController = AnalyticsWindowController()
         }
-        
         analyticsWindowController?.showWindow(nil)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -428,303 +510,255 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openSettings() {
         settingsWindowController.showSettings(appDelegate: self, fromStatusItem: statusItem)
     }
-    
-    @objc func setTrackingToCamera() {
-        trackingSource = .camera
-        saveSettings()
-        
-        // Ensure camera is setup and running
-        setupCamera()
-        
-        // Restart calibration clearly
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.startCalibration()
-        }
-    }
-    
-    @objc func setTrackingToAirPods() {
-        trackingSource = .airpods
-        saveSettings()
-        
-        // Request permission/data -> Calibrate
-        headphoneMotionManager.startTracking { [weak self] in
-            DispatchQueue.main.async {
-                self?.startCalibration()
-            }
-        }
-    }
 
     @objc func quit() {
-        captureSession?.stopRunning()
+        cameraDetector.stop()
+        airPodsDetector.stop()
         NSApplication.shared.terminate(nil)
     }
 
     // MARK: - Initial Setup Flow
 
     func initialSetupFlow() {
-        // Step 1: Request Camera Permission (for Camera mode)
-        let status = AVCaptureDevice.authorizationStatus(for: .video)
-        
-        if status == .notDetermined {
-            statusMenuItem.title = "Status: Requesting permissions..."
-            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                DispatchQueue.main.async {
-                    self?.setupAndShowModeSelection()
+        guard !setupComplete else { return }
+        setupComplete = true
+
+        // Check if we have existing calibration
+        let configKey = getCurrentConfigKey()
+
+        if trackingSource == .camera {
+            if let profile = loadProfile(forKey: configKey) {
+                let cameras = cameraDetector.getAvailableCameras()
+                if cameras.contains(where: { $0.uniqueID == profile.cameraID }) {
+                    cameraDetector.selectedCameraID = profile.cameraID
+                    cameraCalibration = CameraCalibrationData(
+                        goodPostureY: profile.goodPostureY,
+                        badPostureY: profile.badPostureY,
+                        neutralY: profile.neutralY,
+                        postureRange: profile.postureRange,
+                        cameraID: profile.cameraID
+                    )
+                    startMonitoring()
+                    return
                 }
             }
-        } else {
-            setupAndShowModeSelection()
+        } else if let calibration = airPodsCalibration, calibration.isValid {
+            startMonitoring()
+            return
+        }
+
+        // No valid calibration - show onboarding
+        showOnboarding()
+    }
+
+    func showOnboarding() {
+        onboardingWindowController = OnboardingWindowController()
+        onboardingWindowController?.show(
+            cameraDetector: cameraDetector,
+            airPodsDetector: airPodsDetector
+        ) { [weak self] source, cameraID in
+            guard let self = self else { return }
+
+            self.trackingSource = source
+            if let cameraID = cameraID {
+                self.cameraDetector.selectedCameraID = cameraID
+            }
+            self.saveSettings()
+
+            // Start calibration
+            self.startCalibration()
         }
     }
-    
-    func setupAndShowModeSelection() {
-        guard !cameraSetupComplete else { return }
-        cameraSetupComplete = true
-        
-        let configKey = getCurrentConfigKey()
-        
-        // If profile exists, load it and start monitoring
-        if let profile = loadProfile(forKey: configKey) {
-            let cameras = getAvailableCameras()
-            
-            // Check if profile is valid
-            if cameras.contains(where: { $0.uniqueID == profile.cameraID }) || trackingSource == .airpods {
-                selectedCameraID = profile.cameraID
-                applyProfile(profile)
-                state = .monitoring
-                
-                if trackingSource == .airpods {
-                    headphoneMotionManager.startTracking()
-                } else {
-                    setupCamera()
-                }
-                return
-            } else {
-                state = .paused(.cameraDisconnected)
-                return
-            }
+
+    // MARK: - Tracking Source Management
+
+    func switchTrackingSource(to source: TrackingSource) {
+        guard source != trackingSource else { return }
+
+        // Stop current detector
+        activeDetector.stop()
+
+        trackingSource = source
+        saveSettings()
+
+        // Check if calibration exists for the new source
+        if isCalibrated {
+            // Existing calibration - start monitoring
+            startMonitoring()
+        } else {
+            // No calibration - start calibration flow
+            startCalibration()
         }
-        
-        // No profile -> Show Mode Selection
-        promptForTrackingSource { [weak self] source in
+    }
+
+    // MARK: - Calibration
+
+    func startCalibration() {
+        // Prevent multiple concurrent calibrations (use calibrationController as the lock)
+        guard calibrationController == nil else { return }
+
+        os_log(.info, log: log, "Starting calibration for %{public}@", trackingSource.displayName)
+
+        // Request authorization (this shows permission dialog if needed)
+        activeDetector.requestAuthorization { [weak self] authorized in
             guard let self = self else { return }
-            self.trackingSource = source
-            self.saveSettings()
-            self.updateTrackingMenu()
-            
-            // Start Calibration based on selected mode
-            if source == .camera {
-                self.setupCamera()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self.startCalibration()
-                }
-            } else {
-                // AirPods: Wait for permission/data before calibrating
-                self.headphoneMotionManager.startTracking { [weak self] in
-                    DispatchQueue.main.async {
-                        self?.startCalibration()
+
+            if !authorized {
+                os_log(.error, log: log, "Authorization denied for %{public}@", self.trackingSource.displayName)
+                DispatchQueue.main.async {
+                    // Reset state since we're not proceeding
+                    self.state = self.isCalibrated ? .monitoring : .paused(.noProfile)
+
+                    let alert = NSAlert()
+                    alert.alertStyle = .warning
+                    alert.messageText = "Permission Required"
+                    alert.informativeText = self.trackingSource == .airpods
+                        ? "Motion & Fitness Activity permission is required for AirPods tracking. Please enable it in System Settings > Privacy & Security > Motion & Fitness Activity."
+                        : "Camera permission is required. Please enable it in System Settings > Privacy & Security > Camera."
+                    alert.addButton(withTitle: "Open Settings")
+                    alert.addButton(withTitle: "Cancel")
+                    NSApp.activate(ignoringOtherApps: true)
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy")!)
                     }
                 }
+                return
+            }
+
+            // Authorization granted - now start calibration
+            DispatchQueue.main.async {
+                self.state = .calibrating
+                self.startDetectorAndShowCalibration()
             }
         }
     }
-    
-    func promptForTrackingSource(completion: @escaping (TrackingSource) -> Void) {
-        let alert = NSAlert()
-        alert.messageText = "Select Tracking Method"
-        alert.informativeText = "Choose how you want to track your posture."
-        alert.addButton(withTitle: "Camera")
-        alert.addButton(withTitle: "AirPods")
-        alert.alertStyle = .informational
-        
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            completion(.camera)
-        } else {
-            completion(.airpods)
+
+    private func startDetectorAndShowCalibration() {
+        // Double-check no calibration controller already exists
+        guard calibrationController == nil else {
+            os_log(.info, log: log, "Skipping calibration window - already exists")
+            return
         }
-    }
 
-    func onCameraPermissionGranted() {
-        guard waitingForPermission else { return }
-        waitingForPermission = false
+        activeDetector.start { [weak self] success, error in
+            guard let self = self else { return }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.startCalibration()
-        }
-    }
-
-    func handleCameraDenied() {
-        state = .disabled
-        statusMenuItem.title = "Status: Camera access denied"
-
-        let alert = NSAlert()
-        alert.messageText = "Camera Access Required"
-        alert.informativeText = "Posturr needs camera access to monitor your posture.\n\nPlease enable it in System Settings > Privacy & Security > Camera."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open Settings")
-        alert.addButton(withTitle: "Quit")
-
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") {
-                NSWorkspace.shared.open(url)
+            if !success {
+                os_log(.error, log: log, "Failed to start detector for calibration: %{public}@", error ?? "unknown")
+                DispatchQueue.main.async {
+                    self.state = .paused(.cameraDisconnected)
+                    if self.trackingSource == .camera {
+                        let alert = NSAlert()
+                        alert.alertStyle = .warning
+                        alert.messageText = "Camera Not Available"
+                        alert.informativeText = error ?? "Please make sure your camera is connected and camera access is granted."
+                        alert.addButton(withTitle: "Try Again")
+                        alert.addButton(withTitle: "Cancel")
+                        NSApp.activate(ignoringOtherApps: true)
+                        if alert.runModal() == .alertFirstButtonReturn {
+                            self.startCalibration()
+                        }
+                    }
+                }
+                return
             }
-        } else {
-            NSApplication.shared.terminate(nil)
+
+            DispatchQueue.main.async {
+                self.calibrationController = CalibrationWindowController()
+                self.calibrationController?.start(
+                    detector: self.activeDetector,
+                    onComplete: { [weak self] values in
+                        self?.finishCalibration(values: values)
+                    },
+                    onCancel: { [weak self] in
+                        self?.cancelCalibration()
+                    }
+                )
+            }
         }
     }
 
-    // MARK: - Camera Management
+    func finishCalibration(values: [Any]) {
+        guard values.count >= 4 else {
+            cancelCalibration()
+            return
+        }
+
+        os_log(.info, log: log, "Finishing calibration with %d values", values.count)
+
+        // Create calibration data using the detector
+        guard let calibration = activeDetector.createCalibrationData(from: values) else {
+            cancelCalibration()
+            return
+        }
+
+        // Store calibration
+        if let cameraCalibration = calibration as? CameraCalibrationData {
+            self.cameraCalibration = cameraCalibration
+            // Also save as legacy profile
+            let profile = ProfileData(
+                goodPostureY: cameraCalibration.goodPostureY,
+                badPostureY: cameraCalibration.badPostureY,
+                neutralY: cameraCalibration.neutralY,
+                postureRange: cameraCalibration.postureRange,
+                cameraID: cameraCalibration.cameraID
+            )
+            let configKey = getCurrentConfigKey()
+            saveProfile(forKey: configKey, data: profile)
+        } else if let airPodsCalibration = calibration as? AirPodsCalibrationData {
+            self.airPodsCalibration = airPodsCalibration
+        }
+
+        saveSettings()
+        calibrationController = nil
+
+        consecutiveBadFrames = 0
+        consecutiveGoodFrames = 0
+
+        startMonitoring()
+    }
+
+    func cancelCalibration() {
+        calibrationController = nil
+        if isCalibrated {
+            startMonitoring()
+        } else {
+            state = .paused(.noProfile)
+        }
+    }
+
+    func startMonitoring() {
+        guard let calibration = currentCalibration else {
+            state = .paused(.noProfile)
+            return
+        }
+
+        // For AirPods, check if they're actually in ears before monitoring
+        if trackingSource == .airpods && !activeDetector.isConnected {
+            os_log(.info, log: log, "AirPods not in ears - pausing instead of monitoring")
+            activeDetector.beginMonitoring(with: calibration, intensity: intensity, deadZone: deadZone)
+            state = .paused(.airPodsRemoved)
+            return
+        }
+
+        activeDetector.beginMonitoring(with: calibration, intensity: intensity, deadZone: deadZone)
+        state = .monitoring
+    }
+
+    // MARK: - Camera Management (for Settings compatibility)
 
     func getAvailableCameras() -> [AVCaptureDevice] {
-        let discoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInWideAngleCamera, .externalUnknown],
-            mediaType: .video,
-            position: .unspecified
-        )
-        return discoverySession.devices
-    }
-
-    private func isCameraAvailable() -> Bool {
-        let cameras = getAvailableCameras()
-        return !cameras.isEmpty && (selectedCameraID == nil || cameras.contains { $0.uniqueID == selectedCameraID })
+        return cameraDetector.getAvailableCameras()
     }
 
     func restartCamera() {
-        switchCameraInput()
+        guard trackingSource == .camera, let cameraID = selectedCameraID else { return }
+        cameraDetector.switchCamera(to: cameraID)
         state = .paused(.noProfile)
     }
 
     func applyDetectionMode() {
-        guard let session = captureSession else { return }
-
-        session.beginConfiguration()
-
-        // Configure camera to capture at lower frame rate
-        if let input = session.inputs.first as? AVCaptureDeviceInput {
-            let device = input.device
-            configureDeviceFrameRate(device)
-        }
-
-        session.commitConfiguration()
-    }
-
-    private func configureDeviceFrameRate(_ device: AVCaptureDevice) {
-        let targetFrameRate = detectionMode.frameRate
-
-        // Find the lowest supported frame rate across all ranges
-        var minSupported = 30.0  // Default fallback
-        for range in device.activeFormat.videoSupportedFrameRateRanges {
-            minSupported = min(minSupported, range.minFrameRate)
-        }
-
-        // Clamp to supported range - can't go below what camera supports
-        let actualFrameRate = max(targetFrameRate, minSupported)
-
-        // Frame duration = 1/fps
-        let frameDuration = CMTimeMake(value: 1, timescale: Int32(actualFrameRate))
-
-        do {
-            try device.lockForConfiguration()
-            device.activeVideoMinFrameDuration = frameDuration
-            device.activeVideoMaxFrameDuration = frameDuration
-            device.unlockForConfiguration()
-        } catch {
-        }
-    }
-
-    private func switchCameraInput() {
-        let wasRunning = captureSession?.isRunning ?? false
-
-        if wasRunning {
-            captureSession?.stopRunning()
-        }
-
-        if let inputs = captureSession?.inputs {
-            for input in inputs {
-                captureSession?.removeInput(input)
-            }
-        }
-
-        let cameras = getAvailableCameras()
-        let camera = cameras.first { $0.uniqueID == selectedCameraID } ?? cameras.first
-
-        guard let selectedCamera = camera else {
-            return
-        }
-
-        do {
-            let input = try AVCaptureDeviceInput(device: selectedCamera)
-            selectedCameraID = selectedCamera.uniqueID
-            captureSession?.addInput(input)
-        } catch {
-            return
-        }
-
-        if wasRunning {
-            DispatchQueue.global(qos: .userInitiated).async {
-                self.captureSession?.startRunning()
-            }
-        }
-    }
-
-    private func ensureCameraInput() {
-        guard let session = captureSession else {
-            return
-        }
-
-        if let currentInput = session.inputs.first as? AVCaptureDeviceInput {
-            if currentInput.device.uniqueID == selectedCameraID {
-                return
-            }
-        } else {
-        }
-
-        switchCameraInput()
-    }
-
-    func setupCamera() {
-        captureSession = AVCaptureSession()
-        captureSession?.sessionPreset = .cif352x288  // Low resolution for CPU efficiency
-
-        let cameras = getAvailableCameras()
-        let camera: AVCaptureDevice?
-
-        if let selectedID = selectedCameraID {
-            camera = cameras.first { $0.uniqueID == selectedID }
-        } else {
-            camera = cameras.first { $0.position == .front } ?? cameras.first
-        }
-
-        guard let selectedCamera = camera,
-              let input = try? AVCaptureDeviceInput(device: selectedCamera) else {
-            statusMenuItem.title = "Status: No Camera"
-            return
-        }
-
-        if selectedCameraID == nil {
-            selectedCameraID = selectedCamera.uniqueID
-        }
-
-        captureSession?.addInput(input)
-
-        videoOutput = AVCaptureVideoDataOutput()
-        videoOutput?.alwaysDiscardsLateVideoFrames = true
-        videoOutput?.setSampleBufferDelegate(self, queue: captureQueue)
-
-        if let videoOutput = videoOutput {
-            captureSession?.addOutput(videoOutput)
-        }
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            self.captureSession?.startRunning()
-            // Must configure frame rate AFTER session starts on macOS
-            // Otherwise the session preset overrides our settings
-            DispatchQueue.main.async {
-                self.applyDetectionMode()
-            }
-        }
+        cameraDetector.baseFrameInterval = 1.0 / detectionMode.frameRate
     }
 
     // MARK: - Camera Hot-Plug
@@ -748,6 +782,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func handleCameraConnected(_ notification: Notification) {
+        guard trackingSource == .camera else { return }
         syncUIToState()
 
         guard let device = notification.object as? AVCaptureDevice,
@@ -757,35 +792,48 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let configKey = getCurrentConfigKey()
         if let profile = loadProfile(forKey: configKey),
            profile.cameraID == device.uniqueID {
-            selectedCameraID = profile.cameraID
-            applyProfile(profile)
-            switchCameraInput()
-            state = .monitoring
+            cameraDetector.selectedCameraID = profile.cameraID
+            cameraCalibration = CameraCalibrationData(
+                goodPostureY: profile.goodPostureY,
+                badPostureY: profile.badPostureY,
+                neutralY: profile.neutralY,
+                postureRange: profile.postureRange,
+                cameraID: profile.cameraID
+            )
+            cameraDetector.switchCamera(to: profile.cameraID)
+            startMonitoring()
         } else if reason == .cameraDisconnected {
             state = .paused(.noProfile)
         }
     }
 
     func handleCameraDisconnected(_ notification: Notification) {
+        guard trackingSource == .camera else { return }
+
         guard let device = notification.object as? AVCaptureDevice,
               device.hasMediaType(.video) else { return }
-
 
         guard device.uniqueID == selectedCameraID else {
             syncUIToState()
             return
         }
 
-        let cameras = getAvailableCameras()
+        let cameras = cameraDetector.getAvailableCameras()
 
         if let fallbackCamera = cameras.first {
-            selectedCameraID = fallbackCamera.uniqueID
-            switchCameraInput()
+            cameraDetector.selectedCameraID = fallbackCamera.uniqueID
+            cameraDetector.switchCamera(to: fallbackCamera.uniqueID)
 
             let configKey = getCurrentConfigKey()
             if let profile = loadProfile(forKey: configKey), profile.cameraID == fallbackCamera.uniqueID {
-                applyProfile(profile)
-                state = .monitoring
+                cameraCalibration = CameraCalibrationData(
+                    goodPostureY: profile.goodPostureY,
+                    badPostureY: profile.badPostureY,
+                    neutralY: profile.neutralY,
+                    postureRange: profile.postureRange,
+                    cameraID: profile.cameraID
+                )
+                startMonitoring()
             } else {
                 state = .paused(.noProfile)
             }
@@ -817,48 +865,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func handleScreenLocked() {
-
-        // Only save state and pause if we're in an active state
-        guard state.isActive || (state != .disabled && state != .paused(.screenLocked)) else {
-            return
-        }
-
+        guard state.isActive || (state != .disabled && state != .paused(.screenLocked)) else { return }
         stateBeforeLock = state
         state = .paused(.screenLocked)
     }
 
     func handleScreenUnlocked() {
-
-        // Only restore if we paused due to screen lock
-        guard case .paused(.screenLocked) = state else {
-            return
-        }
+        guard case .paused(.screenLocked) = state else { return }
 
         if let previousState = stateBeforeLock {
             state = previousState
             stateBeforeLock = nil
         } else {
-            state = .monitoring
+            startMonitoring()
         }
     }
 
     // MARK: - Global Keyboard Shortcut (Carbon API)
 
     func registerGlobalHotKey() {
-        // Unregister existing hotkey if any
         unregisterGlobalHotKey()
 
         guard toggleShortcutEnabled else { return }
 
-        // Convert NSEvent modifier flags to Carbon modifiers
         let carbonModifiers = carbonModifiersFromNSEvent(toggleShortcut.modifiers)
 
-        // Create hotkey ID
         var hotKeyID = EventHotKeyID()
-        hotKeyID.signature = OSType(0x504F5354)  // 'POST' for Posturr
+        hotKeyID.signature = OSType(0x504F5354)
         hotKeyID.id = 1
 
-        // Install event handler if not already installed
         if carbonEventHandler == nil {
             var eventType = EventTypeSpec(
                 eventClass: OSType(kEventClassKeyboard),
@@ -868,7 +903,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let status = InstallEventHandler(
                 GetApplicationEventTarget(),
                 { (_, event, _) -> OSStatus in
-                    // Get the AppDelegate and call toggleEnabled
                     if let appDelegate = NSApp.delegate as? AppDelegate {
                         DispatchQueue.main.async {
                             appDelegate.toggleEnabled()
@@ -887,7 +921,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Register the hotkey
         let status = RegisterEventHotKey(
             UInt32(toggleShortcut.keyCode),
             carbonModifiers,
@@ -898,6 +931,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         if status != noErr {
+            os_log(.error, log: log, "Failed to register hotkey: %d", status)
         }
     }
 
@@ -926,102 +960,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let menuItem = enabledMenuItem else { return }
 
         if toggleShortcutEnabled {
-            // Show shortcut hint in the menu item title
             menuItem.title = "Enabled (\(toggleShortcut.displayString))"
         } else {
             menuItem.title = "Enabled"
         }
-    }
-
-    // MARK: - Calibration
-
-    func startCalibration() {
-        guard state != .calibrating else {
-            return
-        }
-
-        isCalibrated = false
-        state = .calibrating
-
-
-        
-        let calibrations = CalibrationWindowController()
-        calibrationController = calibrations
-        
-        calibrations.start(
-            trackingSource: trackingSource,
-            onComplete: { [weak self] values, motions in
-                guard let self = self else { return }
-                
-                if self.trackingSource == .airpods {
-                    // AirPods Calibration Complete (Average of 4 corners)
-                    var avgPitch = 0.0
-                    var avgRoll = 0.0
-                    var avgYaw = 0.0
-                    
-                    if !motions.isEmpty {
-                        avgPitch = motions.map { $0.0 }.reduce(0, +) / Double(motions.count)
-                        avgRoll = motions.map { $0.1 }.reduce(0, +) / Double(motions.count)
-                        avgYaw = motions.map { $0.2 }.reduce(0, +) / Double(motions.count)
-                    }
-                    
-                    let profile = AirPodsProfile(
-                        pitch: avgPitch,
-                        roll: avgRoll,
-                        yaw: avgYaw
-                    )
-                    self.airPodsProfile = profile
-                    self.saveSettings()
-                    
-                    self.isCalibrated = true
-                    self.calibrationController = nil
-                    
-                    self.state = .monitoring
-                } else {
-                    // Camera Calibration Complete (Original Logic)
-
-                    let maxY = values.max() ?? 0.6
-                    let minY = values.min() ?? 0.4
-                    let avgY = values.reduce(0, +) / CGFloat(values.count)
-
-                    self.goodPostureY = maxY
-                    self.badPostureY = minY
-                    self.neutralY = avgY
-                    self.postureRange = abs(maxY - minY)
-
-                    let profile = ProfileData(
-                        goodPostureY: self.goodPostureY,
-                        badPostureY: self.badPostureY,
-                        neutralY: self.neutralY,
-                        postureRange: self.postureRange,
-                        cameraID: self.selectedCameraID ?? ""
-                    )
-                    let configKey = self.getCurrentConfigKey()
-                    self.saveProfile(forKey: configKey, data: profile)
-
-                    self.isCalibrated = true
-                    self.calibrationController = nil
-
-                    self.consecutiveBadFrames = 0
-                    self.consecutiveGoodFrames = 0
-
-                    self.state = .monitoring
-                }
-            },
-            onCancel: { [weak self] in
-                self?.calibrationController = nil
-                self?.isCalibrated = true
-                self?.state = .monitoring
-            }
-        )
-    }
-
-    func applyProfile(_ profile: ProfileData) {
-        goodPostureY = profile.goodPostureY
-        badPostureY = profile.badPostureY
-        neutralY = profile.neutralY
-        postureRange = profile.postureRange
-        isCalibrated = true
     }
 
     // MARK: - Persistence
@@ -1047,9 +989,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             defaults.set(cameraID, forKey: SettingsKeys.lastCameraID)
         }
         defaults.set(trackingSource.rawValue, forKey: SettingsKeys.trackingSource)
-        if let airPodsProfile = airPodsProfile,
-           let profileData = try? JSONEncoder().encode(airPodsProfile) {
-            defaults.set(profileData, forKey: SettingsKeys.airPodsProfile)
+        if let airPodsCalibration = airPodsCalibration,
+           let data = try? JSONEncoder().encode(airPodsCalibration) {
+            defaults.set(data, forKey: SettingsKeys.airPodsCalibration)
         }
     }
 
@@ -1070,14 +1012,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
            let mode = DetectionMode(rawValue: modeString) {
             detectionMode = mode
         }
-        selectedCameraID = defaults.string(forKey: SettingsKeys.lastCameraID)
+        cameraDetector.selectedCameraID = defaults.string(forKey: SettingsKeys.lastCameraID)
         if let sourceString = defaults.string(forKey: SettingsKeys.trackingSource),
            let source = TrackingSource(rawValue: sourceString) {
             trackingSource = source
         }
-        if let profileData = defaults.data(forKey: SettingsKeys.airPodsProfile),
-           let profile = try? JSONDecoder().decode(AirPodsProfile.self, from: profileData) {
-            airPodsProfile = profile
+        if let data = defaults.data(forKey: SettingsKeys.airPodsCalibration),
+           let calibration = try? JSONDecoder().decode(AirPodsCalibrationData.self, from: data) {
+            airPodsCalibration = calibration
         }
         if let modeString = defaults.string(forKey: SettingsKeys.warningMode),
            let mode = WarningMode(rawValue: modeString) {
@@ -1090,7 +1032,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if defaults.object(forKey: SettingsKeys.warningOnsetDelay) != nil {
             warningOnsetDelay = defaults.double(forKey: SettingsKeys.warningOnsetDelay)
         }
-        // Shortcut settings - default to enabled if not set
         if defaults.object(forKey: SettingsKeys.toggleShortcutEnabled) != nil {
             toggleShortcutEnabled = defaults.bool(forKey: SettingsKeys.toggleShortcutEnabled)
         }
@@ -1185,19 +1126,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func handleDisplayConfigurationChange() {
         rebuildOverlayWindows()
 
-        guard state != .disabled else {
-            return
-        }
+        guard state != .disabled else { return }
 
         if pauseOnTheGo && isLaptopOnlyConfiguration() {
             state = .paused(.onTheGo)
             return
         }
 
-        let cameras = getAvailableCameras()
+        guard trackingSource == .camera else { return }
+
+        let cameras = cameraDetector.getAvailableCameras()
         let configKey = getCurrentConfigKey()
         let profile = loadProfile(forKey: configKey)
-
 
         if cameras.isEmpty {
             state = .paused(.cameraDisconnected)
@@ -1207,54 +1147,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let profile = profile,
            cameras.contains(where: { $0.uniqueID == profile.cameraID }) {
             if selectedCameraID != profile.cameraID {
-                selectedCameraID = profile.cameraID
-                switchCameraInput()
+                cameraDetector.selectedCameraID = profile.cameraID
+                cameraDetector.switchCamera(to: profile.cameraID)
             }
-            applyProfile(profile)
-            state = .monitoring
+            cameraCalibration = CameraCalibrationData(
+                goodPostureY: profile.goodPostureY,
+                badPostureY: profile.badPostureY,
+                neutralY: profile.neutralY,
+                postureRange: profile.postureRange,
+                cameraID: profile.cameraID
+            )
+            startMonitoring()
         } else {
             state = .paused(.noProfile)
         }
-    }
-
-    // MARK: - AirPods Tracking
-
-    func setupAirPodsTracking() {
-        headphoneMotionManager.onUpdate = { [weak self] pitch, roll, yaw in
-            guard let self = self else { return }
-            
-            if self.state == .calibrating {
-                self.calibrationController?.updateCurrentMotion(pitch: pitch, roll: roll, yaw: yaw)
-            } else if self.state == .monitoring, let profile = self.airPodsProfile {
-                self.evaluateAirPodsPosture(pitch: pitch, profile: profile)
-            }
-        }
-    }
-
-    func evaluateAirPodsPosture(pitch: Double, profile: AirPodsProfile) {
-        // Calculate signed difference (Current - Neutral)
-        // Assumption: Looking Down decreases Pitch (Negative direction) based on reference logic
-        let diff = pitch - profile.pitch
-        
-        // Threshold calculation: Base 0.15 rad (~8.5 deg) + scaled deadZone
-        // deadZone (0.0-1.0) * 0.5 rad (~28 deg)
-        let threshold = 0.15 + (deadZone * 0.5)
-        
-        // Only detect forward lean (negative diff exceeding threshold)
-        // Leaning back (positive diff) is ignored (e.g. stretching)
-        let isBadPosture = diff < -threshold
-        
-        // Severity
-        var severity: Double = 0
-        if isBadPosture {
-             // How much past the threshold?
-             // e.g. diff = -0.4, threshold = 0.15 => excess = |-0.4| - 0.15 = 0.25
-             let excess = abs(diff) - threshold
-             // Max out severity at +0.3 rad (~17 deg) past threshold
-             severity = min(1.0, excess / 0.3)
-        }
-        
-        processPostureState(isBad: isBadPosture, severity: severity)
     }
 
     // MARK: - Overlay Windows
@@ -1300,13 +1206,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         targetBlurRadius = 0
         currentBlurRadius = 0
 
-        // Clear NSVisualEffectView alpha
         for blurView in blurViews {
             blurView.alphaValue = 0
         }
 
         #if !APP_STORE
-        // Clear private API blur
         if let getConnectionID = cgsMainConnectionID,
            let setBlurRadius = cgsSetWindowBackgroundBlurRadius {
             let cid = getConnectionID()
@@ -1318,10 +1222,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func switchWarningMode(to newMode: WarningMode) {
-        // Reset current warning state
         clearBlur()
 
-        // Clear vignette/border intensity before removing windows
         warningOverlayManager.currentIntensity = 0
         warningOverlayManager.targetIntensity = 0
         for view in warningOverlayManager.overlayViews {
@@ -1332,14 +1234,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Remove old warning overlay windows
         for window in warningOverlayManager.windows {
             window.orderOut(nil)
         }
         warningOverlayManager.windows.removeAll()
         warningOverlayManager.overlayViews.removeAll()
 
-        // Set new mode and rebuild if needed
         warningMode = newMode
         if warningMode.usesWarningOverlay {
             warningOverlayManager.mode = warningMode
@@ -1354,31 +1254,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func updateBlur() {
-        // Two independent concerns:
-        // 1. Privacy blur: full blur when away (always uses blur overlay)
-        // 2. Posture warning: user's chosen style (blur/vignette/border/none)
-
         let privacyBlurIntensity: CGFloat = isCurrentlyAway ? 1.0 : 0.0
 
-        // Compute target blur radius and warning overlay intensity based on mode
         switch warningMode {
         case .blur:
-            // Both privacy and posture use blur - take the higher value
             let combinedIntensity = max(privacyBlurIntensity, postureWarningIntensity)
             targetBlurRadius = Int32(combinedIntensity * 64)
             warningOverlayManager.targetIntensity = 0
         case .none:
-            // Only privacy blur, no posture warning visual
             targetBlurRadius = Int32(privacyBlurIntensity * 64)
             warningOverlayManager.targetIntensity = 0
         case .vignette, .border, .solid:
-            // Privacy uses blur, posture uses vignette/border/solid overlay
             targetBlurRadius = Int32(privacyBlurIntensity * 64)
             warningOverlayManager.targetIntensity = postureWarningIntensity
         }
         warningOverlayManager.updateWarning()
 
-        // Animate blur toward target
         if currentBlurRadius < targetBlurRadius {
             currentBlurRadius = min(currentBlurRadius + 1, targetBlurRadius)
         } else if currentBlurRadius > targetBlurRadius {
@@ -1409,214 +1300,5 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         #endif
-    }
-
-    // MARK: - Posture Detection
-
-    func processFrame(_ pixelBuffer: CVPixelBuffer) {
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
-
-        let bodyRequest = VNDetectHumanBodyPoseRequest { [weak self] request, error in
-            if let results = request.results as? [VNHumanBodyPoseObservation], let body = results.first {
-                self?.analyzeBodyPose(body)
-            } else {
-                self?.tryFaceDetection(pixelBuffer: pixelBuffer)
-            }
-        }
-
-        do {
-            try handler.perform([bodyRequest])
-        } catch {
-            tryFaceDetection(pixelBuffer: pixelBuffer)
-        }
-    }
-
-    func analyzeBodyPose(_ body: VNHumanBodyPoseObservation) {
-        guard let nose = try? body.recognizedPoint(.nose), nose.confidence > 0.3 else {
-            return
-        }
-
-        consecutiveNoDetectionFrames = 0
-        isCurrentlyAway = false
-
-        let noseY = nose.location.y
-        currentNoseY = noseY
-
-        if state == .calibrating {
-            calibrationController?.updateCurrentNoseY(noseY)
-            return
-        }
-
-        guard state == .monitoring && isCalibrated else { return }
-
-        evaluatePosture(currentY: noseY)
-    }
-
-    func tryFaceDetection(pixelBuffer: CVPixelBuffer) {
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
-
-        let faceRequest = VNDetectFaceRectanglesRequest { [weak self] request, error in
-            if let results = request.results as? [VNFaceObservation], let face = results.first {
-                self?.analyzeFace(face)
-            } else {
-                self?.handleNoDetection()
-            }
-        }
-
-        try? handler.perform([faceRequest])
-    }
-
-    func handleNoDetection() {
-        consecutiveNoDetectionFrames += 1
-        consecutiveBadFrames = 0
-        consecutiveGoodFrames = 0
-
-        guard state == .monitoring && isCalibrated && blurWhenAway else {
-            consecutiveNoDetectionFrames = 0
-            return
-        }
-
-        if consecutiveNoDetectionFrames >= awayFrameThreshold && !isCurrentlyAway {
-            isCurrentlyAway = true
-
-            DispatchQueue.main.async {
-                self.statusMenuItem.title = "Status: Away"
-                self.statusItem.button?.image = NSImage(systemSymbolName: "figure.walk", accessibilityDescription: "Away")
-            }
-        }
-    }
-
-    func analyzeFace(_ face: VNFaceObservation) {
-        consecutiveNoDetectionFrames = 0
-        isCurrentlyAway = false
-
-        let faceY = face.boundingBox.midY
-        currentNoseY = faceY
-
-        if state == .calibrating {
-            calibrationController?.updateCurrentNoseY(faceY)
-            return
-        }
-
-        guard state == .monitoring && isCalibrated else { return }
-
-        evaluatePosture(currentY: faceY)
-    }
-
-    func smoothNoseY(_ rawY: CGFloat) -> CGFloat {
-        noseYHistory.append(rawY)
-
-        if noseYHistory.count > smoothingWindow {
-            noseYHistory.removeFirst()
-        }
-
-        let sum = noseYHistory.reduce(0, +)
-        smoothedNoseY = sum / CGFloat(noseYHistory.count)
-        return smoothedNoseY
-    }
-
-    func evaluatePosture(currentY: CGFloat) {
-        let smoothedY = smoothNoseY(currentY)
-
-        // How far past the bad posture threshold (positive = slouching)
-        let slouchAmount = badPostureY - smoothedY
-
-        // Dead zone is an absolute buffer (percentage of posture range)
-        let deadZoneThreshold = deadZone * postureRange
-
-        // Hysteresis: easier to exit slouching state than enter it
-        let enterThreshold = deadZoneThreshold
-        let exitThreshold = deadZoneThreshold * 0.7
-
-        let threshold = isCurrentlySlouching ? exitThreshold : enterThreshold
-        let isBadPosture = slouchAmount > threshold
-
-        // Calculate severity: how far past the dead zone (0 to 1)
-        let pastDeadZone = slouchAmount - deadZoneThreshold
-        let remainingRange = max(0.01, postureRange - deadZoneThreshold)
-        let severity = min(1.0, max(0.0, pastDeadZone / remainingRange))
-
-        processPostureState(isBad: isBadPosture, severity: Double(severity))
-    }
-
-    func processPostureState(isBad: Bool, severity: Double) {
-        // Track analytics
-        AnalyticsManager.shared.trackTime(interval: frameInterval, isSlouching: isCurrentlySlouching)
-
-        if isBad {
-            consecutiveBadFrames += 1
-            consecutiveGoodFrames = 0
-
-            if consecutiveBadFrames >= frameThreshold {
-                // Start tracking when bad posture began (if not already)
-                if badPostureStartTime == nil {
-                    badPostureStartTime = Date()
-                }
-
-                // Check if we've waited long enough for the blur onset delay
-                let elapsedTime = Date().timeIntervalSince(badPostureStartTime!)
-                guard elapsedTime >= warningOnsetDelay else {
-                    // Still waiting for delay, don't activate blur yet
-                    return
-                }
-
-                // Record slouch event only once when transitioning to slouching state
-                if !isCurrentlySlouching {
-                    AnalyticsManager.shared.recordSlouchEvent()
-                }
-
-                isCurrentlySlouching = true
-
-                // Intensity controls the curve: higher = warning ramps up faster
-                // pow(severity, 1/intensity): intensity 2.0 = aggressive, 0.5 = gentle
-                let adjustedSeverity = pow(severity, 1.0 / intensity)
-
-                postureWarningIntensity = adjustedSeverity
-
-                DispatchQueue.main.async {
-                    self.statusMenuItem.title = "Status: Slouching"
-                    self.statusItem.button?.image = NSImage(systemSymbolName: "figure.fall", accessibilityDescription: "Bad Posture")
-                }
-            }
-        } else {
-            consecutiveGoodFrames += 1
-            consecutiveBadFrames = 0
-
-            // Reset the bad posture start time when posture improves
-            badPostureStartTime = nil
-
-            postureWarningIntensity = 0
-
-            if consecutiveGoodFrames >= 5 { // Quick recovery
-                isCurrentlySlouching = false
-                DispatchQueue.main.async {
-                    self.syncUIToState()
-                }
-            }
-        }
-
-        DispatchQueue.main.async {
-            self.updateBlur()
-        }
-    }
-}
-
-// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
-
-extension AppDelegate: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-
-        if waitingForPermission {
-            DispatchQueue.main.async {
-                self.onCameraPermissionGranted()
-            }
-        }
-
-        let now = Date()
-        guard now.timeIntervalSince(lastFrameTime) >= frameInterval else { return }
-        lastFrameTime = now
-
-        processFrame(pixelBuffer)
     }
 }

@@ -36,11 +36,10 @@ class SettingsWindowController: NSObject, NSWindowDelegate {
         let settingsView = SettingsView(appDelegate: appDelegate)
         let hostingController = NSHostingController(rootView: settingsView)
 
-        // Let the content determine the window size
-        let fittingSize = hostingController.sizeThatFits(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
-
+        // Use fixed window size to avoid jolt when SwiftUI content loads
+        // Width matches SettingsView .frame(width: 720), height accommodates all content
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: fittingSize.width, height: fittingSize.height),
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 920),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -144,6 +143,10 @@ struct SettingRow: View {
                 .toggleStyle(.switch)
                 .tint(.brandCyan)
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isOn.toggle()
+        }
     }
 }
 
@@ -226,6 +229,7 @@ struct WarningStylePicker: View {
                             RoundedRectangle(cornerRadius: 5, style: .continuous)
                                 .fill(selection == mode ? Color.brandCyan : Color.clear)
                         )
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -247,6 +251,49 @@ extension WarningMode {
         case .solid: return "Solid"
         case .none: return "None"
         }
+    }
+}
+
+// MARK: - Tracking Source Picker
+
+struct TrackingSourcePicker: View {
+    @Binding var selection: TrackingSource
+    let airPodsAvailable: Bool
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(TrackingSource.allCases) { source in
+                let isDisabled = source == .airpods && !airPodsAvailable
+                Button(action: {
+                    if !isDisabled {
+                        selection = source
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: source.icon)
+                            .font(.system(size: 10))
+                        Text(source.displayName)
+                            .font(.system(size: 11, weight: selection == source ? .semibold : .regular))
+                    }
+                    .foregroundColor(selection == source ? .white : (isDisabled ? .secondary.opacity(0.5) : .primary))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
+                    .padding(.horizontal, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(selection == source ? Color.brandCyan : Color.clear)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isDisabled)
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color.primary.opacity(0.06))
+        )
     }
 }
 
@@ -273,6 +320,8 @@ struct SettingsView: View {
     @State private var toggleShortcutEnabled: Bool = true
     @State private var toggleShortcut: KeyboardShortcut = .defaultShortcut
     @State private var detectionModeSlider: Double = 0
+    @State private var trackingSource: TrackingSource = .camera
+    @State private var airPodsAvailable: Bool = false
 
     let detectionModes: [DetectionMode] = [.responsive, .balanced, .performance]
 
@@ -347,18 +396,63 @@ struct SettingsView: View {
                 HStack(alignment: .top, spacing: 16) {
                     // Left column - Detection
                     VStack(spacing: 12) {
-                        SectionCard("Camera", icon: "camera") {
-                            Picker("", selection: $selectedCameraID) {
-                                ForEach(availableCameras, id: \.id) { camera in
-                                    Text(camera.name).tag(camera.id)
+                        SectionCard("Tracking", icon: "figure.stand") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                // Tracking method picker
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack(spacing: 4) {
+                                        Text("Method")
+                                            .font(.system(size: 13))
+                                        HelpButton(text: "Camera uses your webcam to track head position. AirPods uses motion sensors in compatible AirPods (Pro, Max, or 3rd gen) to detect head tilt.")
+                                    }
+
+                                    TrackingSourcePicker(
+                                        selection: $trackingSource,
+                                        airPodsAvailable: airPodsAvailable
+                                    )
+                                    .onChange(of: trackingSource) { newValue in
+                                        if newValue != appDelegate.trackingSource {
+                                            appDelegate.switchTrackingSource(to: newValue)
+                                        }
+                                    }
                                 }
-                            }
-                            .labelsHidden()
-                            .onChange(of: selectedCameraID) { newValue in
-                                if newValue != appDelegate.selectedCameraID {
-                                    appDelegate.selectedCameraID = newValue
-                                    appDelegate.saveSettings()
-                                    appDelegate.restartCamera()
+
+                                // Camera picker (only when camera mode selected)
+                                if trackingSource == .camera && !availableCameras.isEmpty {
+                                    SubtleDivider()
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Camera")
+                                            .font(.system(size: 13))
+
+                                        Picker("", selection: $selectedCameraID) {
+                                            ForEach(availableCameras, id: \.id) { camera in
+                                                Text(camera.name).tag(camera.id)
+                                            }
+                                        }
+                                        .labelsHidden()
+                                        .onChange(of: selectedCameraID) { newValue in
+                                            if newValue != appDelegate.selectedCameraID {
+                                                appDelegate.selectedCameraID = newValue
+                                                appDelegate.saveSettings()
+                                                appDelegate.restartCamera()
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // AirPods status (only when AirPods mode selected)
+                                if trackingSource == .airpods {
+                                    SubtleDivider()
+
+                                    HStack {
+                                        Image(systemName: airPodsAvailable ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                            .foregroundColor(airPodsAvailable ? .green : .orange)
+                                            .font(.system(size: 12))
+                                        Text(airPodsAvailable ? "AirPods connected" : "Connect compatible AirPods")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                             }
                         }
@@ -523,9 +617,6 @@ struct SettingsView: View {
                                 .onChange(of: blurWhenAway) { newValue in
                                     appDelegate.blurWhenAway = newValue
                                     appDelegate.saveSettings()
-                                    if !newValue {
-                                        appDelegate.consecutiveNoDetectionFrames = 0
-                                    }
                                 }
 
                                 SubtleDivider()
@@ -630,8 +721,12 @@ struct SettingsView: View {
         intensitySlider = Double(intensityValues.firstIndex(of: intensity) ?? 2)
         deadZoneSlider = Double(deadZoneValues.firstIndex(of: deadZone) ?? 2)
 
+        // Load tracking source
+        trackingSource = appDelegate.trackingSource
+        airPodsAvailable = appDelegate.airPodsDetector.isAvailable
+
         // Load cameras
-        let cameras = appDelegate.getAvailableCameras()
+        let cameras = appDelegate.cameraDetector.getAvailableCameras()
         availableCameras = cameras.map { (id: $0.uniqueID, name: $0.localizedName) }
         selectedCameraID = appDelegate.selectedCameraID ?? cameras.first?.uniqueID ?? ""
 

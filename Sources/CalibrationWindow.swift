@@ -7,7 +7,9 @@ class CalibrationView: NSView {
     var pulsePhase: CGFloat = 0
     var instructionText: String = "Look at the ring and press Space"
     var stepText: String = "Step 1 of 4"
+    var hintText: String = "Move your head naturally \u{2022} Press Space when ready"
     var showRing: Bool = true
+    var waitingForAirPods: Bool = false
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
@@ -15,6 +17,12 @@ class CalibrationView: NSView {
         // Dark overlay
         NSColor.black.withAlphaComponent(0.85).setFill()
         dirtyRect.fill()
+
+        // Show AirPods waiting state
+        if waitingForAirPods {
+            drawWaitingForAirPods()
+            return
+        }
 
         // Pulsing ring (only if this screen should show it)
         if showRing {
@@ -84,7 +92,7 @@ class CalibrationView: NSView {
 
         // Draw hint below
         let hintRect = NSRect(x: 0, y: bounds.midY - 70, width: bounds.width, height: 30)
-        ("Move your head naturally • Press Space when ready" as NSString).draw(in: hintRect, withAttributes: hintAttrs)
+        (hintText as NSString).draw(in: hintRect, withAttributes: hintAttrs)
 
         // Draw escape hint smaller
         let escapeAttrs: [NSAttributedString.Key: Any] = [
@@ -95,6 +103,47 @@ class CalibrationView: NSView {
         let escapeRect = NSRect(x: 0, y: bounds.midY - 110, width: bounds.width, height: 25)
         ("Escape to skip calibration" as NSString).draw(in: escapeRect, withAttributes: escapeAttrs)
     }
+
+    private func drawWaitingForAirPods() {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+
+        // Draw pulsing AirPods icon (using SF Symbol or text)
+        let iconAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 72, weight: .light),
+            .foregroundColor: NSColor.cyan.withAlphaComponent(0.7 + 0.3 * sin(pulsePhase)),
+            .paragraphStyle: paragraphStyle
+        ]
+        let iconRect = NSRect(x: 0, y: bounds.midY + 20, width: bounds.width, height: 90)
+        ("🎧" as NSString).draw(in: iconRect, withAttributes: iconAttrs)
+
+        // Main instruction
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 28, weight: .semibold),
+            .foregroundColor: NSColor.white,
+            .paragraphStyle: paragraphStyle
+        ]
+        let titleRect = NSRect(x: 0, y: bounds.midY - 30, width: bounds.width, height: 45)
+        ("Put in your AirPods" as NSString).draw(in: titleRect, withAttributes: titleAttrs)
+
+        // Subtitle
+        let subtitleAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 16, weight: .regular),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.7),
+            .paragraphStyle: paragraphStyle
+        ]
+        let subtitleRect = NSRect(x: 0, y: bounds.midY - 70, width: bounds.width, height: 30)
+        ("Calibration will begin automatically" as NSString).draw(in: subtitleRect, withAttributes: subtitleAttrs)
+
+        // Escape hint
+        let escapeAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 14, weight: .regular),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.5),
+            .paragraphStyle: paragraphStyle
+        ]
+        let escapeRect = NSRect(x: 0, y: bounds.midY - 120, width: bounds.width, height: 25)
+        ("Press Escape to cancel" as NSString).draw(in: escapeRect, withAttributes: escapeAttrs)
+    }
 }
 
 // MARK: - Calibration Window Controller
@@ -104,19 +153,21 @@ class CalibrationWindowController: NSObject {
     var calibrationViews: [CalibrationView] = []
     var animationTimer: Timer?
     var currentStep = 0
-    var onComplete: (([CGFloat], [(Double, Double, Double)]) -> Void)?
+    var onComplete: (([Any]) -> Void)?
     var onCancel: (() -> Void)?
-    var capturedValues: [CGFloat] = []
-    var capturedMotions: [(Double, Double, Double)] = []
-    
-    var currentNoseY: CGFloat = 0.5
-    var currentPitch: Double = 0.0
-    var currentRoll: Double = 0.0
-    var currentYaw: Double = 0.0
-    
+    var capturedValues: [Any] = []
+
     var localEventMonitor: Any?
     var globalEventMonitor: Any?
-    var trackingSource: TrackingSource = .camera
+
+    // The detector being used for calibration
+    weak var detector: PostureDetector?
+
+    // Waiting for detector connection (e.g., AirPods in ears)
+    var isWaitingForConnection: Bool = false
+
+    // Store the original connection callback to restore later
+    var originalConnectionCallback: ((Bool) -> Void)?
 
     struct CalibrationStep {
         let instruction: String
@@ -154,8 +205,8 @@ class CalibrationWindowController: NSObject {
 
     func buildSteps() {
         steps = []
-        // Always use 4-corner calibration for consistency
         let corners: [Corner] = [.topLeft, .topRight, .bottomRight, .bottomLeft]
+
         for screenIndex in 0..<NSScreen.screens.count {
             let screenName = NSScreen.screens.count > 1 ? "Screen \(screenIndex + 1) " : ""
             for corner in corners {
@@ -168,13 +219,12 @@ class CalibrationWindowController: NSObject {
         }
     }
 
-    func start(trackingSource: TrackingSource, onComplete: @escaping ([CGFloat], [(Double, Double, Double)]) -> Void, onCancel: @escaping () -> Void) {
-        self.trackingSource = trackingSource
+    func start(detector: PostureDetector, onComplete: @escaping ([Any]) -> Void, onCancel: @escaping () -> Void) {
+        self.detector = detector
         self.onComplete = onComplete
         self.onCancel = onCancel
         self.currentStep = 0
         self.capturedValues = []
-        self.capturedMotions = []
 
         buildSteps()
 
@@ -226,8 +276,57 @@ class CalibrationWindowController: NSObject {
         }
         NSApp.activate(ignoringOtherApps: true)
 
-        updateStep()
+        // Check if detector needs to wait for connection (e.g., AirPods in ears)
+        // Save the original callback to restore later
+        originalConnectionCallback = detector.onConnectionStateChange
+
+        if !detector.isConnected {
+            // Show waiting state with lower window level so permission dialogs appear on top
+            isWaitingForConnection = true
+            for window in windows {
+                window.level = .floating  // Lower level allows system dialogs on top
+            }
+            showWaitingForConnection()
+
+            // Subscribe to connection state changes (wrapping the original callback)
+            detector.onConnectionStateChange = { [weak self] isConnected in
+                // Call our handler for calibration
+                if isConnected {
+                    self?.detectorConnected()
+                }
+                // Also call the original callback so AppDelegate stays in sync
+                self?.originalConnectionCallback?(isConnected)
+            }
+        } else {
+            // Already connected and authorized - proceed with calibration
+            updateStep()
+        }
+
         startAnimation()
+    }
+
+    func showWaitingForConnection() {
+        for view in calibrationViews {
+            view.waitingForAirPods = true  // View still uses this name for the UI state
+            view.showRing = false
+            view.needsDisplay = true
+        }
+    }
+
+    func detectorConnected() {
+        isWaitingForConnection = false
+
+        // Raise window level back to full screen calibration level
+        for window in windows {
+            window.level = .screenSaver + 1
+        }
+        NSApp.activate(ignoringOtherApps: true)
+
+        for view in calibrationViews {
+            view.waitingForAirPods = false  // View still uses this name for the UI state
+            view.needsDisplay = true
+        }
+        updateStep()
     }
 
     func updateStep() {
@@ -241,7 +340,6 @@ class CalibrationWindowController: NSObject {
         // Update all views
         for (index, view) in calibrationViews.enumerated() {
             if index == step.screenIndex {
-                // Show ring for both Camera and AirPods modes
                 view.showRing = true
                 view.targetPosition = step.corner.position(in: view.bounds)
                 view.instructionText = step.instruction
@@ -265,32 +363,21 @@ class CalibrationWindowController: NSObject {
     }
 
     func captureCurrentPosition() {
-        if trackingSource == .camera {
-            capturedValues.append(currentNoseY)
-        } else {
-            capturedValues.append(0.0) // Dummy
+        // Don't capture while waiting for detector connection
+        guard !isWaitingForConnection else { return }
+
+        // Get current calibration value from the detector
+        if let value = detector?.getCurrentCalibrationValue() {
+            capturedValues.append(value)
         }
-        
-        // Always capture motion (useful for AirPods)
-        capturedMotions.append((currentPitch, currentRoll, currentYaw))
-        
+
         currentStep += 1
         updateStep()
     }
 
-    func updateCurrentNoseY(_ value: CGFloat) {
-        currentNoseY = value
-    }
-    
-    func updateCurrentMotion(pitch: Double, roll: Double, yaw: Double) {
-        currentPitch = pitch
-        currentRoll = roll
-        currentYaw = yaw
-    }
-
     func complete() {
         cleanup()
-        onComplete?(capturedValues, capturedMotions)
+        onComplete?(capturedValues)
     }
 
     func cancel() {
@@ -311,6 +398,10 @@ class CalibrationWindowController: NSObject {
             NSEvent.removeMonitor(monitor)
             globalEventMonitor = nil
         }
+
+        // Restore original connection callback
+        detector?.onConnectionStateChange = originalConnectionCallback
+        originalConnectionCallback = nil
 
         for window in windows {
             window.orderOut(nil)

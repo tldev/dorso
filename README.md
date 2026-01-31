@@ -2,7 +2,7 @@
 
 **A macOS app that blurs your screen when you slouch.**
 
-Posturr uses your Mac's camera and Apple's Vision framework to monitor your posture in real-time. When it detects that you're slouching, it progressively blurs your screen to remind you to sit up straight. Maintain good posture, and the blur clears instantly.
+Posturr monitors your posture in real-time using either your Mac's camera or AirPods motion sensors. When it detects that you're slouching, it progressively blurs your screen to remind you to sit up straight. Maintain good posture, and the blur clears instantly.
 
 [![Download Latest Release](https://img.shields.io/github/v/release/tldev/posturr?style=for-the-badge&logo=apple&label=Download&color=007AFF)](https://github.com/tldev/posturr/releases/latest)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/8VzX39fZ)
@@ -12,17 +12,19 @@ Posturr uses your Mac's camera and Apple's Vision framework to monitor your post
 ## Screenshots
 
 <p align="center">
-  <img src="assets/posturr_menubar.jpg" width="280" alt="Menu Bar">
+  <img src="assets/posturr_onboarding.jpg" width="320" alt="Onboarding - Choose Tracking Method">
   <img src="assets/posturr_settings.jpg" width="400" alt="Settings">
 </p>
 
 <p align="center">
-  <img src="assets/posturr_analytics.jpg" width="500" alt="Analytics Dashboard">
+  <img src="assets/posturr_menubar.jpg" width="280" alt="Menu Bar">
+  <img src="assets/posturr_analytics.jpg" width="400" alt="Analytics Dashboard">
 </p>
 
 ## Features
 
-- **Real-time posture detection** - Uses Apple's Vision framework for body pose and face tracking
+- **Two tracking methods** - Use your camera (Vision framework) or AirPods motion sensors
+- **AirPods motion tracking** - Track posture without camera using AirPods Pro, Max, or 3rd gen+ (macOS 14+)
 - **Progressive screen blur** - Gentle visual reminder that intensifies with worse posture
 - **Menu bar controls** - Easy access to settings, calibration, and status from the menu bar
 - **Multi-display support** - Works across all connected monitors
@@ -46,13 +48,13 @@ brew install --cask posturr
 2. Open the DMG and drag `Posturr.app` to your Applications folder
 3. Launch normally - no Gatekeeper warnings (app is signed and notarized)
 
-### Camera Permission
+### Permissions
 
-Posturr requires camera access to monitor your posture. When you first launch the app, macOS will ask for permission. Click "OK" to grant access.
+**Camera Mode:** Requires camera access. When you first launch the app, macOS will ask for permission.
 
-If you accidentally denied permission, you can grant it later:
-1. Open **System Settings** > **Privacy & Security** > **Camera**
-2. Find Posturr and enable the toggle
+**AirPods Mode:** Requires Motion & Fitness Activity permission (macOS 14+). This allows the app to read head motion data from your AirPods.
+
+If you accidentally denied permission, you can grant it later in **System Settings** > **Privacy & Security** > **Camera** or **Motion & Fitness Activity**.
 
 ## Usage
 
@@ -88,14 +90,21 @@ The Settings window (accessible from the menu bar) provides:
 
 ## How It Works
 
-Posturr uses Apple's Vision framework to detect body pose landmarks:
+Posturr offers two tracking methods:
 
-1. **Body Pose Detection**: Tracks nose, shoulders, and their relative positions
-2. **Face Detection Fallback**: When full body isn't visible, tracks face position
-3. **Posture Analysis**: Measures the vertical distance between nose and shoulders
-4. **Blur Response**: Applies screen blur proportional to posture deviation
+### Camera Mode
+Uses Apple's Vision framework to detect body pose landmarks:
+- **Body Pose Detection**: Tracks nose and head position
+- **Face Detection Fallback**: When full body isn't visible, tracks face position
+- **Posture Analysis**: Measures vertical head position against your calibrated baseline
 
-The screen blur uses macOS's private CoreGraphics API by default for efficient, system-level blur. If the blur doesn't appear on your system, enable **Compatibility Mode** from the menu to use `NSVisualEffectView` instead.
+### AirPods Mode
+Uses motion sensors in compatible AirPods (Pro, Max, 3rd gen+):
+- **Head Tilt Detection**: Tracks pitch angle of your head
+- **No Camera Required**: Works without any camera access
+- **Automatic Pause**: Pauses when AirPods are removed from ears
+
+The screen blur uses macOS's private CoreGraphics API by default for efficient, system-level blur. If the blur doesn't appear on your system, enable **Compatibility Mode** from settings to use `NSVisualEffectView` instead.
 
 ## Building from Source
 
@@ -138,8 +147,8 @@ swiftc -O \
 
 ## Known Limitations
 
-- **Camera dependency**: Requires a working camera with adequate lighting
-- **Detection accuracy**: Works best with clear view of upper body/face
+- **Camera mode**: Requires a working camera with adequate lighting and clear view of upper body/face
+- **AirPods mode**: Requires macOS 14.0+ and compatible AirPods (Pro, Max, or 3rd generation+)
 
 ## Command Interface
 
@@ -172,18 +181,22 @@ MIT License - see [LICENSE](LICENSE) for details.
 ```
 posturr/
 ├── Sources/
-│   ├── main.swift              # App entry point
-│   ├── AppDelegate.swift       # Main app coordinator and state machine
-│   ├── Models.swift            # Shared types (settings keys, profile data, app state)
-│   ├── Persistence.swift       # Settings and profile storage
-│   ├── DisplayManager.swift    # Display detection and configuration
-│   ├── MenuBar.swift           # Menu bar setup and management
-│   ├── SettingsWindow.swift    # SwiftUI settings window
-│   ├── CalibrationWindow.swift # Calibration UI
-│   └── BlurOverlay.swift       # Screen blur overlay management
-├── build.sh                    # Build script
-├── release.sh                  # Release automation
-└── AppIcon.icns                # App icon
+│   ├── main.swift                  # App entry point
+│   ├── AppDelegate.swift           # Main app coordinator and state machine
+│   ├── PostureDetector.swift       # Protocol for posture detection methods
+│   ├── CameraPostureDetector.swift # Camera-based detection (Vision framework)
+│   ├── AirPodsPostureDetector.swift # AirPods motion-based detection
+│   ├── Models.swift                # Shared types (settings keys, profile data, app state)
+│   ├── Persistence.swift           # Settings and profile storage
+│   ├── DisplayManager.swift        # Display detection and configuration
+│   ├── MenuBar.swift               # Menu bar setup and management
+│   ├── SettingsWindow.swift        # SwiftUI settings window
+│   ├── OnboardingWindow.swift      # Tracking method selection UI
+│   ├── CalibrationWindow.swift     # Calibration UI
+│   └── BlurOverlay.swift           # Screen blur overlay management
+├── build.sh                        # Build script
+├── release.sh                      # Release automation
+└── AppIcon.icns                    # App icon
 ```
 
 ## Contributing
