@@ -130,6 +130,8 @@ cat > "$CONTENTS/Info.plist" << EOF
     <string>public.app-category.healthcare-fitness</string>
     <key>NSCameraUsageDescription</key>
     <string>Posturr needs camera access to monitor your posture and blur the screen when you slouch.</string>
+    <key>NSMotionUsageDescription</key>
+    <string>Posturr needs access to motion data to monitor your posture using AirPods.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>CFBundleIconFile</key>

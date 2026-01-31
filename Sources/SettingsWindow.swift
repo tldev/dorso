@@ -492,7 +492,6 @@ struct SettingsView: View {
                                             try SMAppService.mainApp.unregister()
                                         }
                                     } catch {
-                                        print("Failed to toggle launch at login: \(error)")
                                         launchAtLogin = SMAppService.mainApp.status == .enabled
                                     }
                                 }

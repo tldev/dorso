@@ -104,12 +104,19 @@ class CalibrationWindowController: NSObject {
     var calibrationViews: [CalibrationView] = []
     var animationTimer: Timer?
     var currentStep = 0
-    var onComplete: (([CGFloat]) -> Void)?
+    var onComplete: (([CGFloat], [(Double, Double, Double)]) -> Void)?
     var onCancel: (() -> Void)?
     var capturedValues: [CGFloat] = []
+    var capturedMotions: [(Double, Double, Double)] = []
+    
     var currentNoseY: CGFloat = 0.5
+    var currentPitch: Double = 0.0
+    var currentRoll: Double = 0.0
+    var currentYaw: Double = 0.0
+    
     var localEventMonitor: Any?
     var globalEventMonitor: Any?
+    var trackingSource: TrackingSource = .camera
 
     struct CalibrationStep {
         let instruction: String
@@ -147,8 +154,8 @@ class CalibrationWindowController: NSObject {
 
     func buildSteps() {
         steps = []
+        // Always use 4-corner calibration for consistency
         let corners: [Corner] = [.topLeft, .topRight, .bottomRight, .bottomLeft]
-
         for screenIndex in 0..<NSScreen.screens.count {
             let screenName = NSScreen.screens.count > 1 ? "Screen \(screenIndex + 1) " : ""
             for corner in corners {
@@ -161,11 +168,13 @@ class CalibrationWindowController: NSObject {
         }
     }
 
-    func start(onComplete: @escaping ([CGFloat]) -> Void, onCancel: @escaping () -> Void) {
+    func start(trackingSource: TrackingSource, onComplete: @escaping ([CGFloat], [(Double, Double, Double)]) -> Void, onCancel: @escaping () -> Void) {
+        self.trackingSource = trackingSource
         self.onComplete = onComplete
         self.onCancel = onCancel
         self.currentStep = 0
         self.capturedValues = []
+        self.capturedMotions = []
 
         buildSteps()
 
@@ -232,6 +241,7 @@ class CalibrationWindowController: NSObject {
         // Update all views
         for (index, view) in calibrationViews.enumerated() {
             if index == step.screenIndex {
+                // Show ring for both Camera and AirPods modes
                 view.showRing = true
                 view.targetPosition = step.corner.position(in: view.bounds)
                 view.instructionText = step.instruction
@@ -255,7 +265,15 @@ class CalibrationWindowController: NSObject {
     }
 
     func captureCurrentPosition() {
-        capturedValues.append(currentNoseY)
+        if trackingSource == .camera {
+            capturedValues.append(currentNoseY)
+        } else {
+            capturedValues.append(0.0) // Dummy
+        }
+        
+        // Always capture motion (useful for AirPods)
+        capturedMotions.append((currentPitch, currentRoll, currentYaw))
+        
         currentStep += 1
         updateStep()
     }
@@ -263,10 +281,16 @@ class CalibrationWindowController: NSObject {
     func updateCurrentNoseY(_ value: CGFloat) {
         currentNoseY = value
     }
+    
+    func updateCurrentMotion(pitch: Double, roll: Double, yaw: Double) {
+        currentPitch = pitch
+        currentRoll = roll
+        currentYaw = yaw
+    }
 
     func complete() {
         cleanup()
-        onComplete?(capturedValues)
+        onComplete?(capturedValues, capturedMotions)
     }
 
     func cancel() {
