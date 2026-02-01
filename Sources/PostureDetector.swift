@@ -19,6 +19,12 @@ protocol CalibrationData: Codable {
     var isValid: Bool { get }
 }
 
+/// Calibration point captured during calibration (face position + size)
+struct CalibrationPoint {
+    let noseY: CGFloat
+    let faceWidth: CGFloat
+}
+
 /// Camera-based calibration profile
 struct CameraCalibrationData: CalibrationData {
     let goodPostureY: CGFloat
@@ -26,10 +32,21 @@ struct CameraCalibrationData: CalibrationData {
     let neutralY: CGFloat
     let postureRange: CGFloat
     let cameraID: String
+    /// Neutral face width for forward-head (turtle neck) detection
+    var neutralFaceWidth: CGFloat = 0.0
 
     var isValid: Bool {
         postureRange > 0.01 && !cameraID.isEmpty
     }
+
+    // MARK: - Forward-Head Detection Constants
+
+    /// Minimum percentage increase in face width to trigger forward-head detection
+    static let forwardHeadBaseThreshold: CGFloat = 0.05
+    /// Range over which severity scales from 0 to 1 (beyond threshold)
+    static let forwardHeadSeverityRange: CGFloat = 0.15
+    /// Minimum severity when forward-head posture is detected
+    static let forwardHeadMinSeverity: Double = 0.5
 }
 
 /// AirPods motion calibration profile
