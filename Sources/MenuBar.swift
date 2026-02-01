@@ -16,8 +16,7 @@ class MenuBarManager {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "figure.stand", accessibilityDescription: "Posturr")
-            button.image?.isTemplate = true
+            button.image = MenuBarIcon.good.image
         }
 
         let menu = NSMenu()
@@ -57,9 +56,9 @@ class MenuBarManager {
         statusItem.menu = menu
     }
 
-    func updateStatus(title: String, icon: String) {
+    func updateStatus(title: String, icon: MenuBarIcon) {
         statusMenuItem.title = title
-        statusItem.button?.image = NSImage(systemSymbolName: icon, accessibilityDescription: title)
+        statusItem.button?.image = icon.image
     }
 
     func updateEnabledState(_ enabled: Bool) {

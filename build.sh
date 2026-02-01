@@ -13,7 +13,7 @@ set -e
 # Configuration
 APP_NAME="Posturr"
 BUNDLE_ID="com.thelazydeveloper.posturr"
-VERSION="1.5.1"
+VERSION="1.5.2"
 MIN_MACOS="13.0"
 
 # Check for App Store build flag
@@ -155,6 +155,13 @@ elif [ -d "$SCRIPT_DIR/Posturr.iconset" ]; then
     iconutil -c icns -o "$RESOURCES_DIR/AppIcon.icns" "$SCRIPT_DIR/Posturr.iconset"
 else
     echo -e "${YELLOW}Warning: No app icon found. The app will use default icon.${NC}"
+fi
+
+# Copy custom menu bar icons if they exist
+if [ -d "$SOURCES_DIR/Icons" ]; then
+    echo "Copying custom menu bar icons..."
+    mkdir -p "$RESOURCES_DIR/Icons"
+    cp "$SOURCES_DIR/Icons"/*.pdf "$RESOURCES_DIR/Icons/" 2>/dev/null || true
 fi
 
 # Create entitlements file

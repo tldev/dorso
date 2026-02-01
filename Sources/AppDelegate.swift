@@ -231,19 +231,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         switch state {
         case .disabled:
             statusMenuItem.title = "Status: Disabled"
-            statusItem.button?.image = NSImage(systemSymbolName: "figure.stand.line.dotted.figure.stand", accessibilityDescription: "Disabled")
+            statusItem.button?.image = MenuBarIcon.paused.image
 
         case .calibrating:
             statusMenuItem.title = "Status: Calibrating..."
-            statusItem.button?.image = NSImage(systemSymbolName: "figure.stand", accessibilityDescription: "Calibrating")
+            statusItem.button?.image = MenuBarIcon.calibrating.image
 
         case .monitoring:
             if isCalibrated {
                 statusMenuItem.title = "Status: Good Posture"
-                statusItem.button?.image = NSImage(systemSymbolName: "figure.stand", accessibilityDescription: "Good Posture")
+                statusItem.button?.image = MenuBarIcon.good.image
             } else {
                 statusMenuItem.title = "Status: Starting..."
-                statusItem.button?.image = NSImage(systemSymbolName: "figure.stand", accessibilityDescription: "Posturr")
+                statusItem.button?.image = MenuBarIcon.good.image
             }
 
         case .paused(let reason):
@@ -259,7 +259,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .airPodsRemoved:
                 statusMenuItem.title = "Status: Paused (put in AirPods)"
             }
-            statusItem.button?.image = NSImage(systemSymbolName: "pause.circle", accessibilityDescription: "Paused")
+            statusItem.button?.image = MenuBarIcon.paused.image
         }
 
         enabledMenuItem.state = (state != .disabled) ? .on : .off
@@ -388,7 +388,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 DispatchQueue.main.async {
                     self.statusMenuItem.title = "Status: Slouching"
-                    self.statusItem.button?.image = NSImage(systemSymbolName: "figure.fall", accessibilityDescription: "Bad Posture")
+                    self.statusItem.button?.image = MenuBarIcon.bad.image
                 }
             }
         } else {
@@ -418,7 +418,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if isAway {
             DispatchQueue.main.async {
                 self.statusMenuItem.title = "Status: Away"
-                self.statusItem.button?.image = NSImage(systemSymbolName: "figure.walk", accessibilityDescription: "Away")
+                self.statusItem.button?.image = MenuBarIcon.away.image
             }
         } else {
             DispatchQueue.main.async {
@@ -433,8 +433,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "figure.stand", accessibilityDescription: "Posturr")
-            button.image?.isTemplate = true
+            button.image = MenuBarIcon.good.image
         }
 
         let menu = NSMenu()
@@ -445,7 +444,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        enabledMenuItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
+        enabledMenuItem = NSMenuItem(title: "Enable", action: #selector(toggleEnabled), keyEquivalent: "")
         enabledMenuItem.target = self
         enabledMenuItem.state = .on
         updateEnabledMenuItemShortcut()
@@ -457,9 +456,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        let statsItem = NSMenuItem(title: "Statistics", action: #selector(showAnalytics), keyEquivalent: "s")
+        let statsItem = NSMenuItem(title: "Analytics", action: #selector(showAnalytics), keyEquivalent: "a")
         statsItem.target = self
-        statsItem.image = NSImage(systemSymbolName: "chart.bar.xaxis", accessibilityDescription: "Statistics")
+        statsItem.image = NSImage(systemSymbolName: "chart.bar.xaxis", accessibilityDescription: "Analytics")
         menu.addItem(statsItem)
 
         let settingsItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ",")
@@ -959,10 +958,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func updateEnabledMenuItemShortcut() {
         guard let menuItem = enabledMenuItem else { return }
 
+        menuItem.title = "Enable"
         if toggleShortcutEnabled {
-            menuItem.title = "Enabled (\(toggleShortcut.displayString))"
+            menuItem.keyEquivalent = toggleShortcut.keyCharacter
+            menuItem.keyEquivalentModifierMask = toggleShortcut.modifiers
         } else {
-            menuItem.title = "Enabled"
+            menuItem.keyEquivalent = ""
+            menuItem.keyEquivalentModifierMask = []
         }
     }
 

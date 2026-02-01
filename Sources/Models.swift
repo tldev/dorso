@@ -2,6 +2,66 @@ import Foundation
 import CoreGraphics
 import AppKit
 
+// MARK: - Menu Bar Icons
+
+enum MenuBarIcon: String, CaseIterable {
+    case good = "posture-good"
+    case bad = "posture-bad"
+    case away = "posture-away"
+    case paused = "posture-paused"
+    case calibrating = "posture-calibrating"
+
+    /// Fallback SF Symbol for each icon state
+    private var fallbackSymbol: String {
+        switch self {
+        case .good: return "figure.stand"
+        case .bad: return "figure.fall"
+        case .away: return "figure.walk"
+        case .paused: return "pause.circle"
+        case .calibrating: return "figure.stand"
+        }
+    }
+
+    /// Accessibility description for the icon
+    private var accessibilityDescription: String {
+        switch self {
+        case .good: return "Good Posture"
+        case .bad: return "Bad Posture"
+        case .away: return "Away"
+        case .paused: return "Paused"
+        case .calibrating: return "Calibrating"
+        }
+    }
+
+    /// Returns the menu bar icon, preferring custom PDF if available
+    var image: NSImage? {
+        // Try to load custom PDF icon from Resources/Icons/
+        if let url = Bundle.main.url(forResource: rawValue, withExtension: "pdf", subdirectory: "Icons"),
+           let customImage = NSImage(contentsOf: url) {
+            // Resize to menu bar height (18pt) while preserving aspect ratio
+            let targetHeight: CGFloat = 18
+            let aspectRatio = customImage.size.width / customImage.size.height
+            let targetWidth = targetHeight * aspectRatio
+            let targetSize = NSSize(width: targetWidth, height: targetHeight)
+
+            let resizedImage = NSImage(size: targetSize)
+            resizedImage.lockFocus()
+            customImage.draw(in: NSRect(origin: .zero, size: targetSize),
+                           from: NSRect(origin: .zero, size: customImage.size),
+                           operation: .copy,
+                           fraction: 1.0)
+            resizedImage.unlockFocus()
+            resizedImage.isTemplate = true
+            return resizedImage
+        }
+
+        // Fall back to SF Symbol
+        let image = NSImage(systemSymbolName: fallbackSymbol, accessibilityDescription: accessibilityDescription)
+        image?.isTemplate = true
+        return image
+    }
+}
+
 // MARK: - Constants
 
 enum WarningDefaults {
@@ -91,6 +151,11 @@ struct KeyboardShortcut: Equatable {
         if modifiers.contains(.command) { parts.append("⌘") }
         parts.append(keyCodeToString(keyCode))
         return parts.joined()
+    }
+
+    /// Returns lowercase character for use with NSMenuItem.keyEquivalent
+    var keyCharacter: String {
+        keyCodeToString(keyCode).lowercased()
     }
 
     private func keyCodeToString(_ keyCode: UInt16) -> String {
