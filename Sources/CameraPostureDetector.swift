@@ -160,9 +160,11 @@ class CameraPostureDetector: NSObject, PostureDetector {
         let minY = yValues.min() ?? 0.4
         let avgY = yValues.reduce(0, +) / CGFloat(yValues.count)
         let range = abs(maxY - minY)
-        let neutralWidth = widthValues.isEmpty ? 0.0 : widthValues.reduce(0, +) / CGFloat(widthValues.count)
+        // Use max face width as baseline - this prevents false positives when user's
+        // natural resting position is closer to screen than average calibration position
+        let neutralWidth = widthValues.max() ?? 0.0
 
-        os_log(.info, log: log, "Created calibration: goodY=%.3f, badY=%.3f, range=%.3f, neutralWidth=%.3f", maxY, minY, range, neutralWidth)
+        os_log(.info, log: log, "Created calibration: goodY=%.3f, badY=%.3f, range=%.3f, neutralWidth=%.3f (max)", maxY, minY, range, neutralWidth)
 
         return CameraCalibrationData(
             goodPostureY: maxY,
