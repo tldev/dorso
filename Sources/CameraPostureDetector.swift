@@ -210,7 +210,24 @@ class CameraPostureDetector: NSObject, PostureDetector {
 
     private func setupCamera() {
         captureSession = AVCaptureSession()
-        captureSession?.sessionPreset = .cif352x288  // Low resolution for CPU efficiency
+
+        // Use vga640x480 instead of cif352x288 for better compatibility with professional cameras
+        // The CIF preset can cause pixel format issues on cameras like Elgato capture cards
+        guard let session = captureSession else { return }
+
+        session.beginConfiguration()
+
+        // Try vga640x480 first (widely supported), fall back to medium if needed
+        if session.canSetSessionPreset(.vga640x480) {
+            session.sessionPreset = .vga640x480
+            os_log(.info, log: log, "Using VGA 640x480 preset")
+        } else if session.canSetSessionPreset(.medium) {
+            session.sessionPreset = .medium
+            os_log(.info, log: log, "Using medium preset (VGA not available)")
+        } else {
+            // Last resort - use whatever the default is
+            os_log(.error, log: log, "Using default preset (VGA/medium not available)")
+        }
 
         let cameras = getAvailableCameras()
         let camera: AVCaptureDevice?
@@ -223,20 +240,31 @@ class CameraPostureDetector: NSObject, PostureDetector {
 
         guard let selectedCamera = camera,
               let input = try? AVCaptureDeviceInput(device: selectedCamera) else {
+            session.commitConfiguration()
             os_log(.error, log: log, "Failed to create camera input")
             return
         }
 
         selectedCameraID = selectedCamera.uniqueID
-        captureSession?.addInput(input)
+        session.addInput(input)
 
         videoOutput = AVCaptureVideoDataOutput()
         videoOutput?.alwaysDiscardsLateVideoFrames = true
+
+        // Explicitly set pixel format to 32BGRA for consistent color handling
+        // This prevents issues with YUV color space on professional cameras (e.g., Elgato capture cards)
+        videoOutput?.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: NSNumber(value: kCVPixelFormatType_32BGRA)
+        ]
+        os_log(.info, log: log, "Configured camera with 32BGRA pixel format")
+
         videoOutput?.setSampleBufferDelegate(self, queue: captureQueue)
 
         if let videoOutput = videoOutput {
-            captureSession?.addOutput(videoOutput)
+            session.addOutput(videoOutput)
         }
+
+        session.commitConfiguration()
 
         os_log(.info, log: log, "Camera setup complete: %{public}@", selectedCamera.localizedName)
     }
@@ -252,32 +280,37 @@ class CameraPostureDetector: NSObject, PostureDetector {
     }
 
     func switchCamera(to cameraID: String) {
-        let wasRunning = captureSession?.isRunning ?? false
+        guard let session = captureSession else { return }
+
+        let wasRunning = session.isRunning
 
         if wasRunning {
-            captureSession?.stopRunning()
+            session.stopRunning()
         }
 
+        session.beginConfiguration()
+
         // Remove existing inputs
-        if let inputs = captureSession?.inputs {
-            for input in inputs {
-                captureSession?.removeInput(input)
-            }
+        for input in session.inputs {
+            session.removeInput(input)
         }
 
         let cameras = getAvailableCameras()
         guard let camera = cameras.first(where: { $0.uniqueID == cameraID }),
               let input = try? AVCaptureDeviceInput(device: camera) else {
+            session.commitConfiguration()
             os_log(.error, log: log, "Failed to switch to camera: %{public}@", cameraID)
             return
         }
 
         selectedCameraID = cameraID
-        captureSession?.addInput(input)
+        session.addInput(input)
+
+        session.commitConfiguration()
 
         if wasRunning {
             DispatchQueue.global(qos: .userInitiated).async {
-                self.captureSession?.startRunning()
+                session.startRunning()
             }
         }
 
