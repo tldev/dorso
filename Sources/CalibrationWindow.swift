@@ -212,14 +212,15 @@ class CalibrationView: NSView {
 
 // MARK: - Calibration Window Controller
 
+@MainActor
 class CalibrationWindowController: NSObject {
     var windows: [NSWindow] = []
     var calibrationViews: [CalibrationView] = []
     var animationTimer: Timer?
     var currentStep = 0
-    var onComplete: (([Any]) -> Void)?
+    var onComplete: (([CalibrationSample]) -> Void)?
     var onCancel: (() -> Void)?
-    var capturedValues: [Any] = []
+    var capturedValues: [CalibrationSample] = []
 
     var localEventMonitor: Any?
     var globalEventMonitor: Any?
@@ -282,7 +283,7 @@ class CalibrationWindowController: NSObject {
         }
     }
 
-    func start(detector: PostureDetector, onComplete: @escaping ([Any]) -> Void, onCancel: @escaping () -> Void) {
+    func start(detector: PostureDetector, onComplete: @escaping ([CalibrationSample]) -> Void, onCancel: @escaping () -> Void) {
         self.detector = detector
         self.onComplete = onComplete
         self.onCancel = onCancel
@@ -421,11 +422,14 @@ class CalibrationWindowController: NSObject {
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
 
         animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { [weak self] _ in
-            for view in self?.calibrationViews ?? [] {
-                if !reduceMotion {
-                    view.pulsePhase += 0.08
+            Task { @MainActor in
+                guard let self else { return }
+                for view in self.calibrationViews {
+                    if !reduceMotion {
+                        view.pulsePhase += 0.08
+                    }
+                    view.needsDisplay = true
                 }
-                view.needsDisplay = true
             }
         }
     }
@@ -435,8 +439,8 @@ class CalibrationWindowController: NSObject {
         guard !isWaitingForConnection else { return }
 
         // Get current calibration value from the detector
-        if let value = detector?.getCurrentCalibrationValue() {
-            capturedValues.append(value)
+        if let detector {
+            capturedValues.append(detector.getCurrentCalibrationValue())
         }
 
         currentStep += 1

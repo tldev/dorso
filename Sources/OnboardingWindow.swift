@@ -4,6 +4,7 @@ import AVFoundation
 
 // MARK: - Onboarding Window Controller
 
+@MainActor
 class OnboardingWindowController: NSObject, NSWindowDelegate {
     var window: NSWindow?
     var onComplete: ((TrackingSource, String?) -> Void)?

@@ -77,8 +77,10 @@ struct PostureEngine {
                 }
 
                 // Check onset delay
-                let elapsedTime = currentTime.timeIntervalSince(newState.badPostureStartTime!)
-                if elapsedTime >= config.warningOnsetDelay {
+                let badStartTime = newState.badPostureStartTime ?? currentTime
+                let elapsedTime = currentTime.timeIntervalSince(badStartTime)
+                let onsetDelay = max(0, config.warningOnsetDelay)
+                if elapsedTime >= onsetDelay {
                     // Transition to slouching if not already
                     if !newState.isCurrentlySlouching {
                         newState.isCurrentlySlouching = true
@@ -87,7 +89,10 @@ struct PostureEngine {
                     }
 
                     // Calculate warning intensity
-                    let adjustedSeverity = pow(reading.severity, 1.0 / Double(config.intensity))
+                    let rawIntensity = Double(config.intensity)
+                    let intensity = rawIntensity > 0 ? rawIntensity : 1.0
+                    let clampedSeverity = min(1.0, max(0.0, reading.severity))
+                    let adjustedSeverity = pow(clampedSeverity, 1.0 / intensity)
                     newState.postureWarningIntensity = CGFloat(adjustedSeverity)
                 }
             }

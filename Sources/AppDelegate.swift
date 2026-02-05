@@ -21,6 +21,7 @@ extension MenuBarIconType {
 
 // MARK: - App Delegate
 
+@MainActor
 public class AppDelegate: NSObject, NSApplicationDelegate {
     public override init() {
         super.init()
@@ -38,6 +39,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     // Warning overlay (alternative to blur)
     var warningOverlayManager = WarningOverlayManager()
     let settingsProfileManager = SettingsProfileManager()
+    private var appliedWarningColorData: Data?
 
     // MARK: - Posture Detectors
 
@@ -214,7 +216,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 activeDetector.start { [weak self] success, error in
                     if !success, let error = error {
                         os_log(.error, log: log, "Failed to start detector: %{public}@", error)
-                        self?.state = .paused(.cameraDisconnected)
+                        Task { @MainActor in
+                            self?.state = .paused(.cameraDisconnected)
+                        }
                     }
                 }
             }
@@ -257,16 +261,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         setupOverlayWindows()
 
+        warningOverlayManager.mode = activeWarningMode
+        warningOverlayManager.warningColor = activeWarningColor
+        appliedWarningColorData = activeSettingsProfile?.warningColorData
         if activeWarningMode.usesWarningOverlay {
-            warningOverlayManager.mode = activeWarningMode
-            warningOverlayManager.warningColor = activeWarningColor
             warningOverlayManager.setupOverlayWindows()
         }
 
         setupObservers()
 
         Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
-            self?.updateBlur()
+            Task { @MainActor in
+                self?.updateBlur()
+            }
         }
 
         initialSetupFlow()
@@ -285,20 +292,28 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         cameraDetector.baseFrameInterval = 1.0 / activeDetectionMode.frameRate
 
         cameraDetector.onPostureReading = { [weak self] reading in
-            self?.handlePostureReading(reading)
+            Task { @MainActor in
+                self?.handlePostureReading(reading)
+            }
         }
 
         cameraDetector.onAwayStateChange = { [weak self] isAway in
-            self?.handleAwayStateChange(isAway)
+            Task { @MainActor in
+                self?.handleAwayStateChange(isAway)
+            }
         }
 
         // Configure AirPods detector
         airPodsDetector.onPostureReading = { [weak self] reading in
-            self?.handlePostureReading(reading)
+            Task { @MainActor in
+                self?.handlePostureReading(reading)
+            }
         }
 
         airPodsDetector.onConnectionStateChange = { [weak self] isConnected in
-            self?.handleConnectionStateChange(isConnected)
+            Task { @MainActor in
+                self?.handleConnectionStateChange(isConnected)
+            }
         }
     }
 
@@ -347,13 +362,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             case .recordSlouchEvent:
                 AnalyticsManager.shared.recordSlouchEvent()
             case .updateUI:
-                DispatchQueue.main.async {
-                    self.syncUIToState()
-                }
+                syncUIToState()
             case .updateBlur:
-                DispatchQueue.main.async {
-                    self.updateBlur()
-                }
+                updateBlur()
             }
         }
     }
@@ -365,9 +376,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         monitoringState = result.newState
 
         if result.shouldUpdateUI {
-            DispatchQueue.main.async {
-                self.syncUIToState()
-            }
+            syncUIToState()
         }
     }
 
@@ -376,25 +385,35 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupObservers() {
         // Display configuration changes
         displayMonitor.onDisplayConfigurationChange = { [weak self] in
-            self?.handleDisplayConfigurationChange()
+            Task { @MainActor in
+                self?.handleDisplayConfigurationChange()
+            }
         }
         displayMonitor.startMonitoring()
 
         // Camera hot-plug
         cameraObserver.onCameraConnected = { [weak self] device in
-            self?.handleCameraConnected(device)
+            Task { @MainActor in
+                self?.handleCameraConnected(device)
+            }
         }
         cameraObserver.onCameraDisconnected = { [weak self] device in
-            self?.handleCameraDisconnected(device)
+            Task { @MainActor in
+                self?.handleCameraDisconnected(device)
+            }
         }
         cameraObserver.startObserving()
 
         // Screen lock/unlock
         screenLockObserver.onScreenLocked = { [weak self] in
-            self?.handleScreenLocked()
+            Task { @MainActor in
+                self?.handleScreenLocked()
+            }
         }
         screenLockObserver.onScreenUnlocked = { [weak self] in
-            self?.handleScreenUnlocked()
+            Task { @MainActor in
+                self?.handleScreenUnlocked()
+            }
         }
         screenLockObserver.startObserving()
 
@@ -403,7 +422,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             enabled: toggleShortcutEnabled,
             shortcut: toggleShortcut,
             onToggle: { [weak self] in
-                self?.toggleEnabled()
+                Task { @MainActor in
+                    self?.toggleEnabled()
+                }
             }
         )
     }
@@ -415,19 +436,29 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarManager.updateShortcut(enabled: toggleShortcutEnabled, shortcut: toggleShortcut)
 
         menuBarManager.onToggleEnabled = { [weak self] in
-            self?.toggleEnabled()
+            Task { @MainActor in
+                self?.toggleEnabled()
+            }
         }
         menuBarManager.onRecalibrate = { [weak self] in
-            self?.startCalibration()
+            Task { @MainActor in
+                self?.startCalibration()
+            }
         }
         menuBarManager.onShowAnalytics = { [weak self] in
-            self?.showAnalytics()
+            Task { @MainActor in
+                self?.showAnalytics()
+            }
         }
         menuBarManager.onOpenSettings = { [weak self] in
-            self?.openSettings()
+            Task { @MainActor in
+                self?.openSettings()
+            }
         }
         menuBarManager.onQuit = { [weak self] in
-            self?.quit()
+            Task { @MainActor in
+                self?.quit()
+            }
         }
     }
 
@@ -509,16 +540,18 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             cameraDetector: cameraDetector,
             airPodsDetector: airPodsDetector
         ) { [weak self] source, cameraID in
-            guard let self = self else { return }
+            Task { @MainActor in
+                guard let self else { return }
 
-            self.trackingSource = source
-            if let cameraID = cameraID {
-                self.cameraDetector.selectedCameraID = cameraID
+                self.trackingSource = source
+                if let cameraID = cameraID {
+                    self.cameraDetector.selectedCameraID = cameraID
+                }
+                self.saveSettings()
+
+                // Start calibration
+                self.startCalibration()
             }
-            self.saveSettings()
-
-            // Start calibration
-            self.startCalibration()
         }
     }
 
@@ -554,11 +587,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Request authorization (this shows permission dialog if needed)
         activeDetector.requestAuthorization { [weak self] authorized in
-            guard let self = self else { return }
+            Task { @MainActor in
+                guard let self else { return }
 
-            if !authorized {
-                os_log(.error, log: log, "Authorization denied for %{public}@", self.trackingSource.displayName)
-                DispatchQueue.main.async {
+                if !authorized {
+                    os_log(.error, log: log, "Authorization denied for %{public}@", self.trackingSource.displayName)
+
                     // Reset state since we're not proceeding
                     self.state = self.isCalibrated ? .monitoring : .paused(.noProfile)
 
@@ -574,12 +608,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     if alert.runModal() == .alertFirstButtonReturn {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy")!)
                     }
+                    return
                 }
-                return
-            }
 
-            // Authorization granted - now start calibration
-            DispatchQueue.main.async {
+                // Authorization granted - now start calibration
                 self.state = .calibrating
                 self.startDetectorAndShowCalibration()
             }
@@ -594,11 +626,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         activeDetector.start { [weak self] success, error in
-            guard let self = self else { return }
+            Task { @MainActor in
+                guard let self else { return }
 
-            if !success {
-                os_log(.error, log: log, "Failed to start detector for calibration: %{public}@", error ?? "unknown")
-                DispatchQueue.main.async {
+                if !success {
+                    os_log(.error, log: log, "Failed to start detector for calibration: %{public}@", error ?? "unknown")
                     self.state = .paused(.cameraDisconnected)
                     if self.trackingSource == .camera {
                         let alert = NSAlert()
@@ -612,26 +644,28 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                             self.startCalibration()
                         }
                     }
+                    return
                 }
-                return
-            }
 
-            DispatchQueue.main.async {
                 self.calibrationController = CalibrationWindowController()
                 self.calibrationController?.start(
                     detector: self.activeDetector,
                     onComplete: { [weak self] values in
-                        self?.finishCalibration(values: values)
+                        Task { @MainActor in
+                            self?.finishCalibration(values: values)
+                        }
                     },
                     onCancel: { [weak self] in
-                        self?.cancelCalibration()
+                        Task { @MainActor in
+                            self?.cancelCalibration()
+                        }
                     }
                 )
             }
         }
     }
 
-    func finishCalibration(values: [Any]) {
+    func finishCalibration(values: [CalibrationSample]) {
         guard values.count >= 4 else {
             cancelCalibration()
             return
@@ -712,15 +746,24 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     func applyDetectionMode() {
         cameraDetector.baseFrameInterval = 1.0 / activeDetectionMode.frameRate
     }
+
     func applyActiveSettingsProfile() {
         postureConfig.intensity = activeIntensity
         postureConfig.warningOnsetDelay = activeWarningOnsetDelay
         activeDetector.updateParameters(intensity: activeIntensity, deadZone: activeDeadZone)
-        if setupComplete {
+        applyDetectionMode()
+
+        guard setupComplete else { return }
+
+        if warningOverlayManager.mode != activeWarningMode {
             switchWarningMode(to: activeWarningMode)
+        }
+
+        let desiredColorData = activeSettingsProfile?.warningColorData
+        if desiredColorData != appliedWarningColorData {
+            appliedWarningColorData = desiredColorData
             updateWarningColor(activeWarningColor)
         }
-        applyDetectionMode()
     }
 
 
@@ -801,83 +844,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Global Keyboard Shortcut
-
-    func updateGlobalKeyMonitor() {
-        hotkeyManager.isEnabled = toggleShortcutEnabled
-        hotkeyManager.shortcut = toggleShortcut
-        menuBarManager.updateShortcut(enabled: toggleShortcutEnabled, shortcut: toggleShortcut)
-    }
-
-    // MARK: - Persistence
-
-    func saveSettings() {
-        let defaults = UserDefaults.standard
-        defaults.set(useCompatibilityMode, forKey: SettingsKeys.useCompatibilityMode)
-        defaults.set(blurWhenAway, forKey: SettingsKeys.blurWhenAway)
-        defaults.set(showInDock, forKey: SettingsKeys.showInDock)
-        defaults.set(pauseOnTheGo, forKey: SettingsKeys.pauseOnTheGo)
-        defaults.set(toggleShortcutEnabled, forKey: SettingsKeys.toggleShortcutEnabled)
-        defaults.set(Int(toggleShortcut.keyCode), forKey: SettingsKeys.toggleShortcutKeyCode)
-        defaults.set(Int(toggleShortcut.modifiers.rawValue), forKey: SettingsKeys.toggleShortcutModifiers)
-        if let cameraID = selectedCameraID {
-            defaults.set(cameraID, forKey: SettingsKeys.lastCameraID)
-        }
-        defaults.set(trackingSource.rawValue, forKey: SettingsKeys.trackingSource)
-        if let airPodsCalibration = airPodsCalibration,
-           let data = try? JSONEncoder().encode(airPodsCalibration) {
-            defaults.set(data, forKey: SettingsKeys.airPodsCalibration)
-        }
-    }
-
-    func loadSettings() {
-        let defaults = UserDefaults.standard
-        settingsProfileManager.loadProfiles()
-        applyActiveSettingsProfile()
-
-        useCompatibilityMode = defaults.bool(forKey: SettingsKeys.useCompatibilityMode)
-        blurWhenAway = defaults.bool(forKey: SettingsKeys.blurWhenAway)
-        showInDock = defaults.bool(forKey: SettingsKeys.showInDock)
-        pauseOnTheGo = defaults.bool(forKey: SettingsKeys.pauseOnTheGo)
-        cameraDetector.selectedCameraID = defaults.string(forKey: SettingsKeys.lastCameraID)
-        if let sourceString = defaults.string(forKey: SettingsKeys.trackingSource),
-           let source = TrackingSource(rawValue: sourceString) {
-            trackingSource = source
-        }
-        if let data = defaults.data(forKey: SettingsKeys.airPodsCalibration),
-           let calibration = try? JSONDecoder().decode(AirPodsCalibrationData.self, from: data) {
-            airPodsCalibration = calibration
-        }
-        if defaults.object(forKey: SettingsKeys.toggleShortcutEnabled) != nil {
-            toggleShortcutEnabled = defaults.bool(forKey: SettingsKeys.toggleShortcutEnabled)
-        }
-        if defaults.object(forKey: SettingsKeys.toggleShortcutKeyCode) != nil {
-            let keyCode = UInt16(defaults.integer(forKey: SettingsKeys.toggleShortcutKeyCode))
-            let modifiers = NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: SettingsKeys.toggleShortcutModifiers)))
-            toggleShortcut = KeyboardShortcut(keyCode: keyCode, modifiers: modifiers)
-        }
-    }
-
-    func saveProfile(forKey key: String, data: ProfileData) {
-        let defaults = UserDefaults.standard
-        var profiles = defaults.dictionary(forKey: SettingsKeys.profiles) as? [String: Data] ?? [:]
-
-        if let encoded = try? JSONEncoder().encode(data) {
-            profiles[key] = encoded
-            defaults.set(profiles, forKey: SettingsKeys.profiles)
-        }
-    }
-
-    func loadProfile(forKey key: String) -> ProfileData? {
-        let defaults = UserDefaults.standard
-        guard let profiles = defaults.dictionary(forKey: SettingsKeys.profiles) as? [String: Data],
-              let data = profiles[key] else {
-            return nil
-        }
-
-        return try? JSONDecoder().decode(ProfileData.self, from: data)
-    }
-
     // MARK: - Display Configuration
 
     private func handleDisplayConfigurationChange() {
@@ -920,146 +886,4 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Overlay Windows
-
-    func setupOverlayWindows() {
-        for screen in NSScreen.screens {
-            let frame = screen.visibleFrame
-            let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
-            window.isOpaque = false
-            window.backgroundColor = .clear
-            window.level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue - 1)
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            window.ignoresMouseEvents = true
-            window.hasShadow = false
-
-            let blurView = NSVisualEffectView(frame: NSRect(origin: .zero, size: frame.size))
-            blurView.blendingMode = .behindWindow
-            blurView.material = .fullScreenUI
-            blurView.state = .active
-            blurView.alphaValue = 0
-
-            window.contentView = blurView
-            window.orderFrontRegardless()
-            windows.append(window)
-            blurViews.append(blurView)
-        }
-    }
-
-    func rebuildOverlayWindows() {
-        for window in windows {
-            window.orderOut(nil)
-        }
-        windows.removeAll()
-        blurViews.removeAll()
-        setupOverlayWindows()
-
-        if activeWarningMode.usesWarningOverlay {
-            warningOverlayManager.rebuildOverlayWindows()
-        }
-    }
-
-    func clearBlur() {
-        targetBlurRadius = 0
-        currentBlurRadius = 0
-
-        for blurView in blurViews {
-            blurView.alphaValue = 0
-        }
-
-        #if !APP_STORE
-        if let getConnectionID = cgsMainConnectionID,
-           let setBlurRadius = cgsSetWindowBackgroundBlurRadius {
-            let cid = getConnectionID()
-            for window in windows {
-                _ = setBlurRadius(cid, UInt32(window.windowNumber), 0)
-            }
-        }
-        #endif
-    }
-
-    func switchWarningMode(to newMode: WarningMode) {
-        clearBlur()
-
-        warningOverlayManager.currentIntensity = 0
-        warningOverlayManager.targetIntensity = 0
-        for view in warningOverlayManager.overlayViews {
-            if let vignetteView = view as? VignetteOverlayView {
-                vignetteView.intensity = 0
-            } else if let borderView = view as? BorderOverlayView {
-                borderView.intensity = 0
-            }
-        }
-
-        for window in warningOverlayManager.windows {
-            window.orderOut(nil)
-        }
-        warningOverlayManager.windows.removeAll()
-        warningOverlayManager.overlayViews.removeAll()
-
-        if newMode.usesWarningOverlay {
-            warningOverlayManager.mode = newMode
-            warningOverlayManager.warningColor = activeWarningColor
-            warningOverlayManager.setupOverlayWindows()
-        }
-    }
-
-    func updateWarningColor(_ color: NSColor) {
-        warningOverlayManager.updateColor(color)
-    }
-
-    func updateBlur() {
-        let privacyBlurIntensity: CGFloat = isCurrentlyAway ? 1.0 : 0.0
-
-        switch activeWarningMode {
-        case .blur:
-            let combinedIntensity = max(privacyBlurIntensity, postureWarningIntensity)
-            targetBlurRadius = Int32(combinedIntensity * 64)
-            warningOverlayManager.targetIntensity = 0
-        case .none:
-            targetBlurRadius = Int32(privacyBlurIntensity * 64)
-            warningOverlayManager.targetIntensity = 0
-        case .vignette, .border, .solid:
-            targetBlurRadius = Int32(privacyBlurIntensity * 64)
-            warningOverlayManager.targetIntensity = postureWarningIntensity
-        }
-
-        // Skip work if nothing is changing
-        let blurNeedsUpdate = currentBlurRadius != targetBlurRadius
-        let overlayNeedsUpdate = warningOverlayManager.currentIntensity != warningOverlayManager.targetIntensity
-        guard blurNeedsUpdate || overlayNeedsUpdate else { return }
-
-        warningOverlayManager.updateWarning()
-
-        if currentBlurRadius < targetBlurRadius {
-            currentBlurRadius = min(currentBlurRadius + 1, targetBlurRadius)
-        } else if currentBlurRadius > targetBlurRadius {
-            currentBlurRadius = max(currentBlurRadius - 3, targetBlurRadius)
-        }
-
-        let normalizedBlur = CGFloat(currentBlurRadius) / 64.0
-        let visualEffectAlpha = min(1.0, sqrt(normalizedBlur) * 1.2)
-
-        #if APP_STORE
-        for blurView in blurViews {
-            blurView.alphaValue = visualEffectAlpha
-        }
-        #else
-        if useCompatibilityMode {
-            for blurView in blurViews {
-                blurView.alphaValue = visualEffectAlpha
-            }
-        } else if let getConnectionID = cgsMainConnectionID,
-                  let setBlurRadius = cgsSetWindowBackgroundBlurRadius {
-            let cid = getConnectionID()
-            for window in windows {
-                _ = setBlurRadius(cid, UInt32(window.windowNumber), currentBlurRadius)
-            }
-        } else {
-            for blurView in blurViews {
-                blurView.alphaValue = visualEffectAlpha
-            }
-        }
-        #endif
-    }
 }

@@ -49,7 +49,7 @@ class CameraPostureDetector: NSObject, PostureDetector {
     }
 
     var onPostureReading: ((PostureReading) -> Void)?
-    var onCalibrationUpdate: ((Any) -> Void)?
+    var onCalibrationUpdate: ((CalibrationSample) -> Void)?
 
     // MARK: - Camera State
 
@@ -59,6 +59,7 @@ class CameraPostureDetector: NSObject, PostureDetector {
 
     var selectedCameraID: String?
     private var isMonitoring = false
+    private var isStarting = false
 
     // MARK: - Calibration State
 
@@ -89,19 +90,28 @@ class CameraPostureDetector: NSObject, PostureDetector {
     private var consecutiveNoDetectionFrames = 0
     private let awayFrameThreshold = 15
     var onAwayStateChange: ((Bool) -> Void)?
+    private var isAway = false
 
     // MARK: - Lifecycle
 
     func start(completion: @escaping (Bool, String?) -> Void) {
+        // Idempotent start (prevents double-start during calibration/state transitions)
+        if isActive || isStarting {
+            completion(true, nil)
+            return
+        }
+
         let status = AVCaptureDevice.authorizationStatus(for: .video)
 
         switch status {
         case .authorized:
+            isStarting = true
             setupCamera()
             startSession()
             completion(true, nil)
 
         case .notDetermined:
+            isStarting = true
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 DispatchQueue.main.async {
                     if granted {
@@ -109,6 +119,7 @@ class CameraPostureDetector: NSObject, PostureDetector {
                         self?.startSession()
                         completion(true, nil)
                     } else {
+                        self?.isStarting = false
                         completion(false, "Camera access denied")
                     }
                 }
@@ -130,27 +141,27 @@ class CameraPostureDetector: NSObject, PostureDetector {
         captureSession?.stopRunning()
         isActive = false
         isMonitoring = false
+        isStarting = false
+        consecutiveNoDetectionFrames = 0
+        isAway = false
     }
 
     // MARK: - Calibration
 
-    func getCurrentCalibrationValue() -> Any {
-        if currentFaceWidth > 0 {
-            return CalibrationPoint(noseY: currentNoseY, faceWidth: currentFaceWidth)
-        }
-        return currentNoseY
+    func getCurrentCalibrationValue() -> CalibrationSample {
+        let faceWidth: CGFloat? = currentFaceWidth > 0 ? currentFaceWidth : nil
+        return .camera(CameraCalibrationSample(noseY: currentNoseY, faceWidth: faceWidth))
     }
 
-    func createCalibrationData(from points: [Any]) -> CalibrationData? {
+    func createCalibrationData(from samples: [CalibrationSample]) -> CalibrationData? {
         var yValues: [CGFloat] = []
         var widthValues: [CGFloat] = []
 
-        for point in points {
-            if let calibrationPoint = point as? CalibrationPoint {
-                yValues.append(calibrationPoint.noseY)
-                widthValues.append(calibrationPoint.faceWidth)
-            } else if let y = point as? CGFloat {
-                yValues.append(y)
+        for sample in samples {
+            guard case .camera(let cameraSample) = sample else { continue }
+            yValues.append(cameraSample.noseY)
+            if let faceWidth = cameraSample.faceWidth {
+                widthValues.append(faceWidth)
             }
         }
 
@@ -190,6 +201,8 @@ class CameraPostureDetector: NSObject, PostureDetector {
         self.isMonitoring = true
         self.isCurrentlySlouching = false
         self.noseYHistory.removeAll()
+        self.consecutiveNoDetectionFrames = 0
+        self.isAway = false
 
         os_log(.info, log: log, "Started monitoring with intensity=%.2f, deadZone=%.2f", intensity, deadZone)
     }
@@ -276,6 +289,7 @@ class CameraPostureDetector: NSObject, PostureDetector {
             self?.captureSession?.startRunning()
             DispatchQueue.main.async {
                 self?.isActive = true
+                self?.isStarting = false
                 os_log(.info, log: log, "Camera session started")
             }
         }
@@ -370,14 +384,11 @@ class CameraPostureDetector: NSObject, PostureDetector {
         }
 
         // Send calibration update
-        if let width = faceWidth {
-            onCalibrationUpdate?(CalibrationPoint(noseY: noseY, faceWidth: width))
-        } else {
-            onCalibrationUpdate?(noseY)
-        }
+        onCalibrationUpdate?(.camera(CameraCalibrationSample(noseY: noseY, faceWidth: faceWidth)))
 
-        // Reset away state
-        if blurWhenAway {
+        // Reset away state only on transitions
+        if blurWhenAway, isAway {
+            isAway = false
             onAwayStateChange?(false)
         }
 
@@ -392,7 +403,8 @@ class CameraPostureDetector: NSObject, PostureDetector {
 
         consecutiveNoDetectionFrames += 1
 
-        if consecutiveNoDetectionFrames >= awayFrameThreshold {
+        if consecutiveNoDetectionFrames >= awayFrameThreshold, !isAway {
+            isAway = true
             onAwayStateChange?(true)
         }
     }
@@ -479,6 +491,8 @@ extension CameraPostureDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
         guard now.timeIntervalSince(lastFrameTime) >= frameInterval else { return }
         lastFrameTime = now
 
-        processFrame(pixelBuffer)
+        autoreleasepool {
+            processFrame(pixelBuffer)
+        }
     }
 }

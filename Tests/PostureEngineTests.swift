@@ -170,6 +170,42 @@ final class PostureEngineTests: XCTestCase {
         XCTAssertGreaterThan(result.newState.postureWarningIntensity, 0)
     }
 
+    // MARK: - Defensive Input Tests
+
+    func testIntensityZeroDefaultsToOne() {
+        let now = Date()
+        let state = makeState(badFrames: 7) // Will become 8
+        let result = PostureEngine.processReading(
+            makeReading(bad: true, severity: 0.8),
+            state: state,
+            config: makeConfig(frameThreshold: 8, onsetDelay: 0, intensity: 0),
+            currentTime: now
+        )
+
+        XCTAssertEqual(Double(result.newState.postureWarningIntensity), 0.8, accuracy: 0.0001)
+    }
+
+    func testSeverityIsClampedToZeroToOne() {
+        let now = Date()
+        let state = makeState(badFrames: 7) // Will become 8
+
+        let high = PostureEngine.processReading(
+            makeReading(bad: true, severity: 2.0),
+            state: state,
+            config: makeConfig(frameThreshold: 8, onsetDelay: 0, intensity: 1.0),
+            currentTime: now
+        )
+        XCTAssertEqual(Double(high.newState.postureWarningIntensity), 1.0, accuracy: 0.0001)
+
+        let low = PostureEngine.processReading(
+            makeReading(bad: true, severity: -1.0),
+            state: state,
+            config: makeConfig(frameThreshold: 8, onsetDelay: 0, intensity: 1.0),
+            currentTime: now
+        )
+        XCTAssertEqual(Double(low.newState.postureWarningIntensity), 0.0, accuracy: 0.0001)
+    }
+
     // MARK: - Onset Delay Tests
 
     func testOnsetDelayPreventsImmediateSlouching() {

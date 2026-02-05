@@ -2,6 +2,7 @@ import AppKit
 
 // MARK: - Menu Bar Manager
 
+@MainActor
 final class MenuBarManager {
     private(set) var statusItem: NSStatusItem!
     private var statusMenuItem: NSMenuItem!

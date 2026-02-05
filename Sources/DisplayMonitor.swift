@@ -4,31 +4,55 @@ import CoreGraphics
 /// Monitors display configuration changes (connect/disconnect/arrangement)
 final class DisplayMonitor {
 
+    typealias RegisterCallback = (CGDisplayReconfigurationCallBack, UnsafeMutableRawPointer?) -> CGError
+    typealias RemoveCallback = (CGDisplayReconfigurationCallBack, UnsafeMutableRawPointer?) -> CGError
+
     private var debounceTimer: Timer?
     private var callbackRegistered = false
+    private var callbackUserInfo: UnsafeMutableRawPointer?
+
+    private let registerCallback: RegisterCallback
+    private let removeCallback: RemoveCallback
 
     var onDisplayConfigurationChange: (() -> Void)?
 
     // MARK: - Public API
 
+    init(
+        registerCallback: @escaping RegisterCallback = CGDisplayRegisterReconfigurationCallback,
+        removeCallback: @escaping RemoveCallback = CGDisplayRemoveReconfigurationCallback
+    ) {
+        self.registerCallback = registerCallback
+        self.removeCallback = removeCallback
+    }
+
     func startMonitoring() {
         guard !callbackRegistered else { return }
 
-        let callback: CGDisplayReconfigurationCallBack = { displayID, flags, userInfo in
-            guard let userInfo = userInfo else { return }
-            let monitor = Unmanaged<DisplayMonitor>.fromOpaque(userInfo).takeUnretainedValue()
-
-            // Ignore begin configuration events
-            if flags.contains(.beginConfigurationFlag) {
-                return
-            }
-
-            monitor.scheduleConfigurationChange()
+        callbackUserInfo = Unmanaged.passUnretained(self).toOpaque()
+        let result = registerCallback(Self.displayReconfigurationCallback, callbackUserInfo)
+        if result == .success {
+            callbackRegistered = true
+        } else {
+            callbackUserInfo = nil
         }
+    }
 
-        let userInfo = Unmanaged.passUnretained(self).toOpaque()
-        CGDisplayRegisterReconfigurationCallback(callback, userInfo)
-        callbackRegistered = true
+    func stopMonitoring() {
+        guard callbackRegistered else { return }
+
+        debounceTimer?.invalidate()
+        debounceTimer = nil
+
+        if let callbackUserInfo {
+            _ = removeCallback(Self.displayReconfigurationCallback, callbackUserInfo)
+        }
+        callbackUserInfo = nil
+        callbackRegistered = false
+    }
+
+    deinit {
+        stopMonitoring()
     }
 
     // MARK: - Display Utilities
@@ -71,6 +95,18 @@ final class DisplayMonitor {
     }
 
     // MARK: - Private
+
+    private static let displayReconfigurationCallback: CGDisplayReconfigurationCallBack = { _, flags, userInfo in
+        guard let userInfo else { return }
+        let monitor = Unmanaged<DisplayMonitor>.fromOpaque(userInfo).takeUnretainedValue()
+
+        // Ignore begin configuration events
+        if flags.contains(.beginConfigurationFlag) {
+            return
+        }
+
+        monitor.scheduleConfigurationChange()
+    }
 
     private func scheduleConfigurationChange() {
         DispatchQueue.main.async { [weak self] in

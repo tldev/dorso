@@ -133,7 +133,7 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
     }
 
     var onPostureReading: ((PostureReading) -> Void)?
-    var onCalibrationUpdate: ((Any) -> Void)?
+    var onCalibrationUpdate: ((CalibrationSample) -> Void)?
 
     // MARK: - Internal State
 
@@ -208,13 +208,19 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
             return
         }
 
-        // If already running, complete immediately
-        if manager.isDeviceMotionActive {
+        // Treat already-running managers as active (idempotent start)
+        if isActive || manager.isDeviceMotionActive {
+            isActive = true
+            manager.delegate = self
+            manager.startConnectionStatusUpdates()
             completion(true, nil)
             return
         }
 
         os_log(.info, log: log, "Starting AirPods motion tracking")
+
+        // Mark active before starting updates so early callbacks aren't dropped
+        isActive = true
 
         // Set delegate for connection status callbacks
         manager.delegate = self
@@ -243,7 +249,11 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
             self.currentYaw = motion.attitude.yaw
 
             // Send calibration update if handler is set
-            self.onCalibrationUpdate?((self.currentPitch, self.currentRoll, self.currentYaw))
+            self.onCalibrationUpdate?(.airPods(AirPodsCalibrationSample(
+                pitch: self.currentPitch,
+                roll: self.currentRoll,
+                yaw: self.currentYaw
+            )))
 
             // Evaluate posture if monitoring
             if self.isMonitoring, let calibration = self.calibrationData {
@@ -252,7 +262,6 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
         }
 
         // Complete immediately - calibration screen will wait for connection
-        isActive = true
         completion(true, nil)
     }
 
@@ -270,18 +279,21 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
 
     // MARK: - Calibration
 
-    func getCurrentCalibrationValue() -> Any {
-        return (currentPitch, currentRoll, currentYaw)
+    func getCurrentCalibrationValue() -> CalibrationSample {
+        .airPods(AirPodsCalibrationSample(pitch: currentPitch, roll: currentRoll, yaw: currentYaw))
     }
 
-    func createCalibrationData(from points: [Any]) -> CalibrationData? {
-        let motionPoints = points.compactMap { $0 as? (Double, Double, Double) }
+    func createCalibrationData(from samples: [CalibrationSample]) -> CalibrationData? {
+        let motionPoints: [AirPodsCalibrationSample] = samples.compactMap { sample in
+            guard case .airPods(let motionSample) = sample else { return nil }
+            return motionSample
+        }
         guard !motionPoints.isEmpty else { return nil }
 
         // Average all captured points
-        let avgPitch = motionPoints.map { $0.0 }.reduce(0, +) / Double(motionPoints.count)
-        let avgRoll = motionPoints.map { $0.1 }.reduce(0, +) / Double(motionPoints.count)
-        let avgYaw = motionPoints.map { $0.2 }.reduce(0, +) / Double(motionPoints.count)
+        let avgPitch = motionPoints.map(\.pitch).reduce(0, +) / Double(motionPoints.count)
+        let avgRoll = motionPoints.map(\.roll).reduce(0, +) / Double(motionPoints.count)
+        let avgYaw = motionPoints.map(\.yaw).reduce(0, +) / Double(motionPoints.count)
 
         os_log(.info, log: log, "Created calibration: pitch=%.3f, roll=%.3f, yaw=%.3f", avgPitch, avgRoll, avgYaw)
 

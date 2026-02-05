@@ -19,10 +19,25 @@ protocol CalibrationData: Codable {
     var isValid: Bool { get }
 }
 
-/// Calibration point captured during calibration (face position + size)
-struct CalibrationPoint {
+// MARK: - Calibration Samples
+
+/// Calibration point captured during camera calibration (face position + optional face width).
+struct CameraCalibrationSample: Equatable {
     let noseY: CGFloat
-    let faceWidth: CGFloat
+    let faceWidth: CGFloat?
+}
+
+/// Calibration point captured during AirPods calibration (Euler angles in radians).
+struct AirPodsCalibrationSample: Equatable {
+    let pitch: Double
+    let roll: Double
+    let yaw: Double
+}
+
+/// Calibration sample from any detector.
+enum CalibrationSample: Equatable {
+    case camera(CameraCalibrationSample)
+    case airPods(AirPodsCalibrationSample)
 }
 
 /// Camera-based calibration profile
@@ -129,7 +144,7 @@ protocol PostureDetector: AnyObject {
     var onPostureReading: ((PostureReading) -> Void)? { get set }
 
     /// Called during calibration with raw position data
-    var onCalibrationUpdate: ((Any) -> Void)? { get set }
+    var onCalibrationUpdate: ((CalibrationSample) -> Void)? { get set }
 
     /// Called when connection state changes (e.g., AirPods removed from ears)
     /// Not all detectors use this - camera is always "connected" when active
@@ -146,10 +161,10 @@ protocol PostureDetector: AnyObject {
     // MARK: - Calibration
 
     /// Get current calibration value (detector-specific type)
-    func getCurrentCalibrationValue() -> Any
+    func getCurrentCalibrationValue() -> CalibrationSample
 
     /// Create calibration data from captured points
-    func createCalibrationData(from points: [Any]) -> CalibrationData?
+    func createCalibrationData(from samples: [CalibrationSample]) -> CalibrationData?
 
     // MARK: - Monitoring
 
@@ -158,11 +173,4 @@ protocol PostureDetector: AnyObject {
 
     /// Update monitoring parameters
     func updateParameters(intensity: CGFloat, deadZone: CGFloat)
-}
-
-// MARK: - Settings Keys Extension
-
-extension SettingsKeys {
-    static let cameraCalibration = "cameraCalibration"
-    static let airPodsCalibration = "airPodsCalibration"
 }

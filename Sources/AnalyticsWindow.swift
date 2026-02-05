@@ -4,6 +4,7 @@ import AppKit
 
 // MARK: - Window Controller
 
+@MainActor
 class AnalyticsWindowController: NSWindowController {
     convenience init() {
         let hostingController = NSHostingController(rootView: AnalyticsView())
