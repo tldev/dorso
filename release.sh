@@ -179,11 +179,15 @@ rm -f "build/$DMG_NAME"
 
 create-dmg \
     --volname "Posturr" \
+    --volicon "build/Posturr.app/Contents/Resources/AppIcon.icns" \
+    --background "assets/dmg-background.png" \
     --window-pos 200 120 \
-    --window-size 600 400 \
-    --icon-size 100 \
-    --icon "Posturr.app" 150 190 \
-    --app-drop-link 450 190 \
+    --window-size 654 444 \
+    --icon-size 140 \
+    --text-size 12 \
+    --icon "Posturr.app" 197 195 \
+    --hide-extension "Posturr.app" \
+    --app-drop-link 473 195 \
     "build/$DMG_NAME" \
     build/Posturr.app
 
