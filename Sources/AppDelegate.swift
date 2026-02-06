@@ -92,6 +92,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     var pauseOnTheGo = false
     var settingsWindowController = SettingsWindowController()
     var analyticsWindowController: AnalyticsWindowController?
+    var postureVisualizerController: PostureVisualizerWindowController?
     var onboardingWindowController: OnboardingWindowController?
 
     // Observers and monitors
@@ -242,6 +243,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarManager.updateStatus(text: uiState.statusText, icon: uiState.icon.menuBarIcon)
         menuBarManager.updateEnabledState(uiState.isEnabled)
         menuBarManager.updateRecalibrateEnabled(uiState.canRecalibrate)
+
+        updateVisualizerModel(severity: isCurrentlySlouching ? monitoringState.postureWarningIntensity : 0)
     }
 
     // MARK: - App Lifecycle
@@ -372,6 +375,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         // Update state
         monitoringState = result.newState
 
+        // Feed live data to visualizer
+        updateVisualizerModel(severity: reading.severity)
+
         // Execute effects
         for effect in result.effects {
             switch effect {
@@ -465,6 +471,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.startCalibration()
             }
         }
+        menuBarManager.onShowVisualizer = { [weak self] in
+            Task { @MainActor in
+                self?.showPostureVisualizer()
+            }
+        }
         menuBarManager.onShowAnalytics = { [weak self] in
             Task { @MainActor in
                 self?.showAnalytics()
@@ -499,6 +510,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             state = .disabled
         }
         saveSettings()
+    }
+
+    private func showPostureVisualizer() {
+        if postureVisualizerController == nil {
+            postureVisualizerController = PostureVisualizerWindowController()
+        }
+        postureVisualizerController?.showWindow()
+        updateVisualizerModel(severity: 0)
     }
 
     private func showAnalytics() {
@@ -787,6 +806,17 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+
+    // MARK: - Visualizer
+
+    func updateVisualizerModel(severity: Double) {
+        PostureVisualizerModel.shared.update(
+            from: monitoringState,
+            appState: state,
+            trackingSource: trackingSource,
+            severity: severity
+        )
+    }
 
     // MARK: - Camera Hot-Plug
 

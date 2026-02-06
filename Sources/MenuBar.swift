@@ -12,6 +12,7 @@ final class MenuBarManager {
     // Callbacks
     var onToggleEnabled: (() -> Void)?
     var onRecalibrate: (() -> Void)?
+    var onShowVisualizer: (() -> Void)?
     var onShowAnalytics: (() -> Void)?
     var onOpenSettings: (() -> Void)?
     var onQuit: (() -> Void)?
@@ -44,6 +45,12 @@ final class MenuBarManager {
         menu.addItem(recalibrateMenuItem)
 
         menu.addItem(NSMenuItem.separator())
+
+        // Posture Visualizer
+        let visualizerItem = NSMenuItem(title: L("menu.visualizer"), action: #selector(handleShowVisualizer), keyEquivalent: "v")
+        visualizerItem.target = self
+        visualizerItem.image = NSImage(systemSymbolName: "waveform.path.ecg", accessibilityDescription: L("menu.visualizer"))
+        menu.addItem(visualizerItem)
 
         // Analytics
         let statsItem = NSMenuItem(title: L("menu.analytics"), action: #selector(handleShowAnalytics), keyEquivalent: "a")
@@ -100,6 +107,10 @@ final class MenuBarManager {
 
     @objc private func handleRecalibrate() {
         onRecalibrate?()
+    }
+
+    @objc private func handleShowVisualizer() {
+        onShowVisualizer?()
     }
 
     @objc private func handleShowAnalytics() {

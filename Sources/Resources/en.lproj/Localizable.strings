@@ -181,6 +181,23 @@
 "onboarding.unavailable" = "Unavailable";
 "onboarding.continue" = "Continue";
 
+// MARK: - Posture Visualizer (PostureVisualizerWindow.swift)
+
+"menu.visualizer" = "Posture Visualizer";
+"visualizer.title" = "Posture Visualizer";
+"visualizer.status.disabled" = "Disabled";
+"visualizer.status.calibrating" = "Calibrating";
+"visualizer.status.away" = "Away";
+"visualizer.status.slouching" = "Slouching";
+"visualizer.status.good" = "Good";
+"visualizer.status.paused" = "Paused";
+"visualizer.warningLevel" = "Warning Level";
+"visualizer.intensity.none" = "None";
+"visualizer.goodFrames" = "Good Frames";
+"visualizer.badFrames" = "Bad Frames";
+"visualizer.source" = "Source";
+"visualizer.severity" = "Severity";
+
 // MARK: - Common
 
 "common.cancel" = "Cancel";
