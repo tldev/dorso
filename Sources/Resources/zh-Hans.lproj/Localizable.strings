@@ -48,7 +48,7 @@
 // MARK: - Warning Mode (SettingsWindow.swift)
 
 "warningMode.blur" = "模糊";
-"warningMode.vignette" = "暗角";
+"warningMode.glow" = "光晕";
 "warningMode.border" = "边框";
 "warningMode.solid" = "全屏";
 "warningMode.none" = "无";
@@ -123,7 +123,7 @@
 "settings.profile.deleteMessage" = "确定要删除此配置文件吗？此操作无法撤销。";
 "settings.profile.delete" = "删除";
 "settings.warning" = "警告";
-"settings.warning.help" = "模糊会遮挡屏幕，暗角在边缘显示光晕，边框显示彩色边框，全屏填充屏幕。无则禁用视觉警告。";
+"settings.warning.help" = "模糊会遮挡屏幕，光晕在边缘显示光晕，边框显示彩色边框，全屏填充屏幕。无则禁用视觉警告。";
 "settings.deadZone" = "容差区";
 "settings.deadZone.help" = "触发警告前允许的移动范围。宽松的容差区允许更多自然运动。";
 "settings.intensity" = "强度";

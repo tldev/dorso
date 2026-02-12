@@ -48,7 +48,7 @@
 // MARK: - Warning Mode (SettingsWindow.swift)
 
 "warningMode.blur" = "Flou";
-"warningMode.vignette" = "Vignette";
+"warningMode.glow" = "Halo";
 "warningMode.border" = "Bordure";
 "warningMode.solid" = "Plein";
 "warningMode.none" = "Aucun";
@@ -123,7 +123,7 @@
 "settings.profile.deleteMessage" = "Voulez-vous vraiment supprimer ce profil ? Cette action est irréversible.";
 "settings.profile.delete" = "Supprimer";
 "settings.warning" = "Avertissement";
-"settings.warning.help" = "Flou obscurcit l'écran, Vignette affiche un halo sur les bords, Bordure affiche des bordures colorées, Plein remplit l'écran. Aucun désactive les avertissements visuels.";
+"settings.warning.help" = "Flou obscurcit l'écran, Halo affiche un halo sur les bords, Bordure affiche des bordures colorées, Plein remplit l'écran. Aucun désactive les avertissements visuels.";
 "settings.deadZone" = "Zone morte";
 "settings.deadZone.help" = "L'amplitude de mouvement autorisée avant le déclenchement de l'avertissement. Une zone morte détendue permet plus de mouvements naturels.";
 "settings.intensity" = "Intensité";

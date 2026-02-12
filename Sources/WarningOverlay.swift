@@ -1,9 +1,9 @@
 import AppKit
 import CoreGraphics
 
-// MARK: - Vignette Gradient Layer
+// MARK: - Glow Gradient Layer
 
-class VignetteGradientLayer: CALayer {
+class GlowGradientLayer: CALayer {
     var intensity: CGFloat = 0.0
     var reach: CGFloat = 0.7
     var warningColor: NSColor = WarningDefaults.color
@@ -16,7 +16,7 @@ class VignetteGradientLayer: CALayer {
 
     override init(layer: Any) {
         super.init(layer: layer)
-        if let other = layer as? VignetteGradientLayer {
+        if let other = layer as? GlowGradientLayer {
             intensity = other.intensity
             reach = other.reach
             warningColor = other.warningColor
@@ -71,10 +71,10 @@ class VignetteGradientLayer: CALayer {
     }
 }
 
-// MARK: - Vignette Overlay View
+// MARK: - Glow Overlay View
 
-class VignetteOverlayView: NSView {
-    private var vignetteLayer: VignetteGradientLayer!
+class GlowOverlayView: NSView {
+    private var glowLayer: GlowGradientLayer!
     private var lastDrawnIntensity: CGFloat = -1
 
     var intensity: CGFloat = 0.0 {
@@ -85,7 +85,7 @@ class VignetteOverlayView: NSView {
 
     var reach: CGFloat = 0.7 {
         didSet {
-            vignetteLayer.reach = reach
+            glowLayer.reach = reach
             lastDrawnIntensity = -1
             updateLayerIfNeeded()
         }
@@ -93,7 +93,7 @@ class VignetteOverlayView: NSView {
 
     var warningColor: NSColor = WarningDefaults.color {
         didSet {
-            vignetteLayer.warningColor = warningColor
+            glowLayer.warningColor = warningColor
             lastDrawnIntensity = -1
             updateLayerIfNeeded()
         }
@@ -113,15 +113,15 @@ class VignetteOverlayView: NSView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
 
-        vignetteLayer = VignetteGradientLayer()
-        vignetteLayer.frame = bounds
-        vignetteLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
-        layer?.addSublayer(vignetteLayer)
+        glowLayer = GlowGradientLayer()
+        glowLayer.frame = bounds
+        glowLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
+        layer?.addSublayer(glowLayer)
     }
 
     override func layout() {
         super.layout()
-        vignetteLayer.frame = bounds
+        glowLayer.frame = bounds
         lastDrawnIntensity = -1
         updateLayerIfNeeded()
     }
@@ -132,8 +132,8 @@ class VignetteOverlayView: NSView {
         guard abs(intensity - lastDrawnIntensity) > threshold else { return }
 
         lastDrawnIntensity = intensity
-        vignetteLayer.intensity = intensity
-        vignetteLayer.setNeedsDisplay()
+        glowLayer.intensity = intensity
+        glowLayer.setNeedsDisplay()
     }
 }
 
@@ -350,7 +350,7 @@ class WarningOverlayManager {
     var overlayViews: [NSView] = []
     var currentIntensity: CGFloat = 0.0
     var targetIntensity: CGFloat = 0.0
-    var mode: WarningMode = .vignette
+    var mode: WarningMode = .glow
     var warningColor: NSColor = WarningDefaults.color
 
     func setupOverlayWindows() {
@@ -371,8 +371,8 @@ class WarningOverlayManager {
 
             let overlayView: NSView
             switch mode {
-            case .vignette:
-                let view = VignetteOverlayView(frame: NSRect(origin: .zero, size: frame.size))
+            case .glow:
+                let view = GlowOverlayView(frame: NSRect(origin: .zero, size: frame.size))
                 view.warningColor = warningColor
                 overlayView = view
             case .border:
@@ -416,8 +416,8 @@ class WarningOverlayManager {
         }
 
         for view in overlayViews {
-            if let vignetteView = view as? VignetteOverlayView {
-                vignetteView.intensity = currentIntensity
+            if let glowView = view as? GlowOverlayView {
+                glowView.intensity = currentIntensity
             } else if let borderView = view as? BorderOverlayView {
                 borderView.intensity = currentIntensity
             } else if let solidView = view as? SolidOverlayView {
@@ -429,8 +429,8 @@ class WarningOverlayManager {
     func updateColor(_ color: NSColor) {
         warningColor = color
         for view in overlayViews {
-            if let vignetteView = view as? VignetteOverlayView {
-                vignetteView.warningColor = color
+            if let glowView = view as? GlowOverlayView {
+                glowView.warningColor = color
             } else if let borderView = view as? BorderOverlayView {
                 borderView.warningColor = color
             } else if let solidView = view as? SolidOverlayView {

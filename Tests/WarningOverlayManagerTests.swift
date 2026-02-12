@@ -9,7 +9,7 @@ final class WarningOverlayManagerTests: XCTestCase {
         let manager = WarningOverlayManager()
         XCTAssertEqual(manager.currentIntensity, 0.0)
         XCTAssertEqual(manager.targetIntensity, 0.0)
-        XCTAssertEqual(manager.mode, .vignette)
+        XCTAssertEqual(manager.mode, .glow)
         XCTAssertTrue(manager.windows.isEmpty)
         XCTAssertTrue(manager.overlayViews.isEmpty)
     }

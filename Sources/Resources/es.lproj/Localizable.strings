@@ -48,7 +48,7 @@
 // MARK: - Warning Mode (SettingsWindow.swift)
 
 "warningMode.blur" = "Difuminar";
-"warningMode.vignette" = "Viñeta";
+"warningMode.glow" = "Brillo";
 "warningMode.border" = "Borde";
 "warningMode.solid" = "Sólido";
 "warningMode.none" = "Ninguno";
@@ -123,7 +123,7 @@
 "settings.profile.deleteMessage" = "¿Seguro que quieres eliminar este perfil? Esta acción no se puede deshacer.";
 "settings.profile.delete" = "Eliminar";
 "settings.warning" = "Aviso";
-"settings.warning.help" = "Desenfoque oscurece la pantalla, Viñeta muestra un brillo en los bordes, Borde muestra bordes de color, Sólido llena la pantalla. Ninguno desactiva los avisos visuales.";
+"settings.warning.help" = "Desenfoque oscurece la pantalla, Brillo muestra un brillo en los bordes, Borde muestra bordes de color, Sólido llena la pantalla. Ninguno desactiva los avisos visuales.";
 "settings.deadZone" = "Tolerancia";
 "settings.deadZone.help" = "Cuánto puedes moverte antes de que se active el aviso. Una zona muerta relajada permite más movimiento natural.";
 "settings.intensity" = "Intensidad";

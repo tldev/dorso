@@ -111,17 +111,29 @@ enum WarningDefaults {
 
 enum WarningMode: String, CaseIterable, Codable {
     case blur = "blur"
-    case vignette = "vignette"
+    case glow = "glow"
     case border = "border"
     case solid = "solid"
     case none = "none"
 
     /// Whether this mode uses the WarningOverlayManager for posture warnings.
-    /// Vignette, border, and solid use the overlay system; blur and none do not.
+    /// Glow, border, and solid use the overlay system; blur and none do not.
     var usesWarningOverlay: Bool {
         switch self {
-        case .vignette, .border, .solid: return true
+        case .glow, .border, .solid: return true
         case .blur, .none: return false
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        if rawValue == "vignette" {
+            self = .glow
+        } else if let mode = WarningMode(rawValue: rawValue) {
+            self = mode
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid WarningMode: \(rawValue)")
         }
     }
 }

@@ -92,7 +92,7 @@ struct CompactWarningStylePicker: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach([WarningMode.blur, .vignette, .border, .solid, .none], id: \.self) { mode in
+            ForEach([WarningMode.blur, .glow, .border, .solid, .none], id: \.self) { mode in
                 Button(action: { selection = mode }) {
                     Text(mode.shortName)
                         .font(.system(size: 10, weight: selection == mode ? .semibold : .regular))
@@ -403,7 +403,7 @@ extension WarningMode {
     var displayName: String {
         switch self {
         case .blur: return L("warningMode.blur")
-        case .vignette: return L("warningMode.vignette")
+        case .glow: return L("warningMode.glow")
         case .border: return L("warningMode.border")
         case .solid: return L("warningMode.solid")
         case .none: return L("warningMode.none")

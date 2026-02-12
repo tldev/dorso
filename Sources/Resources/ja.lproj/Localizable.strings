@@ -48,7 +48,7 @@
 // MARK: - Warning Mode (SettingsWindow.swift)
 
 "warningMode.blur" = "ぼかし";
-"warningMode.vignette" = "ビネット";
+"warningMode.glow" = "グロー";
 "warningMode.border" = "枠線";
 "warningMode.solid" = "塗りつぶし";
 "warningMode.none" = "なし";
@@ -123,7 +123,7 @@
 "settings.profile.deleteMessage" = "このプロファイルを削除しますか？この操作は取り消せません。";
 "settings.profile.delete" = "削除";
 "settings.warning" = "警告";
-"settings.warning.help" = "ぼかしは画面を不鮮明にし、ビネットは端に光彩を表示し、枠線は色付きの枠を表示し、塗りつぶしは画面を覆います。なしで視覚警告を無効にします。";
+"settings.warning.help" = "ぼかしは画面を不鮮明にし、グローは端に光彩を表示し、枠線は色付きの枠を表示し、塗りつぶしは画面を覆います。なしで視覚警告を無効にします。";
 "settings.deadZone" = "デッドゾーン";
 "settings.deadZone.help" = "警告が始まるまでの許容される動きの範囲。ゆるいデッドゾーンはより自然な動きを許容します。";
 "settings.intensity" = "強度";

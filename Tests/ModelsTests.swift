@@ -183,8 +183,8 @@ final class ModelsTests: XCTestCase {
 
     // MARK: - WarningMode Tests
 
-    func testWarningModeUsesWarningOverlayForVignette() {
-        XCTAssertTrue(WarningMode.vignette.usesWarningOverlay)
+    func testWarningModeUsesWarningOverlayForGlow() {
+        XCTAssertTrue(WarningMode.glow.usesWarningOverlay)
     }
 
     func testWarningModeUsesWarningOverlayForBorder() {
@@ -205,7 +205,7 @@ final class ModelsTests: XCTestCase {
 
     func testWarningModeRawValues() {
         XCTAssertEqual(WarningMode.blur.rawValue, "blur")
-        XCTAssertEqual(WarningMode.vignette.rawValue, "vignette")
+        XCTAssertEqual(WarningMode.glow.rawValue, "glow")
         XCTAssertEqual(WarningMode.border.rawValue, "border")
         XCTAssertEqual(WarningMode.solid.rawValue, "solid")
         XCTAssertEqual(WarningMode.none.rawValue, "none")
@@ -214,7 +214,7 @@ final class ModelsTests: XCTestCase {
     func testWarningModeCaseIterable() {
         XCTAssertEqual(WarningMode.allCases.count, 5)
         XCTAssertTrue(WarningMode.allCases.contains(.blur))
-        XCTAssertTrue(WarningMode.allCases.contains(.vignette))
+        XCTAssertTrue(WarningMode.allCases.contains(.glow))
         XCTAssertTrue(WarningMode.allCases.contains(.border))
         XCTAssertTrue(WarningMode.allCases.contains(.solid))
         XCTAssertTrue(WarningMode.allCases.contains(.none))

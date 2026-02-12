@@ -68,8 +68,8 @@ extension AppDelegate {
         warningOverlayManager.currentIntensity = 0
         warningOverlayManager.targetIntensity = 0
         for view in warningOverlayManager.overlayViews {
-            if let vignetteView = view as? VignetteOverlayView {
-                vignetteView.intensity = 0
+            if let glowView = view as? GlowOverlayView {
+                glowView.intensity = 0
             } else if let borderView = view as? BorderOverlayView {
                 borderView.intensity = 0
             }
@@ -102,7 +102,7 @@ extension AppDelegate {
         case .none:
             targetBlurRadius = Int32(privacyBlurIntensity * 64)
             warningOverlayManager.targetIntensity = 0
-        case .vignette, .border, .solid:
+        case .glow, .border, .solid:
             targetBlurRadius = Int32(privacyBlurIntensity * 64)
             warningOverlayManager.targetIntensity = postureWarningIntensity
         }

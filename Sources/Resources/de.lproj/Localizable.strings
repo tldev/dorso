@@ -48,7 +48,7 @@
 // MARK: - Warning Mode (SettingsWindow.swift)
 
 "warningMode.blur" = "Unschärfe";
-"warningMode.vignette" = "Vignette";
+"warningMode.glow" = "Leuchten";
 "warningMode.border" = "Rahmen";
 "warningMode.solid" = "Vollton";
 "warningMode.none" = "Keine";
@@ -123,7 +123,7 @@
 "settings.profile.deleteMessage" = "Möchten Sie dieses Profil wirklich löschen? Dies kann nicht rückgängig gemacht werden.";
 "settings.profile.delete" = "Löschen";
 "settings.warning" = "Warnung";
-"settings.warning.help" = "Unschärfe verdunkelt den Bildschirm, Vignette zeigt einen Leuchteffekt am Rand, Rahmen zeigt farbige Ränder, Vollton füllt den Bildschirm. Keine deaktiviert visuelle Warnungen.";
+"settings.warning.help" = "Unschärfe verdunkelt den Bildschirm, Leuchten zeigt einen Leuchteffekt am Rand, Rahmen zeigt farbige Ränder, Vollton füllt den Bildschirm. Keine deaktiviert visuelle Warnungen.";
 "settings.deadZone" = "Toleranz";
 "settings.deadZone.help" = "Wie viel Sie sich bewegen können, bevor die Warnung beginnt. Ein lockerer Toleranzbereich erlaubt mehr natürliche Bewegung.";
 "settings.intensity" = "Intensität";

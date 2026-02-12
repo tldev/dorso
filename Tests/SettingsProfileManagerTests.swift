@@ -80,7 +80,7 @@ final class SettingsProfileManagerTests: XCTestCase {
         let second = SettingsProfile(
             id: UUID().uuidString,
             name: "Work",
-            warningMode: .vignette,
+            warningMode: .glow,
             warningColorData: SettingsProfile.encodedColorData(from: .systemBlue),
             deadZone: 0.15,
             intensity: 1.2,
@@ -96,7 +96,7 @@ final class SettingsProfileManagerTests: XCTestCase {
         XCTAssertEqual(manager.settingsProfiles.count, 2)
         XCTAssertEqual(manager.activeProfile?.id, second.id)
         XCTAssertEqual(manager.activeProfile?.name, "Work")
-        XCTAssertEqual(manager.activeProfile?.warningMode, .vignette)
+        XCTAssertEqual(manager.activeProfile?.warningMode, .glow)
     }
 
     func testCreateProfileEnsuresUniqueNames() {
