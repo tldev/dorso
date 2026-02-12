@@ -181,8 +181,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         os_log(.info, log: log, "State transition: %{public}@ -> %{public}@", String(describing: oldState), String(describing: newState))
         syncDetectorToState()
         if !newState.isActive {
-            targetBlurRadius = 0
+            isCurrentlyAway = false
+            isCurrentlySlouching = false
             postureWarningIntensity = 0
+            clearBlur()
         }
         if newState == .monitoring {
             applyActiveSettingsProfile()
