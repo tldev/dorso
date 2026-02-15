@@ -454,10 +454,32 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
         screenLockObserver.onScreenUnlocked = { [weak self] in
             Task { @MainActor in
-                self?.handleScreenUnlocked()
+                self?.handleScreenUnlocked(triggeredByUnlockNotification: true)
             }
         }
         screenLockObserver.startObserving()
+
+        // System sleep/wake
+        let workspaceNotificationCenter = NSWorkspace.shared.notificationCenter
+        workspaceNotificationCenter.addObserver(
+            forName: NSWorkspace.screensDidSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleScreenLocked()
+            }
+        }
+
+        workspaceNotificationCenter.addObserver(
+            forName: NSWorkspace.screensDidWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleScreenUnlocked(triggeredByUnlockNotification: false)
+            }
+        }
 
         // Global hotkey
         hotkeyManager.configure(
@@ -885,15 +907,30 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         state = .paused(.screenLocked)
     }
 
-    private func handleScreenUnlocked() {
-        guard case .paused(.screenLocked) = state else { return }
-
-        if let previousState = stateBeforeLock {
-            state = previousState
-            stateBeforeLock = nil
-        } else {
-            startMonitoring()
+    private func handleScreenUnlocked(triggeredByUnlockNotification: Bool) {
+        if case .paused(.screenLocked) = state {
+            if let previousState = stateBeforeLock {
+                stateBeforeLock = nil
+                switch previousState {
+                case .monitoring:
+                    // Re-enter monitoring via startMonitoring() so detector monitoring
+                    // state/calibration are re-applied after lock pause.
+                    startMonitoring()
+                default:
+                    state = previousState
+                }
+            } else {
+                startMonitoring()
+            }
         }
+
+        // Wake can arrive before unlock; force a camera session rebuild on real unlock
+        // to recover from stale AV capture pipelines.
+        guard triggeredByUnlockNotification,
+              trackingSource == .camera,
+              state == .monitoring else { return }
+
+        cameraDetector.restartSessionAfterWakeUnlock()
     }
 
     // MARK: - Display Configuration
