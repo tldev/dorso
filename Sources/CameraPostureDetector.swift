@@ -295,13 +295,60 @@ class CameraPostureDetector: NSObject, PostureDetector {
 
     private func startSession() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.captureSession?.startRunning()
+            guard let self, let session = self.captureSession else {
+                DispatchQueue.main.async {
+                    self?.isActive = false
+                    self?.isStarting = false
+                    os_log(.error, log: log, "Camera session missing during start")
+                }
+                return
+            }
+
+            session.startRunning()
+
             DispatchQueue.main.async {
-                self?.isActive = true
-                self?.isStarting = false
-                os_log(.info, log: log, "Camera session started")
+                self.isActive = session.isRunning
+                self.isStarting = false
+                if session.isRunning {
+                    os_log(.info, log: log, "Camera session started")
+                } else {
+                    os_log(.error, log: log, "Camera session failed to start")
+                }
             }
         }
+    }
+
+    /// Rebuild the capture session after wake/unlock to recover from stale camera pipelines.
+    /// Keeps monitoring/calibration state intact (unlike full stop/start).
+    func restartSessionAfterWakeUnlock(retryCount: Int = 0) {
+        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
+
+        if isStarting {
+            guard retryCount < 8 else {
+                os_log(.error, log: log, "Skipping wake restart: session still starting after retries")
+                return
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                self?.restartSessionAfterWakeUnlock(retryCount: retryCount + 1)
+            }
+            return
+        }
+
+        guard isActive else { return }
+
+        os_log(.info, log: log, "Restarting camera session after wake/unlock")
+
+        captureSession?.stopRunning()
+        videoOutput?.setSampleBufferDelegate(nil, queue: nil)
+        captureSession = nil
+        videoOutput = nil
+        lastFrameTime = .distantPast
+        isActive = false
+        isStarting = true
+
+        setupCamera()
+        startSession()
     }
 
     func switchCamera(to cameraID: String) {
