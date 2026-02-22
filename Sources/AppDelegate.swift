@@ -194,29 +194,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func syncDetectorToState() {
-        var shouldRun: Bool
-        switch state {
-        case .calibrating, .monitoring:
-            shouldRun = true
-        case .disabled, .paused:
-            shouldRun = false
-        }
+        let shouldRun = PostureEngine.shouldDetectorRun(for: state, trackingSource: trackingSource)
 
-        // Special case: Keep AirPods detector running when paused due to removal
-        // so we can detect when they're put back in ears
-        if case .paused(.airPodsRemoved) = state, trackingSource == .airpods {
-            shouldRun = true
-        }
-
-        // Stop the other detector
+        // Always stop the other detector so in-flight starts are cancelled
+        // even if that detector has not flipped isActive=true yet.
         if trackingSource == .camera {
-            if airPodsDetector.isActive {
-                airPodsDetector.stop()
-            }
+            airPodsDetector.stop()
         } else {
-            if cameraDetector.isActive {
-                cameraDetector.stop()
-            }
+            cameraDetector.stop()
         }
 
         // Start/stop the active detector
@@ -232,9 +217,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         } else {
-            if activeDetector.isActive {
-                activeDetector.stop()
-            }
+            // Always call stop() so in-flight starts are cancelled even if
+            // the detector has not yet flipped isActive=true.
+            activeDetector.stop()
         }
     }
 

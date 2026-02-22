@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import DorsoCore
 
 final class CameraPostureDetectorTests: XCTestCase {
@@ -273,6 +274,57 @@ final class CameraPostureDetectorTests: XCTestCase {
         // Update parameters - should not crash
         detector.updateParameters(intensity: 0.5, deadZone: 0.1)
         // If we get here without crashing, the test passes
+    }
+
+    // MARK: - Lifecycle Race Regression
+
+    func testStopDuringInFlightStartDoesNotBecomeActive() {
+        let startInvoked = expectation(description: "start handler invoked")
+        let delayedStartCompletion = expectation(description: "delayed start completion fired")
+        let settled = expectation(description: "detector remained inactive")
+
+        let stopLock = NSLock()
+        var stopCallCount = 0
+
+        let runtime = CameraPostureDetector.Runtime(
+            authorizationStatus: { .authorized },
+            requestAccess: { completion in completion(true) },
+            customSessionFactory: { AVCaptureSession() },
+            startRunning: { _, completion in
+                startInvoked.fulfill()
+                DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) {
+                    completion(true)
+                    delayedStartCompletion.fulfill()
+                }
+            },
+            stopRunning: { _ in
+                stopLock.lock()
+                stopCallCount += 1
+                stopLock.unlock()
+            }
+        )
+        let detector = CameraPostureDetector(runtime: runtime)
+
+        detector.start { success, error in
+            XCTAssertTrue(success)
+            XCTAssertNil(error)
+        }
+
+        wait(for: [startInvoked], timeout: 1.0)
+        detector.stop()
+
+        wait(for: [delayedStartCompletion], timeout: 1.0)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            XCTAssertFalse(detector.isActive, "Detector should remain inactive after stop even if delayed start callback arrives")
+            stopLock.lock()
+            let count = stopCallCount
+            stopLock.unlock()
+            XCTAssertGreaterThanOrEqual(count, 1, "Stop should be called for in-flight or stale session start")
+            settled.fulfill()
+        }
+
+        wait(for: [settled], timeout: 1.0)
     }
 }
 
