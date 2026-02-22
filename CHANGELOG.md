@@ -5,6 +5,15 @@ All notable changes to Dorso will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.2] - 2026-02-22
+
+### Fixed
+- Fixed a race where rapidly toggling Enabled could leave the camera running while Dorso was disabled.
+- Added regression test coverage to ensure the camera session and app enabled state stay in sync.
+
+### Acknowledgments
+- Thanks to [@Shadow1363](https://github.com/Shadow1363) for reporting and isolating this issue in [#68](https://github.com/tldev/dorso/issues/68)
+
 ## [1.9.1] - 2026-02-20
 
 ### Fixed
