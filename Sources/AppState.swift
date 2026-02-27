@@ -3,6 +3,7 @@ import Foundation
 // MARK: - Pause Reason
 
 enum PauseReason: Equatable {
+    case sourceUnavailable
     case noProfile
     case onTheGo
     case cameraDisconnected
@@ -14,9 +15,9 @@ enum PauseReason: Equatable {
 
 enum AppState: Equatable {
     case disabled
-    case calibrating
-    case monitoring
-    case paused(PauseReason)
+    case calibrating(TrackingSource = .camera)
+    case monitoring(TrackingSource = .camera)
+    case paused(PauseReason, context: PauseContext? = nil)
 
     var isActive: Bool {
         switch self {
@@ -25,4 +26,3 @@ enum AppState: Equatable {
         }
     }
 }
-

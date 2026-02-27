@@ -24,6 +24,10 @@ extension AppDelegate {
         if let cameraID = selectedCameraID {
             defaults.set(cameraID, forKey: SettingsKeys.lastCameraID)
         }
+        defaults.set(trackingPolicyMode.rawValue, forKey: SettingsKeys.trackingPolicyMode)
+        defaults.set(preferredTrackingSource.rawValue, forKey: SettingsKeys.preferredTrackingSource)
+        defaults.set(manualTrackingSource.rawValue, forKey: SettingsKeys.manualTrackingSource)
+        defaults.set(autoReturnEnabled, forKey: SettingsKeys.autoReturnEnabled)
         defaults.set(trackingSource.rawValue, forKey: SettingsKeys.trackingSource)
         if let airPodsCalibration = airPodsCalibration,
            let data = try? JSONEncoder().encode(airPodsCalibration) {
@@ -42,10 +46,22 @@ extension AppDelegate {
         showInDock = defaults.bool(forKey: SettingsKeys.showInDock)
         pauseOnTheGo = defaults.bool(forKey: SettingsKeys.pauseOnTheGo)
         cameraDetector.selectedCameraID = defaults.string(forKey: SettingsKeys.lastCameraID)
-        if let sourceString = defaults.string(forKey: SettingsKeys.trackingSource),
-           let source = TrackingSource(rawValue: sourceString) {
-            trackingSource = source
+        if let modeString = defaults.string(forKey: SettingsKeys.trackingPolicyMode),
+           let mode = TrackingPolicyMode(rawValue: modeString) {
+            trackingPolicyMode = mode
         }
+        if let preferredRaw = defaults.string(forKey: SettingsKeys.preferredTrackingSource),
+           let source = TrackingSource(rawValue: preferredRaw) {
+            preferredTrackingSource = source
+        }
+        if let manualRaw = defaults.string(forKey: SettingsKeys.manualTrackingSource),
+           let source = TrackingSource(rawValue: manualRaw) {
+            manualTrackingSource = source
+        }
+        if defaults.object(forKey: SettingsKeys.autoReturnEnabled) != nil {
+            autoReturnEnabled = defaults.bool(forKey: SettingsKeys.autoReturnEnabled)
+        }
+        trackingSource = trackingPolicyMode == .manual ? manualTrackingSource : preferredTrackingSource
         if let data = defaults.data(forKey: SettingsKeys.airPodsCalibration),
            let calibration = try? JSONDecoder().decode(AirPodsCalibrationData.self, from: data) {
             airPodsCalibration = calibration

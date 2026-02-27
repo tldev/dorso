@@ -32,10 +32,19 @@
 "status.goodPosture" = "Status: Good Posture";
 "status.calibrationNeeded" = "Status: Calibration needed";
 "status.pausedOnTheGo" = "Status: Paused (on the go - recalibrate)";
+"status.paused" = "Status: Paused";
 "status.cameraDisconnected" = "Status: Camera disconnected";
 "status.airPodsDisconnected" = "Status: AirPods disconnected";
 "status.pausedScreenLocked" = "Status: Paused (screen locked)";
 "status.pausedPutInAirPods" = "Status: Paused (put in AirPods)";
+"status.pausedFallbackNeedsPermission" = "Status: Paused: Fallback %@ needs permission";
+"status.pausedFallbackPermissionDenied" = "Status: Paused: Fallback %@ permission denied";
+"status.pausedFallbackNeedsConnection" = "Status: Paused: Fallback %@ not connected";
+"status.pausedFallbackNeedsCalibration" = "Status: Paused: Fallback %@ needs calibration";
+"status.pausedSourceNeedsPermission" = "Status: Paused: %@ needs permission";
+"status.pausedSourcePermissionDenied" = "Status: Paused: %@ permission denied";
+"status.pausedSourceNeedsConnection" = "Status: Paused: %@ not connected";
+"status.pausedSourceNeedsCalibration" = "Status: Paused: %@ needs calibration";
 
 // MARK: - Menu Bar Icon Accessibility (Models.swift)
 
@@ -86,6 +95,11 @@
 "alert.cameraNotAvailable" = "Camera Not Available";
 "alert.cameraNotAvailable.message" = "Please make sure your camera is connected and camera access is granted.";
 "alert.tryAgain" = "Try Again";
+"alert.connectAirPods.title" = "Connect AirPods";
+"alert.connectAirPods.message" = "Put in your AirPods and make sure head tracking is available. Dorso will continue automatically.";
+"alert.connectCamera.title" = "Connect Camera";
+"alert.connectCamera.message" = "Connect a camera and keep Dorso open. Monitoring will resume automatically.";
+"alert.openBluetooth" = "Open Bluetooth";
 
 // MARK: - Calibration (CalibrationWindow.swift)
 
@@ -108,6 +122,38 @@
 
 "settings.title" = "Settings";
 "settings.tracking" = "Tracking";
+"settings.tracking.help" = "Manual uses only the selected source. Automatic prefers one source and falls back to the other when needed.";
+"settings.trackingMode.manual" = "Manual";
+"settings.trackingMode.automatic" = "Automatic";
+"settings.preferredSource" = "Preferred";
+"settings.manualSource" = "Source";
+"settings.activeSource" = "Active";
+"settings.activeSource.paused" = "Paused";
+"settings.activeSource.fallbackFormat" = "%@ (fallback)";
+"settings.automatic.help.primary" = "If preferred source is unavailable, Dorso switches to the other source when ready.";
+"settings.automatic.help.secondary" = "When preferred source is ready again, Dorso switches back automatically.";
+"settings.fixNow" = "Fix now";
+"settings.camera" = "Camera";
+"settings.ready" = "Ready";
+"settings.needsPermission" = "Needs Permission";
+"settings.permissionDenied" = "Permission Denied";
+"settings.needsConnection" = "Needs Connection";
+"settings.needsCalibration" = "Needs Calibration";
+"settings.paused" = "Paused";
+"settings.readiness.permission" = "Permission";
+"settings.readiness.connection" = "Connection";
+"settings.readiness.calibration" = "Calibration";
+"settings.action.allowAccess" = "Allow Access";
+"settings.action.openPrivacy" = "Open Privacy";
+"settings.action.connectDevice" = "Connect Device";
+"settings.action.calibrate" = "Calibrate";
+"settings.hint.permissionThenCalibrate" = "Allow %@ access. Dorso will continue with the next required setup step.";
+"settings.hint.openPrivacyThenRetry" = "Open Privacy settings for %@ and re-enable permission.";
+"settings.hint.connectThenCalibrate" = "Connect %@. If needed, calibration starts automatically.";
+"settings.hint.calibrateThenResume" = "Calibrate %@ and Dorso will resume automatically.";
+"settings.permission.authorized" = "Allowed";
+"settings.permission.notDetermined" = "Not Set";
+"settings.permission.denied" = "Denied";
 "settings.noCameras" = "No cameras";
 "settings.connected" = "Connected";
 "settings.notConnected" = "Not connected";
@@ -184,3 +230,4 @@
 // MARK: - Common
 
 "common.cancel" = "Cancel";
+"common.ok" = "OK";

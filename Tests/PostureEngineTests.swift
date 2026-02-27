@@ -344,11 +344,11 @@ final class PostureEngineTests: XCTestCase {
     // MARK: - State Machine Tests
 
     func testDetectorShouldRunWhenMonitoring() {
-        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .monitoring, trackingSource: .camera))
+        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .monitoring(), trackingSource: .camera))
     }
 
     func testDetectorShouldRunWhenCalibrating() {
-        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .calibrating, trackingSource: .camera))
+        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .calibrating(), trackingSource: .camera))
     }
 
     func testDetectorShouldNotRunWhenDisabled() {
@@ -372,7 +372,7 @@ final class PostureEngineTests: XCTestCase {
 
     func testStateWhenEnablingWithCalibration() {
         let state = PostureEngine.stateWhenEnabling(isCalibrated: true, detectorAvailable: true)
-        XCTAssertEqual(state, .monitoring)
+        XCTAssertEqual(state, .monitoring())
     }
 
     func testStateWhenEnablingWithoutCalibration() {

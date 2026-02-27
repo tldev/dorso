@@ -159,9 +159,15 @@ struct PostureEngine {
         switch state {
         case .calibrating, .monitoring:
             return true
-        case .paused(let reason):
-            // Keep AirPods detector running when paused due to removal
-            // so we can detect when they're put back in ears
+        case .paused(let reason, let context):
+            // Keep AirPods detector running when waiting for reconnection
+            if reason == .sourceUnavailable,
+               let context,
+               context.targetSource == .airpods,
+               context.blockers.contains(.needsConnection),
+               trackingSource == .airpods {
+                return true
+            }
             if reason == .airPodsRemoved && trackingSource == .airpods {
                 return true
             }
@@ -171,7 +177,7 @@ struct PostureEngine {
         }
     }
 
-    /// Determine the next state when enabling from disabled
+    /// Backward-compatible overload used by legacy tests/callers.
     static func stateWhenEnabling(
         isCalibrated: Bool,
         detectorAvailable: Bool
@@ -181,7 +187,28 @@ struct PostureEngine {
         } else if !detectorAvailable {
             return .paused(.cameraDisconnected)
         } else {
-            return .monitoring
+            return .monitoring()
+        }
+    }
+
+    /// Determine the next state when enabling from disabled
+    static func stateWhenEnabling(
+        isCalibrated: Bool,
+        detectorAvailable: Bool,
+        source: TrackingSource
+    ) -> AppState {
+        if !isCalibrated {
+            return .paused(
+                .sourceUnavailable,
+                context: PauseContext(targetSource: source, blockers: [.needsCalibration], isFallback: false)
+            )
+        } else if !detectorAvailable {
+            return .paused(
+                .sourceUnavailable,
+                context: PauseContext(targetSource: source, blockers: [.needsConnection], isFallback: false)
+            )
+        } else {
+            return .monitoring(source)
         }
     }
 }

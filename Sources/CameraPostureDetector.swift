@@ -422,40 +422,30 @@ class CameraPostureDetector: NSObject, PostureDetector {
     }
 
     func switchCamera(to cameraID: String) {
-        guard let session = captureSession else { return }
+        selectedCameraID = cameraID
 
-        sessionQueue.async {
-            let wasRunning = session.isRunning
+        // Avoid in-place input removal on a live session. Rebuilding the session is
+        // more stable across camera hot-plug / rapid policy transitions.
+        guard lifecycleState == .running || lifecycleState == .starting else { return }
 
-            if wasRunning {
-                self.stopRunningSession(session)
-            }
+        let shouldResumeMonitoring = isMonitoring
+        let previousCalibration = calibrationData
+        let previousIntensity = intensity
+        let previousDeadZone = deadZone
 
-            session.beginConfiguration()
+        stop()
+        lifecycleState = .starting
+        setupCamera()
+        startSession()
 
-            // Remove existing inputs
-            for input in session.inputs {
-                session.removeInput(input)
-            }
+        if shouldResumeMonitoring, let previousCalibration {
+            beginMonitoring(with: previousCalibration, intensity: previousIntensity, deadZone: previousDeadZone)
+        }
 
-            let cameras = self.getAvailableCameras()
-            guard let camera = cameras.first(where: { $0.uniqueID == cameraID }),
-                  let input = try? AVCaptureDeviceInput(device: camera) else {
-                session.commitConfiguration()
-                os_log(.error, log: log, "Failed to switch to camera: %{public}@", cameraID)
-                return
-            }
-
-            self.selectedCameraID = cameraID
-            session.addInput(input)
-
-            session.commitConfiguration()
-
-            if wasRunning {
-                self.startRunningSession(session) { _ in }
-            }
-
-            os_log(.info, log: log, "Switched to camera: %{public}@", camera.localizedName)
+        if let selected = getAvailableCameras().first(where: { $0.uniqueID == cameraID }) {
+            os_log(.info, log: log, "Switched to camera: %{public}@", selected.localizedName)
+        } else {
+            os_log(.error, log: log, "Requested camera no longer available: %{public}@", cameraID)
         }
     }
 

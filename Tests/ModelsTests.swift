@@ -6,11 +6,11 @@ final class ModelsTests: XCTestCase {
     // MARK: - AppState Tests
 
     func testIsActiveForMonitoring() {
-        XCTAssertTrue(AppState.monitoring.isActive)
+        XCTAssertTrue(AppState.monitoring().isActive)
     }
 
     func testIsActiveForCalibrating() {
-        XCTAssertTrue(AppState.calibrating.isActive)
+        XCTAssertTrue(AppState.calibrating().isActive)
     }
 
     func testIsActiveForDisabled() {
@@ -40,9 +40,9 @@ final class ModelsTests: XCTestCase {
     func testAppStateEquatable() {
         XCTAssertEqual(AppState.paused(.noProfile), AppState.paused(.noProfile))
         XCTAssertNotEqual(AppState.paused(.noProfile), AppState.paused(.screenLocked))
-        XCTAssertNotEqual(AppState.disabled, AppState.monitoring)
-        XCTAssertEqual(AppState.monitoring, AppState.monitoring)
-        XCTAssertEqual(AppState.calibrating, AppState.calibrating)
+        XCTAssertNotEqual(AppState.disabled, AppState.monitoring())
+        XCTAssertEqual(AppState.monitoring(), AppState.monitoring())
+        XCTAssertEqual(AppState.calibrating(), AppState.calibrating())
         XCTAssertEqual(AppState.disabled, AppState.disabled)
     }
 

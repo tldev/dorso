@@ -354,11 +354,12 @@ struct BrightnessSliderView: View {
 struct CompactTrackingSourcePicker: View {
     @Binding var selection: TrackingSource
     let airPodsAvailable: Bool
+    var disableUnavailableAirPods: Bool = false
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(TrackingSource.allCases) { source in
-                let isDisabled = source == .airpods && !airPodsAvailable
+                let isDisabled = source == .airpods && !airPodsAvailable && disableUnavailableAirPods
                 Button(action: {
                     if !isDisabled { selection = source }
                 }) {
@@ -379,6 +380,35 @@ struct CompactTrackingSourcePicker: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isDisabled)
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.primary.opacity(0.06))
+        )
+    }
+}
+
+struct CompactTrackingModePicker: View {
+    @Binding var selection: TrackingPolicyMode
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach([TrackingPolicyMode.manual, .automatic], id: \.rawValue) { mode in
+                Button(action: { selection = mode }) {
+                    Text(mode == .manual ? L("settings.trackingMode.manual") : L("settings.trackingMode.automatic"))
+                        .font(.system(size: 10, weight: selection == mode ? .semibold : .regular))
+                        .foregroundColor(selection == mode ? .onBrandCyan : .primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(selection == mode ? Color.brandCyan : Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(2)
@@ -438,8 +468,13 @@ struct SettingsView: View {
     @State private var toggleShortcutEnabled: Bool
     @State private var toggleShortcut: KeyboardShortcut
     @State private var detectionModeSlider: Double
-    @State private var trackingSource: TrackingSource
-    @State private var airPodsAvailable: Bool
+    @State private var trackingPolicyMode: TrackingPolicyMode
+    @State private var manualTrackingSource: TrackingSource
+    @State private var preferredTrackingSource: TrackingSource
+    @State private var activeTrackingSourceText: String
+    @State private var trackingStatusText: String
+    @State private var showTrackingPauseBanner: Bool
+    @State private var trackingPauseContext: PauseContext?
     @State private var settingsProfiles: [SettingsProfile]
     @State private var selectedSettingsProfileID: String
     @State private var lastSelectedSettingsProfileID: String
@@ -496,8 +531,26 @@ struct SettingsView: View {
         _toggleShortcutEnabled = State(initialValue: appDelegate.toggleShortcutEnabled)
         _toggleShortcut = State(initialValue: appDelegate.toggleShortcut)
         _detectionModeSlider = State(initialValue: Double(detectionModes.firstIndex(of: profileDetectionMode) ?? 0))
-        _trackingSource = State(initialValue: appDelegate.trackingSource)
-        _airPodsAvailable = State(initialValue: appDelegate.airPodsDetector.isAvailable)
+        _trackingPolicyMode = State(initialValue: appDelegate.trackingPolicyMode)
+        _manualTrackingSource = State(initialValue: appDelegate.manualTrackingSource)
+        _preferredTrackingSource = State(initialValue: appDelegate.preferredTrackingSource)
+        _activeTrackingSourceText = State(initialValue: SettingsView.activeTrackingSourceText(
+            from: appDelegate.state,
+            trackingPolicyMode: appDelegate.trackingPolicyMode,
+            preferredTrackingSource: appDelegate.preferredTrackingSource
+        ))
+        _trackingStatusText = State(initialValue: PostureUIState.derive(
+            from: appDelegate.state,
+            isCalibrated: appDelegate.isCalibrated,
+            isCurrentlyAway: appDelegate.isCurrentlyAway,
+            isCurrentlySlouching: appDelegate.isCurrentlySlouching,
+            trackingSource: appDelegate.trackingSource
+        ).statusText)
+        _trackingPauseContext = State(initialValue: SettingsView.sourceUnavailableContext(from: appDelegate.state))
+        _showTrackingPauseBanner = State(initialValue: {
+            if case .paused(.sourceUnavailable, _) = appDelegate.state { return true }
+            return false
+        }())
         settingsProfileManager.ensureProfilesLoaded()
         let snapshot = settingsProfileManager.profilesState()
         let profiles = snapshot.profiles
@@ -561,29 +614,136 @@ struct SettingsView: View {
 
             SubtleDivider()
 
-            // Tracking row (not part of profile)
-            HStack(spacing: 8) {
-                Text(L("settings.tracking"))
-                    .font(.system(size: 11, weight: .medium))
-                    .frame(width: 82, alignment: .leading)
-
-                CompactTrackingSourcePicker(
-                    selection: $trackingSource,
-                    airPodsAvailable: airPodsAvailable
-                )
-                .frame(width: 130)
-                .onChange(of: trackingSource) { newValue in
-                    if newValue != appDelegate.trackingSource {
-                        appDelegate.switchTrackingSource(to: newValue)
+            // Tracking section (not part of profile)
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    HStack(spacing: 3) {
+                        Text(L("settings.tracking"))
+                            .font(.system(size: 11, weight: .medium))
+                            .frame(width: 82, alignment: .leading)
+                        HelpButton(text: L("settings.tracking.help"))
                     }
+
+                    CompactTrackingModePicker(selection: $trackingPolicyMode)
+                        .frame(width: 200)
+                        .onChange(of: trackingPolicyMode) { newValue in
+                            appDelegate.setTrackingPolicyMode(newValue)
+                            refreshTrackingUIState()
+                        }
+
+                    Spacer()
+                }
+                .frame(height: 26)
+
+                HStack(spacing: 8) {
+                    Text(trackingPolicyMode == .automatic ? L("settings.preferredSource") : L("settings.manualSource"))
+                        .font(.system(size: 11))
+                        .frame(width: 82, alignment: .leading)
+
+                    CompactTrackingSourcePicker(
+                        selection: trackingPolicyMode == .automatic ? $preferredTrackingSource : $manualTrackingSource,
+                        airPodsAvailable: appDelegate.sourceReadiness(for: .airpods).connectionState == .connected,
+                        disableUnavailableAirPods: false
+                    )
+                    .frame(width: 200)
+                    .onChange(of: preferredTrackingSource) { newValue in
+                        if trackingPolicyMode == .automatic {
+                            appDelegate.setPreferredTrackingSource(newValue)
+                            refreshTrackingUIState()
+                        }
+                    }
+                    .onChange(of: manualTrackingSource) { newValue in
+                        if trackingPolicyMode == .manual {
+                            appDelegate.setManualTrackingSource(newValue)
+                            refreshTrackingUIState()
+                        }
+                    }
+
+                    Spacer()
+
+                    // Recalibrate button
+                    Button(action: {
+                        appDelegate.startCalibration(for: appDelegate.trackingSource)
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(L("settings.recalibrate"))
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.onBrandCyan)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.brandCyan)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(height: 26)
+
+                HStack(spacing: 8) {
+                    Text(L("settings.activeSource"))
+                        .font(.system(size: 11))
+                        .frame(width: 82, alignment: .leading)
+
+                    Text(activeTrackingSourceText)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+                }
+                .frame(height: 22)
+
+                if showTrackingPauseBanner {
+                    HStack(spacing: 8) {
+                        Image(systemName: "pause.circle.fill")
+                            .foregroundColor(.orange)
+                            .font(.system(size: 12))
+                        Text(trackingStatusText)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                        if let targetSource = openPrivacyTargetSource {
+                            Button(action: {
+                                appDelegate.openPrivacySettings(for: targetSource)
+                            }) {
+                                Text(L("settings.action.openPrivacy"))
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(.orange)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color.orange.opacity(0.2))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Spacer()
+                    }
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(Color.orange.opacity(0.12))
+                    )
                 }
 
-                if trackingSource == .camera {
-                    if availableCameras.isEmpty {
+                if availableCameras.isEmpty {
+                    HStack(spacing: 8) {
+                        Text(L("settings.camera"))
+                            .font(.system(size: 10, weight: .medium))
                         Text(L("settings.noCameras"))
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
-                    } else {
+                        Spacer()
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Text(L("settings.camera"))
+                            .font(.system(size: 10, weight: .medium))
+                            .frame(width: 82, alignment: .leading)
+
                         Picker("", selection: $selectedCameraID) {
                             ForEach(availableCameras, id: \.id) { camera in
                                 Text(camera.name).tag(camera.id)
@@ -596,41 +756,12 @@ struct SettingsView: View {
                                 appDelegate.selectedCameraID = newValue
                                 appDelegate.saveSettings()
                                 appDelegate.restartCamera()
+                                refreshTrackingUIState()
                             }
                         }
                     }
-                } else {
-                    // AirPods status
-                    HStack(spacing: 4) {
-                        Image(systemName: airPodsAvailable ? "checkmark.circle.fill" : "exclamationmark.circle")
-                            .foregroundColor(airPodsAvailable ? .green : .secondary)
-                            .font(.system(size: 10))
-                        Text(airPodsAvailable ? L("settings.connected") : L("settings.notConnected"))
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
                 }
-
-                // Recalibrate button
-                Button(action: { appDelegate.startCalibration() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text(L("settings.recalibrate"))
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundColor(.onBrandCyan)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.brandCyan)
-                    )
-                }
-                .buttonStyle(.plain)
             }
-            .frame(height: 26)
             .padding(.vertical, 10)
 
             // Profile Section Card
@@ -832,11 +963,11 @@ struct SettingsView: View {
                 HStack(spacing: 0) {
                     CompactToggle(
                         title: L("settings.blurWhenAway"),
-                        helpText: trackingSource == .airpods
+                        helpText: appDelegate.trackingSource == .airpods
                             ? L("settings.blurWhenAway.help.airpods")
                             : L("settings.blurWhenAway.help.camera"),
                         isOn: $blurWhenAway,
-                        isDisabled: trackingSource == .airpods
+                        isDisabled: appDelegate.trackingSource == .airpods
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .onChange(of: blurWhenAway) { newValue in
@@ -853,8 +984,8 @@ struct SettingsView: View {
                     .onChange(of: pauseOnTheGo) { newValue in
                         appDelegate.pauseOnTheGo = newValue
                         appDelegate.saveSettings()
-                        if !newValue && appDelegate.state == .paused(.onTheGo) {
-                            appDelegate.state = .monitoring
+                        if !newValue, case .paused(.onTheGo, _) = appDelegate.state {
+                            appDelegate.evaluateTrackingPolicy(force: true)
                         }
                     }
                 }
@@ -899,6 +1030,12 @@ struct SettingsView: View {
         .padding(16)
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
+        .onAppear {
+            refreshTrackingUIState()
+        }
+        .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
+            refreshTrackingUIState()
+        }
         .alert(L("settings.profile.newTitle"), isPresented: $showingNewProfilePrompt) {
             TextField(L("settings.profile.namePlaceholder"), text: $newProfileName)
             Button(L("common.cancel"), role: .cancel) {}
@@ -949,6 +1086,70 @@ struct SettingsView: View {
         warningColor = Color(appDelegate.activeWarningColor)
         warningOnsetDelay = appDelegate.activeWarningOnsetDelay
         detectionModeSlider = Double(detectionModes.firstIndex(of: appDelegate.activeDetectionMode) ?? 0)
+    }
+
+    private func refreshTrackingUIState() {
+        availableCameras = appDelegate.cameraDetector.getAvailableCameras().map { (id: $0.uniqueID, name: $0.localizedName) }
+        if selectedCameraID.isEmpty, let first = availableCameras.first {
+            selectedCameraID = first.id
+        }
+
+        trackingPolicyMode = appDelegate.trackingPolicyMode
+        manualTrackingSource = appDelegate.manualTrackingSource
+        preferredTrackingSource = appDelegate.preferredTrackingSource
+        activeTrackingSourceText = Self.activeTrackingSourceText(
+            from: appDelegate.state,
+            trackingPolicyMode: appDelegate.trackingPolicyMode,
+            preferredTrackingSource: appDelegate.preferredTrackingSource
+        )
+        trackingStatusText = PostureUIState.derive(
+            from: appDelegate.state,
+            isCalibrated: appDelegate.isCalibrated,
+            isCurrentlyAway: appDelegate.isCurrentlyAway,
+            isCurrentlySlouching: appDelegate.isCurrentlySlouching,
+            trackingSource: appDelegate.trackingSource
+        ).statusText
+        trackingPauseContext = Self.sourceUnavailableContext(from: appDelegate.state)
+        showTrackingPauseBanner = {
+            if case .paused(.sourceUnavailable, _) = appDelegate.state { return true }
+            return false
+        }()
+    }
+
+    private var openPrivacyTargetSource: TrackingSource? {
+        if let context = trackingPauseContext,
+           context.blockers.contains(.permissionDenied) {
+            return context.targetSource
+        }
+
+        if case let .openPrivacySettings(source)? = appDelegate.latestTrackingDecision?.primaryAction {
+            return source
+        }
+
+        return nil
+    }
+
+    private static func sourceUnavailableContext(from state: AppState) -> PauseContext? {
+        if case .paused(.sourceUnavailable, let context) = state {
+            return context
+        }
+        return nil
+    }
+
+    private static func activeTrackingSourceText(
+        from state: AppState,
+        trackingPolicyMode: TrackingPolicyMode,
+        preferredTrackingSource: TrackingSource
+    ) -> String {
+        switch state {
+        case .monitoring(let source), .calibrating(let source):
+            if trackingPolicyMode == .automatic, source != preferredTrackingSource {
+                return L("settings.activeSource.fallbackFormat", source.displayName)
+            }
+            return source.displayName
+        case .disabled, .paused:
+            return L("settings.activeSource.paused")
+        }
     }
 
     private static func closestIndex(for value: Double, in values: [Double]) -> Int {

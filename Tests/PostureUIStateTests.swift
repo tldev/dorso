@@ -24,7 +24,7 @@ final class PostureUIStateTests: XCTestCase {
 
     func testCalibratingState() {
         let uiState = PostureUIState.derive(
-            from: .calibrating,
+            from: .calibrating(),
             isCalibrated: false,
             isCurrentlyAway: false,
             isCurrentlySlouching: false,
@@ -41,7 +41,7 @@ final class PostureUIStateTests: XCTestCase {
 
     func testMonitoringGoodPosture() {
         let uiState = PostureUIState.derive(
-            from: .monitoring,
+            from: .monitoring(),
             isCalibrated: true,
             isCurrentlyAway: false,
             isCurrentlySlouching: false,
@@ -55,7 +55,7 @@ final class PostureUIStateTests: XCTestCase {
 
     func testMonitoringBadPosture() {
         let uiState = PostureUIState.derive(
-            from: .monitoring,
+            from: .monitoring(),
             isCalibrated: true,
             isCurrentlyAway: false,
             isCurrentlySlouching: true,
@@ -68,7 +68,7 @@ final class PostureUIStateTests: XCTestCase {
 
     func testMonitoringAway() {
         let uiState = PostureUIState.derive(
-            from: .monitoring,
+            from: .monitoring(),
             isCalibrated: true,
             isCurrentlyAway: true,
             isCurrentlySlouching: false,
@@ -81,7 +81,7 @@ final class PostureUIStateTests: XCTestCase {
 
     func testAwayTakesPrecedenceOverSlouching() {
         let uiState = PostureUIState.derive(
-            from: .monitoring,
+            from: .monitoring(),
             isCalibrated: true,
             isCurrentlyAway: true,
             isCurrentlySlouching: true,
@@ -94,7 +94,7 @@ final class PostureUIStateTests: XCTestCase {
 
     func testMonitoringNotCalibrated() {
         let uiState = PostureUIState.derive(
-            from: .monitoring,
+            from: .monitoring(),
             isCalibrated: false,
             isCurrentlyAway: false,
             isCurrentlySlouching: false,

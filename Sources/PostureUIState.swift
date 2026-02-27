@@ -54,8 +54,8 @@ struct PostureUIState: Equatable {
                 canRecalibrate: true
             )
 
-        case .paused(let reason):
-            let statusText = pausedStatusText(reason: reason, trackingSource: trackingSource)
+        case .paused(let reason, let context):
+            let statusText = pausedStatusText(reason: reason, context: context, trackingSource: trackingSource)
             return PostureUIState(
                 statusText: statusText,
                 icon: .paused,
@@ -83,8 +83,10 @@ struct PostureUIState: Equatable {
         }
     }
 
-    private static func pausedStatusText(reason: PauseReason, trackingSource: TrackingSource) -> String {
+    private static func pausedStatusText(reason: PauseReason, context: PauseContext?, trackingSource: TrackingSource) -> String {
         switch reason {
+        case .sourceUnavailable:
+            return sourceUnavailableStatus(context: context)
         case .noProfile:
             return L("status.calibrationNeeded")
         case .onTheGo:
@@ -95,6 +97,39 @@ struct PostureUIState: Equatable {
             return L("status.pausedScreenLocked")
         case .airPodsRemoved:
             return L("status.pausedPutInAirPods")
+        }
+    }
+
+    private static func sourceUnavailableStatus(context: PauseContext?) -> String {
+        guard let context else {
+            return L("status.paused")
+        }
+
+        let sourceName = context.targetSource.displayName
+        let blocker = context.primaryBlocker ?? .needsConnection
+
+        if context.isFallback {
+            switch blocker {
+            case .needsPermission:
+                return L("status.pausedFallbackNeedsPermission", sourceName)
+            case .permissionDenied:
+                return L("status.pausedFallbackPermissionDenied", sourceName)
+            case .needsConnection:
+                return L("status.pausedFallbackNeedsConnection", sourceName)
+            case .needsCalibration:
+                return L("status.pausedFallbackNeedsCalibration", sourceName)
+            }
+        } else {
+            switch blocker {
+            case .needsPermission:
+                return L("status.pausedSourceNeedsPermission", sourceName)
+            case .permissionDenied:
+                return L("status.pausedSourcePermissionDenied", sourceName)
+            case .needsConnection:
+                return L("status.pausedSourceNeedsConnection", sourceName)
+            case .needsCalibration:
+                return L("status.pausedSourceNeedsCalibration", sourceName)
+            }
         }
     }
 }

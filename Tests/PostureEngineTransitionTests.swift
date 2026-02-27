@@ -6,7 +6,7 @@ final class PostureEngineTransitionTests: XCTestCase {
     // MARK: - canTransition: Allowed Transitions
 
     func testCanTransitionFromDisabledToMonitoring() {
-        XCTAssertTrue(PostureEngine.canTransition(from: .disabled, to: .monitoring))
+        XCTAssertTrue(PostureEngine.canTransition(from: .disabled, to: .monitoring()))
     }
 
     func testCanTransitionFromDisabledToPausedNoProfile() {
@@ -14,19 +14,19 @@ final class PostureEngineTransitionTests: XCTestCase {
     }
 
     func testCanTransitionFromDisabledToCalibrating() {
-        XCTAssertTrue(PostureEngine.canTransition(from: .disabled, to: .calibrating))
+        XCTAssertTrue(PostureEngine.canTransition(from: .disabled, to: .calibrating()))
     }
 
     func testCanTransitionFromMonitoringToDisabled() {
-        XCTAssertTrue(PostureEngine.canTransition(from: .monitoring, to: .disabled))
+        XCTAssertTrue(PostureEngine.canTransition(from: .monitoring(), to: .disabled))
     }
 
     func testCanTransitionFromMonitoringToPausedScreenLocked() {
-        XCTAssertTrue(PostureEngine.canTransition(from: .monitoring, to: .paused(.screenLocked)))
+        XCTAssertTrue(PostureEngine.canTransition(from: .monitoring(), to: .paused(.screenLocked)))
     }
 
     func testCanTransitionFromMonitoringToCalibrating() {
-        XCTAssertTrue(PostureEngine.canTransition(from: .monitoring, to: .calibrating))
+        XCTAssertTrue(PostureEngine.canTransition(from: .monitoring(), to: .calibrating()))
     }
 
     func testCanTransitionFromPausedNoProfileToDisabled() {
@@ -34,23 +34,23 @@ final class PostureEngineTransitionTests: XCTestCase {
     }
 
     func testCanTransitionFromPausedNoProfileToMonitoring() {
-        XCTAssertTrue(PostureEngine.canTransition(from: .paused(.noProfile), to: .monitoring))
+        XCTAssertTrue(PostureEngine.canTransition(from: .paused(.noProfile), to: .monitoring()))
     }
 
     func testCanTransitionFromPausedNoProfileToCalibrating() {
-        XCTAssertTrue(PostureEngine.canTransition(from: .paused(.noProfile), to: .calibrating))
+        XCTAssertTrue(PostureEngine.canTransition(from: .paused(.noProfile), to: .calibrating()))
     }
 
     func testCanTransitionFromCalibratingToMonitoring() {
-        XCTAssertTrue(PostureEngine.canTransition(from: .calibrating, to: .monitoring))
+        XCTAssertTrue(PostureEngine.canTransition(from: .calibrating(), to: .monitoring()))
     }
 
     func testCanTransitionFromCalibratingToPausedNoProfile() {
-        XCTAssertTrue(PostureEngine.canTransition(from: .calibrating, to: .paused(.noProfile)))
+        XCTAssertTrue(PostureEngine.canTransition(from: .calibrating(), to: .paused(.noProfile)))
     }
 
     func testCanTransitionFromCalibratingToDisabled() {
-        XCTAssertTrue(PostureEngine.canTransition(from: .calibrating, to: .disabled))
+        XCTAssertTrue(PostureEngine.canTransition(from: .calibrating(), to: .disabled))
     }
 
     // MARK: - canTransition: Same State (disallowed for non-paused)
@@ -60,11 +60,11 @@ final class PostureEngineTransitionTests: XCTestCase {
     }
 
     func testCannotTransitionMonitoringToMonitoring() {
-        XCTAssertFalse(PostureEngine.canTransition(from: .monitoring, to: .monitoring))
+        XCTAssertFalse(PostureEngine.canTransition(from: .monitoring(), to: .monitoring()))
     }
 
     func testCannotTransitionCalibratingToCalibrating() {
-        XCTAssertFalse(PostureEngine.canTransition(from: .calibrating, to: .calibrating))
+        XCTAssertFalse(PostureEngine.canTransition(from: .calibrating(), to: .calibrating()))
     }
 
     // MARK: - canTransition: Paused-to-Paused
@@ -86,8 +86,8 @@ final class PostureEngineTransitionTests: XCTestCase {
         let reasons: [PauseReason] = [.noProfile, .onTheGo, .cameraDisconnected, .screenLocked, .airPodsRemoved]
         for reason in reasons {
             XCTAssertTrue(
-                PostureEngine.canTransition(from: .monitoring, to: .paused(reason)),
-                "Should allow .monitoring -> .paused(.\(reason))"
+                PostureEngine.canTransition(from: .monitoring(), to: .paused(reason)),
+                "Should allow .monitoring() -> .paused(.\(reason))"
             )
         }
     }
@@ -151,19 +151,19 @@ final class PostureEngineTransitionTests: XCTestCase {
     // MARK: - shouldDetectorRun: Active States
 
     func testShouldDetectorRunMonitoringCamera() {
-        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .monitoring, trackingSource: .camera))
+        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .monitoring(), trackingSource: .camera))
     }
 
     func testShouldDetectorRunMonitoringAirPods() {
-        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .monitoring, trackingSource: .airpods))
+        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .monitoring(), trackingSource: .airpods))
     }
 
     func testShouldDetectorRunCalibratingCamera() {
-        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .calibrating, trackingSource: .camera))
+        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .calibrating(), trackingSource: .camera))
     }
 
     func testShouldDetectorRunCalibratingAirPods() {
-        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .calibrating, trackingSource: .airpods))
+        XCTAssertTrue(PostureEngine.shouldDetectorRun(for: .calibrating(), trackingSource: .airpods))
     }
 
     func testShouldDetectorRunDisabledCamera() {
@@ -184,7 +184,7 @@ final class PostureEngineTransitionTests: XCTestCase {
 
     func testStateWhenEnablingCalibratedAndAvailableReturnsMonitoring() {
         let state = PostureEngine.stateWhenEnabling(isCalibrated: true, detectorAvailable: true)
-        XCTAssertEqual(state, .monitoring)
+        XCTAssertEqual(state, .monitoring())
     }
 
     func testStateWhenEnablingCalibratedButUnavailableReturnsCameraDisconnected() {
