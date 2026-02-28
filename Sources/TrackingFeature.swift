@@ -20,6 +20,7 @@ struct TrackingFeature: Reducer {
         case selectedCamera
     }
 
+    // Observer/testing surface for runtime calls.
     enum EffectIntent: Equatable {
         case startMonitoring
         case beginMonitoringSession
@@ -28,7 +29,6 @@ struct TrackingFeature: Reducer {
         case switchCamera(CameraSwitchIntent)
         case syncUI
         case stopDetector(TrackingSource)
-        case setTrackingSource(TrackingSource)
         case persistTrackingSource
         case resetMonitoringState
         case showCalibrationPermissionDeniedAlert
@@ -108,21 +108,14 @@ struct TrackingFeature: Reducer {
         case switchTrackingSource(TrackingSource, isNewSourceCalibrated: Bool)
     }
 
-    @Dependency(\.trackingEffectExecutor) var trackingEffectExecutor
+    @Dependency(\.trackingRuntime) var trackingRuntime
 
-    private func executeEffectIntents(
-        _ intents: [EffectIntent]
+    private func run(
+        _ operation: @escaping @Sendable (TrackingRuntimeClient) async -> Void
     ) -> Effect<Action> {
-        guard !intents.isEmpty else { return .none }
-        return .run { [intents] _ in
-            for intent in intents {
-                await trackingEffectExecutor.execute(intent)
-            }
+        .run { _ in
+            await operation(trackingRuntime)
         }
-    }
-
-    private func emit(_ intents: [EffectIntent]) -> Effect<Action> {
-        executeEffectIntents(intents)
     }
 
     var body: some ReducerOf<Self> {
@@ -144,7 +137,9 @@ struct TrackingFeature: Reducer {
                         trackingSource: trackingSource
                     )
                     if state.appState == .monitoring {
-                        return emit([.startMonitoring])
+                        return run { runtime in
+                            await runtime.startMonitoring()
+                        }
                     }
                 } else {
                     state.appState = .disabled
@@ -189,17 +184,21 @@ struct TrackingFeature: Reducer {
                     hasValidAirPodsCalibration: hasValidAirPodsCalibration
                 )
 
-                var intents: [EffectIntent] = []
-                if result.shouldApplyStartupCameraProfile {
-                    intents.append(.applyStartupCameraProfile(cameraProfile))
+                guard result.shouldApplyStartupCameraProfile || result.shouldStartMonitoring || result.shouldShowOnboarding else {
+                    return .none
                 }
-                if result.shouldStartMonitoring {
-                    intents.append(.startMonitoring)
+
+                return run { runtime in
+                    if result.shouldApplyStartupCameraProfile {
+                        await runtime.applyStartupCameraProfile(cameraProfile)
+                    }
+                    if result.shouldStartMonitoring {
+                        await runtime.startMonitoring()
+                    }
+                    if result.shouldShowOnboarding {
+                        await runtime.showOnboarding()
+                    }
                 }
-                if result.shouldShowOnboarding {
-                    intents.append(.showOnboarding)
-                }
-                return emit(intents)
 
             case let .startMonitoringRequested(isMarketingMode, trackingSource, isCalibrated, isConnected):
                 state.manualSource = trackingSource
@@ -211,7 +210,9 @@ struct TrackingFeature: Reducer {
                 )
                 state.appState = result.newState
                 if result.shouldBeginMonitoringSession {
-                    return emit([.beginMonitoringSession])
+                    return run { runtime in
+                        await runtime.beginMonitoringSession()
+                    }
                 }
                 return .none
 
@@ -223,7 +224,9 @@ struct TrackingFeature: Reducer {
                 )
                 state.appState = result.newState
                 if result.shouldRestartMonitoring {
-                    return emit([.startMonitoring])
+                    return run { runtime in
+                        await runtime.startMonitoring()
+                    }
                 }
                 return .none
 
@@ -237,9 +240,16 @@ struct TrackingFeature: Reducer {
                 state.appState = result.newState
 
                 if result.shouldSelectAndStartMonitoring {
-                    return emit([.switchCamera(.matchingProfile(matchingProfile)), .startMonitoring])
-                } else if result.newState == previousState {
-                    return emit([.syncUI])
+                    return run { runtime in
+                        await runtime.switchCameraToMatchingProfile(matchingProfile)
+                        await runtime.startMonitoring()
+                    }
+                }
+
+                if result.newState == previousState {
+                    return run { runtime in
+                        await runtime.syncUI()
+                    }
                 }
                 return .none
 
@@ -263,26 +273,35 @@ struct TrackingFeature: Reducer {
                 case .none:
                     return .none
                 case .syncUIOnly:
-                    return emit([.syncUI])
-                case .switchToFallback(let startMonitoring):
-                    var intents: [EffectIntent] = [.switchCamera(.fallback(cameraID: fallbackCameraID, profile: fallbackProfile))]
-                    if startMonitoring {
-                        intents.append(.startMonitoring)
+                    return run { runtime in
+                        await runtime.syncUI()
                     }
-                    return emit(intents)
+                case .switchToFallback(let startMonitoring):
+                    return run { runtime in
+                        await runtime.switchCameraToFallback(fallbackCameraID, fallbackProfile)
+                        if startMonitoring {
+                            await runtime.startMonitoring()
+                        }
+                    }
                 }
 
             case .calibrationAuthorizationDenied(let isCalibrated):
                 state.appState = PostureEngine.stateWhenCalibrationAuthorizationDenied(
                     isCalibrated: isCalibrated
                 )
-                return emit([.showCalibrationPermissionDeniedAlert])
+                return run { runtime in
+                    await runtime.showCalibrationPermissionDeniedAlert()
+                }
 
             case .calibrationOpenSettingsRequested:
-                return emit([.openPrivacySettings])
+                return run { runtime in
+                    await runtime.openPrivacySettings()
+                }
 
             case .calibrationRetryRequested:
-                return emit([.retryCalibration])
+                return run { runtime in
+                    await runtime.retryCalibration()
+                }
 
             case .calibrationAuthorizationGranted:
                 state.appState = PostureEngine.stateWhenCalibrationAuthorizationGranted()
@@ -291,7 +310,9 @@ struct TrackingFeature: Reducer {
             case .calibrationStartFailed(let errorMessage):
                 state.appState = PostureEngine.unavailableState(for: state.activeSource)
                 if state.activeSource == .camera {
-                    return emit([.showCameraCalibrationRetryAlert(message: errorMessage)])
+                    return run { runtime in
+                        await runtime.showCameraCalibrationRetryAlert(errorMessage)
+                    }
                 }
                 return .none
 
@@ -305,13 +326,18 @@ struct TrackingFeature: Reducer {
                     isCalibrated: isCalibrated
                 )
                 if isCalibrated {
-                    return emit([.startMonitoring])
+                    return run { runtime in
+                        await runtime.startMonitoring()
+                    }
                 }
                 return .none
 
             case .calibrationCompleted:
                 state.appState = PostureEngine.stateWhenCalibrationCompletes()
-                return emit([.resetMonitoringState, .startMonitoring])
+                return run { runtime in
+                    await runtime.resetMonitoringState()
+                    await runtime.startMonitoring()
+                }
 
             case .screenLocked:
                 let result = PostureEngine.stateWhenScreenLocks(
@@ -331,7 +357,9 @@ struct TrackingFeature: Reducer {
                 state.appState = result.newState
                 state.stateBeforeLock = result.stateBeforeLock
                 if result.shouldRestartMonitoring {
-                    return emit([.startMonitoring])
+                    return run { runtime in
+                        await runtime.startMonitoring()
+                    }
                 }
                 return .none
 
@@ -354,14 +382,18 @@ struct TrackingFeature: Reducer {
                 )
                 state.appState = result.newState
 
-                var intents: [EffectIntent] = []
-                if result.shouldSwitchToProfileCamera {
-                    intents.append(.switchCamera(.matchingProfile(matchingProfile)))
+                guard result.shouldSwitchToProfileCamera || result.shouldStartMonitoring else {
+                    return .none
                 }
-                if result.shouldStartMonitoring {
-                    intents.append(.startMonitoring)
+
+                return run { runtime in
+                    if result.shouldSwitchToProfileCamera {
+                        await runtime.switchCameraToMatchingProfile(matchingProfile)
+                    }
+                    if result.shouldStartMonitoring {
+                        await runtime.startMonitoring()
+                    }
                 }
-                return emit(intents)
 
             case .cameraSelectionChanged:
                 state.appState = PostureEngine.stateWhenCameraSelectionChanges(
@@ -369,7 +401,9 @@ struct TrackingFeature: Reducer {
                     trackingSource: state.activeSource
                 )
                 if state.activeSource == .camera {
-                    return emit([.switchCamera(.selectedCamera)])
+                    return run { runtime in
+                        await runtime.switchCameraToSelected()
+                    }
                 }
                 return .none
 
@@ -385,37 +419,70 @@ struct TrackingFeature: Reducer {
                 state.manualSource = result.newSource
                 state.appState = result.newState
 
-                var intents: [EffectIntent] = []
-                if result.didSwitchSource {
-                    intents.append(.stopDetector(previousSource))
-                    intents.append(.setTrackingSource(result.newSource))
-                    intents.append(.persistTrackingSource)
+                guard result.didSwitchSource || result.shouldStartMonitoring else {
+                    return .none
                 }
-                if result.shouldStartMonitoring {
-                    intents.append(.startMonitoring)
+
+                return run { runtime in
+                    if result.didSwitchSource {
+                        await runtime.stopDetector(previousSource)
+                        await runtime.persistTrackingSource()
+                    }
+                    if result.shouldStartMonitoring {
+                        await runtime.startMonitoring()
+                    }
                 }
-                return emit(intents)
             }
         }
     }
 }
 
-struct TrackingEffectExecutorClient {
-    var execute: (TrackingFeature.EffectIntent) async -> Void
+struct TrackingRuntimeClient {
+    var startMonitoring: @Sendable () async -> Void
+    var beginMonitoringSession: @Sendable () async -> Void
+    var applyStartupCameraProfile: @Sendable (ProfileData?) async -> Void
+    var showOnboarding: @Sendable () async -> Void
+    var switchCameraToMatchingProfile: @Sendable (ProfileData?) async -> Void
+    var switchCameraToFallback: @Sendable (String?, ProfileData?) async -> Void
+    var switchCameraToSelected: @Sendable () async -> Void
+    var syncUI: @Sendable () async -> Void
+    var stopDetector: @Sendable (TrackingSource) async -> Void
+    var persistTrackingSource: @Sendable () async -> Void
+    var resetMonitoringState: @Sendable () async -> Void
+    var showCalibrationPermissionDeniedAlert: @Sendable () async -> Void
+    var openPrivacySettings: @Sendable () async -> Void
+    var showCameraCalibrationRetryAlert: @Sendable (String?) async -> Void
+    var retryCalibration: @Sendable () async -> Void
 }
 
-extension TrackingEffectExecutorClient {
-    static let unimplemented = Self(execute: { _ in })
+extension TrackingRuntimeClient {
+    static let unimplemented = Self(
+        startMonitoring: {},
+        beginMonitoringSession: {},
+        applyStartupCameraProfile: { _ in },
+        showOnboarding: {},
+        switchCameraToMatchingProfile: { _ in },
+        switchCameraToFallback: { _, _ in },
+        switchCameraToSelected: {},
+        syncUI: {},
+        stopDetector: { _ in },
+        persistTrackingSource: {},
+        resetMonitoringState: {},
+        showCalibrationPermissionDeniedAlert: {},
+        openPrivacySettings: {},
+        showCameraCalibrationRetryAlert: { _ in },
+        retryCalibration: {}
+    )
 }
 
-private enum TrackingEffectExecutorClientKey: DependencyKey {
-    static let liveValue = TrackingEffectExecutorClient.unimplemented
-    static let testValue = TrackingEffectExecutorClient.unimplemented
+private enum TrackingRuntimeClientKey: DependencyKey {
+    static let liveValue = TrackingRuntimeClient.unimplemented
+    static let testValue = TrackingRuntimeClient.unimplemented
 }
 
 extension DependencyValues {
-    var trackingEffectExecutor: TrackingEffectExecutorClient {
-        get { self[TrackingEffectExecutorClientKey.self] }
-        set { self[TrackingEffectExecutorClientKey.self] = newValue }
+    var trackingRuntime: TrackingRuntimeClient {
+        get { self[TrackingRuntimeClientKey.self] }
+        set { self[TrackingRuntimeClientKey.self] = newValue }
     }
 }

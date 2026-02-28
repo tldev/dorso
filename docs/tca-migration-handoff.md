@@ -963,6 +963,38 @@ TCA migration is complete only when all items below are true:
   - `swift test --filter AppDelegateTrackingIntegrationTests` passed (28 tests).
   - Full suite `swift test` passed (365 tests, 0 failures).
 
+### 2026-02-28 - Completed Chunk 34 (Codex)
+
+- Removed remaining command-intent interpreter execution path and replaced it with direct TCA runtime dependencies:
+  - In `Sources/TrackingFeature.swift`:
+    - Replaced `trackingEffectExecutor.execute(intent)` emission with direct dependency-driven effects via `trackingRuntime` client methods.
+    - Reducer now performs direct `.run` calls for runtime work (monitor start/session begin, camera switching, UI sync, persistence, remediation flows).
+  - In `Sources/AppDelegate.swift`:
+    - Removed `executeTrackingEffectIntent(...)` switch interpreter.
+    - Wired `trackingStore` dependencies with explicit `trackingRuntime.*` closures to runtime adapter methods.
+    - Kept `trackingEffectIntentObserver` as test/diagnostic instrumentation only.
+- Collapsed duplicate tracking ownership in `AppDelegate`:
+  - Removed adapter-owned mirrored `stateBeforeLock`.
+  - `state` and `trackingSource` now read from reducer state (`trackingStore.withState`) and write through reducer actions.
+  - Added `applyTrackingStoreTransition(...)` to apply detector/UI runtime side effects based on reducer old/new snapshots.
+- Removed obsolete adapter-transition migration artifact:
+  - Deleted `Sources/TrackingAdapterTransition.swift`.
+  - Deleted `Tests/TrackingAdapterTransitionTests.swift`.
+- Updated reducer/integration/parity harnesses to new runtime dependency surface:
+  - `Tests/TrackingFeatureTests.swift` now injects `trackingRuntime` recorder client.
+  - `Tests/TrackingReducerScenarioHarness.swift` now records effects through `trackingRuntime`.
+  - Updated integration and reducer expectations for source switch path (no `.setTrackingSource(...)` intent event).
+- End-state reassessment after this chunk:
+  - Item 1 (`Unified reducer transition boundary`): `true`.
+  - Item 2 (`AppDelegate adapter-only role`): `true`.
+  - Item 3 (`Contract parity proven`): `true`.
+  - Item 4 (`Startup paths reducer-aligned`): `true`.
+  - Item 5 (`Migration guardrails preserved`): `true`.
+- Validation:
+  - `swift test --filter TrackingFeatureTests` passed (35 tests).
+  - `swift test --filter AppDelegateTrackingIntegrationTests` passed (28 tests).
+  - `swift test` passed (362 tests, 0 failures).
+
 ## Recommended Next Steps (For Next Agent)
 
 None
@@ -979,5 +1011,7 @@ The migration end-state above is complete. Optional hardening status:
    - Re-ran full suite verification after the cleanup chunk.
 4. Completed:
    - Removed adapter-facing effect trace return plumbing from `AppDelegate.sendTrackingAction(...)` and migrated integration tests to observer-only effect assertions.
+5. Completed:
+   - Replaced effect-intent interpreter execution with direct `trackingRuntime` dependency methods and removed obsolete adapter-transition scaffolding.
 
 No remaining optional follow-up items are tracked in this handoff.

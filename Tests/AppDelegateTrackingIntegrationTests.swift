@@ -558,7 +558,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         await appDelegate.dispatchSwitchTrackingSourceTransitionForTesting(.airpods)
         let expectedIntents: [TrackingFeature.EffectIntent] = [
             .stopDetector(.camera),
-            .setTrackingSource(.airpods),
             .persistTrackingSource
         ]
 
@@ -587,7 +586,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         await appDelegate.dispatchSwitchTrackingSourceTransitionForTesting(.camera)
         let expectedPrefix: [TrackingFeature.EffectIntent] = [
             .stopDetector(.airpods),
-            .setTrackingSource(.camera),
             .persistTrackingSource,
             .startMonitoring
         ]

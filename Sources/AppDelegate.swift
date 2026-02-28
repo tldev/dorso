@@ -53,14 +53,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     let cameraDetector = CameraPostureDetector()
     let airPodsDetector = AirPodsPostureDetector()
 
-    var trackingSource: TrackingSource = .camera {
-        didSet {
-            if oldValue != trackingSource {
-                syncDetectorToState()
-                if trackingActionDispatchDepth == 0 {
-                    trackingStore.send(.setManualSource(trackingSource))
-                }
-            }
+    var trackingSource: TrackingSource {
+        get { trackingStore.withState { $0.manualSource } }
+        set {
+            let oldTrackingState = trackingStore.withState { $0 }
+            guard oldTrackingState.manualSource != newValue else { return }
+
+            trackingStore.send(.setManualSource(newValue))
+            let newTrackingState = trackingStore.withState { $0 }
+            applyTrackingStoreTransition(from: oldTrackingState, to: newTrackingState)
         }
     }
 
@@ -109,15 +110,55 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     let cameraObserver = CameraObserver()
     let screenLockObserver = ScreenLockObserver()
     let hotkeyManager = HotkeyManager()
-    var stateBeforeLock: AppState?
     private var trackingActionDispatchDepth = 0
     lazy var trackingStore: StoreOf<TrackingFeature> = {
         Store(initialState: TrackingFeature.State()) {
             TrackingFeature()
         } withDependencies: { [weak self] dependencies in
-            dependencies.trackingEffectExecutor.execute = { intent in
-                guard let self else { return }
-                await self.executeTrackingEffectIntent(intent)
+            dependencies.trackingRuntime.startMonitoring = { [weak self] in
+                await self?.runtimeStartMonitoring()
+            }
+            dependencies.trackingRuntime.beginMonitoringSession = { [weak self] in
+                await self?.runtimeBeginMonitoringSession()
+            }
+            dependencies.trackingRuntime.applyStartupCameraProfile = { [weak self] profile in
+                await self?.runtimeApplyStartupCameraProfile(profile)
+            }
+            dependencies.trackingRuntime.showOnboarding = { [weak self] in
+                await self?.runtimeShowOnboarding()
+            }
+            dependencies.trackingRuntime.switchCameraToMatchingProfile = { [weak self] profile in
+                await self?.runtimeSwitchCameraToMatchingProfile(profile)
+            }
+            dependencies.trackingRuntime.switchCameraToFallback = { [weak self] cameraID, profile in
+                await self?.runtimeSwitchCameraToFallback(cameraID: cameraID, profile: profile)
+            }
+            dependencies.trackingRuntime.switchCameraToSelected = { [weak self] in
+                await self?.runtimeSwitchCameraToSelected()
+            }
+            dependencies.trackingRuntime.syncUI = { [weak self] in
+                await self?.runtimeSyncUI()
+            }
+            dependencies.trackingRuntime.stopDetector = { [weak self] source in
+                await self?.runtimeStopDetector(source)
+            }
+            dependencies.trackingRuntime.persistTrackingSource = { [weak self] in
+                await self?.runtimePersistTrackingSource()
+            }
+            dependencies.trackingRuntime.resetMonitoringState = { [weak self] in
+                await self?.runtimeResetMonitoringState()
+            }
+            dependencies.trackingRuntime.showCalibrationPermissionDeniedAlert = { [weak self] in
+                await self?.runtimeShowCalibrationPermissionDeniedAlert()
+            }
+            dependencies.trackingRuntime.openPrivacySettings = { [weak self] in
+                await self?.runtimeOpenPrivacySettings()
+            }
+            dependencies.trackingRuntime.showCameraCalibrationRetryAlert = { [weak self] message in
+                await self?.runtimeShowCameraCalibrationRetryAlert(message: message)
+            }
+            dependencies.trackingRuntime.retryCalibration = { [weak self] in
+                await self?.runtimeRetryCalibration()
             }
         }
     }()
@@ -200,17 +241,27 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - State Machine
 
-    private var _state: AppState = .disabled
     var state: AppState {
-        get { _state }
+        get { trackingStore.withState { $0.appState } }
         set {
-            guard newValue != _state else { return }
-            let oldState = _state
-            _state = newValue
-            handleStateTransition(from: oldState, to: newValue)
-            if trackingActionDispatchDepth == 0 {
-                trackingStore.send(.setAppState(newValue))
-            }
+            let oldTrackingState = trackingStore.withState { $0 }
+            guard oldTrackingState.appState != newValue else { return }
+
+            trackingStore.send(.setAppState(newValue))
+            let newTrackingState = trackingStore.withState { $0 }
+            applyTrackingStoreTransition(from: oldTrackingState, to: newTrackingState)
+        }
+    }
+
+    private func applyTrackingStoreTransition(
+        from oldTrackingState: TrackingFeature.State,
+        to newTrackingState: TrackingFeature.State,
+        applyStateTransition: Bool = true
+    ) {
+        if applyStateTransition, oldTrackingState.appState != newTrackingState.appState {
+            handleStateTransition(from: oldTrackingState.appState, to: newTrackingState.appState)
+        } else if oldTrackingState.manualSource != newTrackingState.manualSource {
+            syncDetectorToState()
         }
     }
 
@@ -243,13 +294,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         await storeTask.finish()
         let newState = trackingStore.withState { $0 }
 
-        stateBeforeLock = newState.stateBeforeLock
-
-        if applyStateTransition {
-            if newState.appState != state {
-                state = newState.appState
-            }
-        }
+        applyTrackingStoreTransition(
+            from: oldState,
+            to: newState,
+            applyStateTransition: applyStateTransition
+        )
 
         return (oldState, newState)
     }
@@ -838,71 +887,107 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func executeTrackingEffectIntent(_ intent: TrackingFeature.EffectIntent) async {
-        trackingEffectIntentObserver?(intent)
+    private func runtimeStartMonitoring() async {
+        trackingEffectIntentObserver?(.startMonitoring)
+        await startMonitoring()
+    }
 
-        switch intent {
-        case .applyStartupCameraProfile(let matchingProfile):
-            guard let matchingProfile else { return }
-            cameraDetector.selectedCameraID = matchingProfile.cameraID
-            applyCameraCalibration(from: matchingProfile)
-        case .startMonitoring:
-            await startMonitoring()
-        case .beginMonitoringSession:
-            if let beginMonitoringSessionHandler {
-                beginMonitoringSessionHandler()
-                return
-            }
-            guard let calibration = currentCalibration else { return }
-            lastPostureReadingTime = nil
-            activeDetector.beginMonitoring(with: calibration, intensity: activeIntensity, deadZone: activeDeadZone)
-        case .showOnboarding:
-            if let showOnboardingHandler {
-                showOnboardingHandler()
-            } else {
-                showOnboarding()
-            }
-        case .syncUI:
-            syncUIToState()
-        case .stopDetector(let source):
-            let detector: PostureDetector = source == .camera ? cameraDetector : airPodsDetector
-            detector.stop()
-        case .setTrackingSource(let source):
-            trackingSource = source
-        case .persistTrackingSource:
-            saveSettings()
-        case .resetMonitoringState:
-            monitoringState.reset()
-        case .showCalibrationPermissionDeniedAlert:
-            await showCalibrationPermissionDeniedAlert()
-        case .openPrivacySettings:
-            openPrivacySettings()
-        case .showCameraCalibrationRetryAlert(let message):
-            await showCameraCalibrationRetryAlert(message: message)
-        case .retryCalibration:
-            if let retryCalibrationHandler {
-                retryCalibrationHandler()
-            } else {
-                startCalibration()
-            }
-        case .switchCamera(let switchIntent):
-            switch switchIntent {
-            case .matchingProfile(let matchingProfile):
-                guard let matchingProfile else { return }
-                cameraDetector.selectedCameraID = matchingProfile.cameraID
-                applyCameraCalibration(from: matchingProfile)
-                cameraDetector.switchCamera(to: matchingProfile.cameraID)
-            case let .fallback(fallbackCameraID, fallbackProfile):
-                guard let fallbackCameraID else { return }
-                cameraDetector.selectedCameraID = fallbackCameraID
-                if let fallbackProfile, fallbackProfile.cameraID == fallbackCameraID {
-                    applyCameraCalibration(from: fallbackProfile)
-                }
-                cameraDetector.switchCamera(to: fallbackCameraID)
-            case .selectedCamera:
-                guard let selectedCameraID else { return }
-                cameraDetector.switchCamera(to: selectedCameraID)
-            }
+    private func runtimeBeginMonitoringSession() async {
+        trackingEffectIntentObserver?(.beginMonitoringSession)
+        if let beginMonitoringSessionHandler {
+            beginMonitoringSessionHandler()
+            return
+        }
+        guard let calibration = currentCalibration else { return }
+        lastPostureReadingTime = nil
+        activeDetector.beginMonitoring(with: calibration, intensity: activeIntensity, deadZone: activeDeadZone)
+    }
+
+    private func runtimeApplyStartupCameraProfile(_ matchingProfile: ProfileData?) async {
+        trackingEffectIntentObserver?(.applyStartupCameraProfile(matchingProfile))
+        guard let matchingProfile else { return }
+        cameraDetector.selectedCameraID = matchingProfile.cameraID
+        applyCameraCalibration(from: matchingProfile)
+    }
+
+    private func runtimeShowOnboarding() async {
+        trackingEffectIntentObserver?(.showOnboarding)
+        if let showOnboardingHandler {
+            showOnboardingHandler()
+        } else {
+            showOnboarding()
+        }
+    }
+
+    private func runtimeSwitchCameraToMatchingProfile(_ matchingProfile: ProfileData?) async {
+        trackingEffectIntentObserver?(.switchCamera(.matchingProfile(matchingProfile)))
+        guard let matchingProfile else { return }
+        cameraDetector.selectedCameraID = matchingProfile.cameraID
+        applyCameraCalibration(from: matchingProfile)
+        cameraDetector.switchCamera(to: matchingProfile.cameraID)
+    }
+
+    private func runtimeSwitchCameraToFallback(
+        cameraID: String?,
+        profile: ProfileData?
+    ) async {
+        trackingEffectIntentObserver?(.switchCamera(.fallback(cameraID: cameraID, profile: profile)))
+        guard let cameraID else { return }
+        cameraDetector.selectedCameraID = cameraID
+        if let profile, profile.cameraID == cameraID {
+            applyCameraCalibration(from: profile)
+        }
+        cameraDetector.switchCamera(to: cameraID)
+    }
+
+    private func runtimeSwitchCameraToSelected() async {
+        trackingEffectIntentObserver?(.switchCamera(.selectedCamera))
+        guard let selectedCameraID else { return }
+        cameraDetector.switchCamera(to: selectedCameraID)
+    }
+
+    private func runtimeSyncUI() async {
+        trackingEffectIntentObserver?(.syncUI)
+        syncUIToState()
+    }
+
+    private func runtimeStopDetector(_ source: TrackingSource) async {
+        trackingEffectIntentObserver?(.stopDetector(source))
+        let detector: PostureDetector = source == .camera ? cameraDetector : airPodsDetector
+        detector.stop()
+    }
+
+    private func runtimePersistTrackingSource() async {
+        trackingEffectIntentObserver?(.persistTrackingSource)
+        saveSettings()
+    }
+
+    private func runtimeResetMonitoringState() async {
+        trackingEffectIntentObserver?(.resetMonitoringState)
+        monitoringState.reset()
+    }
+
+    private func runtimeShowCalibrationPermissionDeniedAlert() async {
+        trackingEffectIntentObserver?(.showCalibrationPermissionDeniedAlert)
+        await showCalibrationPermissionDeniedAlert()
+    }
+
+    private func runtimeOpenPrivacySettings() async {
+        trackingEffectIntentObserver?(.openPrivacySettings)
+        openPrivacySettings()
+    }
+
+    private func runtimeShowCameraCalibrationRetryAlert(message: String?) async {
+        trackingEffectIntentObserver?(.showCameraCalibrationRetryAlert(message: message))
+        await showCameraCalibrationRetryAlert(message: message)
+    }
+
+    private func runtimeRetryCalibration() async {
+        trackingEffectIntentObserver?(.retryCalibration)
+        if let retryCalibrationHandler {
+            retryCalibrationHandler()
+        } else {
+            startCalibration()
         }
     }
 

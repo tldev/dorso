@@ -15,6 +15,40 @@ private actor EffectIntentRecorder {
     }
 }
 
+private extension TrackingRuntimeClient {
+    static func recording(_ recorder: EffectIntentRecorder) -> Self {
+        Self(
+            startMonitoring: { await recorder.record(.startMonitoring) },
+            beginMonitoringSession: { await recorder.record(.beginMonitoringSession) },
+            applyStartupCameraProfile: { profile in
+                await recorder.record(.applyStartupCameraProfile(profile))
+            },
+            showOnboarding: { await recorder.record(.showOnboarding) },
+            switchCameraToMatchingProfile: { profile in
+                await recorder.record(.switchCamera(.matchingProfile(profile)))
+            },
+            switchCameraToFallback: { cameraID, profile in
+                await recorder.record(.switchCamera(.fallback(cameraID: cameraID, profile: profile)))
+            },
+            switchCameraToSelected: {
+                await recorder.record(.switchCamera(.selectedCamera))
+            },
+            syncUI: { await recorder.record(.syncUI) },
+            stopDetector: { source in await recorder.record(.stopDetector(source)) },
+            persistTrackingSource: { await recorder.record(.persistTrackingSource) },
+            resetMonitoringState: { await recorder.record(.resetMonitoringState) },
+            showCalibrationPermissionDeniedAlert: {
+                await recorder.record(.showCalibrationPermissionDeniedAlert)
+            },
+            openPrivacySettings: { await recorder.record(.openPrivacySettings) },
+            showCameraCalibrationRetryAlert: { message in
+                await recorder.record(.showCameraCalibrationRetryAlert(message: message))
+            },
+            retryCalibration: { await recorder.record(.retryCalibration) }
+        )
+    }
+}
+
 final class TrackingFeatureTests: XCTestCase {
     @MainActor
     private func makeStore(
@@ -25,9 +59,7 @@ final class TrackingFeatureTests: XCTestCase {
             return TestStore(initialState: initialState) {
                 TrackingFeature()
             } withDependencies: {
-                $0.trackingEffectExecutor.execute = { intent in
-                    await recorder.record(intent)
-                }
+                $0.trackingRuntime = .recording(recorder)
             }
         }
 
@@ -801,7 +833,6 @@ final class TrackingFeatureTests: XCTestCase {
         await assertIntents(
             [
                 .stopDetector(.camera),
-                .setTrackingSource(.airpods),
                 .persistTrackingSource
             ],
             recorder: recorder
@@ -831,7 +862,6 @@ final class TrackingFeatureTests: XCTestCase {
         await assertIntents(
             [
                 .stopDetector(.camera),
-                .setTrackingSource(.airpods),
                 .persistTrackingSource,
                 .startMonitoring
             ],

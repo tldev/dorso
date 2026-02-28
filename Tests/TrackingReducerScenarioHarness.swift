@@ -14,6 +14,40 @@ private actor IntentRecorder {
     }
 }
 
+private extension TrackingRuntimeClient {
+    static func recording(_ recorder: IntentRecorder) -> Self {
+        Self(
+            startMonitoring: { await recorder.append(.startMonitoring) },
+            beginMonitoringSession: { await recorder.append(.beginMonitoringSession) },
+            applyStartupCameraProfile: { profile in
+                await recorder.append(.applyStartupCameraProfile(profile))
+            },
+            showOnboarding: { await recorder.append(.showOnboarding) },
+            switchCameraToMatchingProfile: { profile in
+                await recorder.append(.switchCamera(.matchingProfile(profile)))
+            },
+            switchCameraToFallback: { cameraID, profile in
+                await recorder.append(.switchCamera(.fallback(cameraID: cameraID, profile: profile)))
+            },
+            switchCameraToSelected: {
+                await recorder.append(.switchCamera(.selectedCamera))
+            },
+            syncUI: { await recorder.append(.syncUI) },
+            stopDetector: { source in await recorder.append(.stopDetector(source)) },
+            persistTrackingSource: { await recorder.append(.persistTrackingSource) },
+            resetMonitoringState: { await recorder.append(.resetMonitoringState) },
+            showCalibrationPermissionDeniedAlert: {
+                await recorder.append(.showCalibrationPermissionDeniedAlert)
+            },
+            openPrivacySettings: { await recorder.append(.openPrivacySettings) },
+            showCameraCalibrationRetryAlert: { message in
+                await recorder.append(.showCameraCalibrationRetryAlert(message: message))
+            },
+            retryCalibration: { await recorder.append(.retryCalibration) }
+        )
+    }
+}
+
 @MainActor
 struct TrackingReducerScenarioHarness {
     private var reducerState: TrackingFeature.State
@@ -218,9 +252,7 @@ struct TrackingReducerScenarioHarness {
         let store = Store(initialState: reducerState) {
             TrackingFeature()
         } withDependencies: {
-            $0.trackingEffectExecutor.execute = { intent in
-                await intentRecorder.append(intent)
-            }
+            $0.trackingRuntime = .recording(intentRecorder)
         }
 
         let actionTask = store.send(action)
