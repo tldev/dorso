@@ -10,10 +10,16 @@ let package = Package(
     products: [
         .library(name: "DorsoCore", targets: ["DorsoCore"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.10.0")
+    ],
     targets: [
         // Core logic library - testable, no main entry point
         .target(
             name: "DorsoCore",
+            dependencies: [
+                .product(name: "ComposableArchitecture", package: "swift-composable-architecture")
+            ],
             path: "Sources",
             exclude: ["App", "Icons"],
             resources: [
@@ -37,7 +43,10 @@ let package = Package(
         // Test target
         .testTarget(
             name: "DorsoTests",
-            dependencies: ["DorsoCore"],
+            dependencies: [
+                "DorsoCore",
+                .product(name: "ComposableArchitecture", package: "swift-composable-architecture")
+            ],
             path: "Tests"
         )
     ]

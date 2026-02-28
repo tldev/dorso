@@ -574,7 +574,9 @@ struct SettingsView: View {
                 .frame(width: 130)
                 .onChange(of: trackingSource) { newValue in
                     if newValue != appDelegate.trackingSource {
-                        appDelegate.switchTrackingSource(to: newValue)
+                        Task { @MainActor in
+                            await appDelegate.switchTrackingSource(to: newValue)
+                        }
                     }
                 }
 
@@ -851,10 +853,8 @@ struct SettingsView: View {
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .onChange(of: pauseOnTheGo) { newValue in
-                        appDelegate.pauseOnTheGo = newValue
-                        appDelegate.saveSettings()
-                        if !newValue && appDelegate.state == .paused(.onTheGo) {
-                            appDelegate.state = .monitoring
+                        Task { @MainActor in
+                            await appDelegate.setPauseOnTheGoEnabled(newValue)
                         }
                     }
                 }

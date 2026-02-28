@@ -371,17 +371,29 @@ final class PostureEngineTests: XCTestCase {
     }
 
     func testStateWhenEnablingWithCalibration() {
-        let state = PostureEngine.stateWhenEnabling(isCalibrated: true, detectorAvailable: true)
+        let state = PostureEngine.stateWhenEnabling(
+            isCalibrated: true,
+            detectorAvailable: true,
+            trackingSource: .camera
+        )
         XCTAssertEqual(state, .monitoring)
     }
 
     func testStateWhenEnablingWithoutCalibration() {
-        let state = PostureEngine.stateWhenEnabling(isCalibrated: false, detectorAvailable: true)
+        let state = PostureEngine.stateWhenEnabling(
+            isCalibrated: false,
+            detectorAvailable: true,
+            trackingSource: .camera
+        )
         XCTAssertEqual(state, .paused(.noProfile))
     }
 
     func testStateWhenEnablingWithoutDetector() {
-        let state = PostureEngine.stateWhenEnabling(isCalibrated: true, detectorAvailable: false)
+        let state = PostureEngine.stateWhenEnabling(
+            isCalibrated: true,
+            detectorAvailable: false,
+            trackingSource: .camera
+        )
         XCTAssertEqual(state, .paused(.cameraDisconnected))
     }
 

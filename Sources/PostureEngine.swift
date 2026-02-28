@@ -47,6 +47,71 @@ struct AwayChangeResult: Equatable {
     let shouldUpdateUI: Bool
 }
 
+/// Result of applying screen lock behavior to tracking state
+struct ScreenLockTransitionResult: Equatable {
+    let newState: AppState
+    let stateBeforeLock: AppState?
+}
+
+/// Result of applying screen unlock behavior to tracking state
+struct ScreenUnlockTransitionResult: Equatable {
+    let newState: AppState
+    let stateBeforeLock: AppState?
+    let shouldRestartMonitoring: Bool
+}
+
+/// Result of processing an AirPods connection change
+struct AirPodsConnectionTransitionResult: Equatable {
+    let newState: AppState
+    let shouldRestartMonitoring: Bool
+}
+
+/// Result of camera-connect handling
+struct CameraConnectedTransitionResult: Equatable {
+    let newState: AppState
+    let shouldSelectAndStartMonitoring: Bool
+}
+
+enum CameraDisconnectedAction: Equatable {
+    case none
+    case syncUIOnly
+    case switchToFallback(startMonitoring: Bool)
+}
+
+/// Result of camera-disconnect handling
+struct CameraDisconnectedTransitionResult: Equatable {
+    let newState: AppState
+    let action: CameraDisconnectedAction
+}
+
+/// Result of handling display configuration changes.
+struct DisplayConfigurationTransitionResult: Equatable {
+    let newState: AppState
+    let shouldSwitchToProfileCamera: Bool
+    let shouldStartMonitoring: Bool
+}
+
+/// Result of switching tracking source manually.
+struct SourceSwitchTransitionResult: Equatable {
+    let newSource: TrackingSource
+    let newState: AppState
+    let didSwitchSource: Bool
+    let shouldStartMonitoring: Bool
+}
+
+/// Result of attempting to start monitoring.
+struct MonitoringStartTransitionResult: Equatable {
+    let newState: AppState
+    let shouldBeginMonitoringSession: Bool
+}
+
+/// Result of evaluating startup/initial-setup behavior.
+struct InitialSetupTransitionResult: Equatable {
+    let shouldApplyStartupCameraProfile: Bool
+    let shouldStartMonitoring: Bool
+    let shouldShowOnboarding: Bool
+}
+
 /// Pure logic engine for posture monitoring - no side effects
 struct PostureEngine {
 
@@ -171,17 +236,351 @@ struct PostureEngine {
         }
     }
 
+    /// Pause reason used when the current source is unavailable.
+    static func unavailabilityPauseReason(for trackingSource: TrackingSource) -> PauseReason {
+        switch trackingSource {
+        case .camera:
+            return .cameraDisconnected
+        case .airpods:
+            return .airPodsRemoved
+        }
+    }
+
+    /// Pause state used when the current source is unavailable.
+    static func unavailableState(for trackingSource: TrackingSource) -> AppState {
+        .paused(unavailabilityPauseReason(for: trackingSource))
+    }
+
     /// Determine the next state when enabling from disabled
     static func stateWhenEnabling(
         isCalibrated: Bool,
-        detectorAvailable: Bool
+        detectorAvailable: Bool,
+        trackingSource: TrackingSource
     ) -> AppState {
         if !isCalibrated {
             return .paused(.noProfile)
         } else if !detectorAvailable {
-            return .paused(.cameraDisconnected)
+            return unavailableState(for: trackingSource)
         } else {
             return .monitoring
         }
+    }
+
+    /// Determine state when calibration authorization is denied.
+    static func stateWhenCalibrationAuthorizationDenied(
+        isCalibrated: Bool
+    ) -> AppState {
+        isCalibrated ? .monitoring : .paused(.noProfile)
+    }
+
+    /// Determine state when calibration authorization is granted.
+    static func stateWhenCalibrationAuthorizationGranted() -> AppState {
+        .calibrating
+    }
+
+    /// Determine state when calibration is cancelled.
+    static func stateWhenCalibrationCancels(
+        isCalibrated: Bool
+    ) -> AppState {
+        isCalibrated ? .monitoring : .paused(.noProfile)
+    }
+
+    /// Determine state when calibration completes successfully.
+    static func stateWhenCalibrationCompletes() -> AppState {
+        .monitoring
+    }
+
+    /// Determine state/effect outcome when monitoring is requested.
+    static func stateWhenMonitoringStarts(
+        isMarketingMode: Bool,
+        trackingSource: TrackingSource,
+        isCalibrated: Bool,
+        isConnected: Bool
+    ) -> MonitoringStartTransitionResult {
+        if isMarketingMode {
+            return MonitoringStartTransitionResult(
+                newState: .monitoring,
+                shouldBeginMonitoringSession: false
+            )
+        }
+
+        guard isCalibrated else {
+            return MonitoringStartTransitionResult(
+                newState: .paused(.noProfile),
+                shouldBeginMonitoringSession: false
+            )
+        }
+
+        if trackingSource == .airpods && !isConnected {
+            return MonitoringStartTransitionResult(
+                newState: .paused(.airPodsRemoved),
+                shouldBeginMonitoringSession: true
+            )
+        }
+
+        return MonitoringStartTransitionResult(
+            newState: .monitoring,
+            shouldBeginMonitoringSession: true
+        )
+    }
+
+    /// Determine state impact when pause-on-the-go setting changes.
+    static func stateWhenPauseOnTheGoSettingChanges(
+        currentState: AppState,
+        isEnabled: Bool
+    ) -> AppState {
+        if !isEnabled, currentState == .paused(.onTheGo) {
+            return .monitoring
+        }
+        return currentState
+    }
+
+    /// Determine startup behavior from current source/readiness context.
+    static func stateWhenInitialSetupRuns(
+        isMarketingMode: Bool,
+        trackingSource: TrackingSource,
+        hasCameraProfile: Bool,
+        profileCameraAvailable: Bool,
+        hasValidAirPodsCalibration: Bool
+    ) -> InitialSetupTransitionResult {
+        if isMarketingMode {
+            return InitialSetupTransitionResult(
+                shouldApplyStartupCameraProfile: false,
+                shouldStartMonitoring: true,
+                shouldShowOnboarding: false
+            )
+        }
+
+        switch trackingSource {
+        case .camera:
+            let canStartCamera = hasCameraProfile && profileCameraAvailable
+            return InitialSetupTransitionResult(
+                shouldApplyStartupCameraProfile: canStartCamera,
+                shouldStartMonitoring: canStartCamera,
+                shouldShowOnboarding: !canStartCamera
+            )
+        case .airpods:
+            return InitialSetupTransitionResult(
+                shouldApplyStartupCameraProfile: false,
+                shouldStartMonitoring: hasValidAirPodsCalibration,
+                shouldShowOnboarding: !hasValidAirPodsCalibration
+            )
+        }
+    }
+
+    /// Determine lock behavior for the current state and source.
+    /// Only states with active detector work are transitioned to screenLocked.
+    static func stateWhenScreenLocks(
+        currentState: AppState,
+        trackingSource: TrackingSource,
+        stateBeforeLock: AppState?
+    ) -> ScreenLockTransitionResult {
+        guard currentState != .disabled, currentState != .paused(.screenLocked) else {
+            return ScreenLockTransitionResult(newState: currentState, stateBeforeLock: stateBeforeLock)
+        }
+
+        guard shouldDetectorRun(for: currentState, trackingSource: trackingSource) else {
+            return ScreenLockTransitionResult(newState: currentState, stateBeforeLock: stateBeforeLock)
+        }
+
+        return ScreenLockTransitionResult(newState: .paused(.screenLocked), stateBeforeLock: currentState)
+    }
+
+    /// Determine unlock behavior based on captured pre-lock state.
+    static func stateWhenScreenUnlocks(
+        currentState: AppState,
+        stateBeforeLock: AppState?
+    ) -> ScreenUnlockTransitionResult {
+        guard case .paused(.screenLocked) = currentState else {
+            return ScreenUnlockTransitionResult(
+                newState: currentState,
+                stateBeforeLock: stateBeforeLock,
+                shouldRestartMonitoring: false
+            )
+        }
+
+        guard let previousState = stateBeforeLock else {
+            return ScreenUnlockTransitionResult(
+                newState: currentState,
+                stateBeforeLock: nil,
+                shouldRestartMonitoring: false
+            )
+        }
+
+        return ScreenUnlockTransitionResult(
+            newState: previousState,
+            stateBeforeLock: nil,
+            shouldRestartMonitoring: previousState == .monitoring
+        )
+    }
+
+    /// Determine state impact of an AirPods in-ear connection change.
+    static func stateWhenAirPodsConnectionChanges(
+        currentState: AppState,
+        trackingSource: TrackingSource,
+        isConnected: Bool
+    ) -> AirPodsConnectionTransitionResult {
+        guard trackingSource == .airpods else {
+            return AirPodsConnectionTransitionResult(newState: currentState, shouldRestartMonitoring: false)
+        }
+
+        if isConnected, currentState == .paused(.airPodsRemoved) {
+            return AirPodsConnectionTransitionResult(newState: .monitoring, shouldRestartMonitoring: true)
+        }
+
+        if !isConnected, currentState == .monitoring {
+            return AirPodsConnectionTransitionResult(newState: .paused(.airPodsRemoved), shouldRestartMonitoring: false)
+        }
+
+        return AirPodsConnectionTransitionResult(newState: currentState, shouldRestartMonitoring: false)
+    }
+
+    /// Determine state impact of a camera connect event.
+    static func stateWhenCameraConnects(
+        currentState: AppState,
+        trackingSource: TrackingSource,
+        hasMatchingProfileForConnectedCamera: Bool
+    ) -> CameraConnectedTransitionResult {
+        guard trackingSource == .camera else {
+            return CameraConnectedTransitionResult(newState: currentState, shouldSelectAndStartMonitoring: false)
+        }
+
+        guard case .paused(let reason) = currentState else {
+            return CameraConnectedTransitionResult(newState: currentState, shouldSelectAndStartMonitoring: false)
+        }
+
+        if hasMatchingProfileForConnectedCamera {
+            return CameraConnectedTransitionResult(newState: .monitoring, shouldSelectAndStartMonitoring: true)
+        }
+
+        if reason == .cameraDisconnected {
+            return CameraConnectedTransitionResult(newState: .paused(.noProfile), shouldSelectAndStartMonitoring: false)
+        }
+
+        return CameraConnectedTransitionResult(newState: currentState, shouldSelectAndStartMonitoring: false)
+    }
+
+    /// Determine state impact of a camera disconnect event.
+    static func stateWhenCameraDisconnects(
+        currentState: AppState,
+        trackingSource: TrackingSource,
+        disconnectedCameraIsSelected: Bool,
+        hasFallbackCamera: Bool,
+        fallbackMatchesProfile: Bool
+    ) -> CameraDisconnectedTransitionResult {
+        guard trackingSource == .camera else {
+            return CameraDisconnectedTransitionResult(newState: currentState, action: .none)
+        }
+
+        guard disconnectedCameraIsSelected else {
+            return CameraDisconnectedTransitionResult(newState: currentState, action: .syncUIOnly)
+        }
+
+        guard hasFallbackCamera else {
+            return CameraDisconnectedTransitionResult(newState: .paused(.cameraDisconnected), action: .none)
+        }
+
+        if fallbackMatchesProfile {
+            return CameraDisconnectedTransitionResult(
+                newState: .monitoring,
+                action: .switchToFallback(startMonitoring: true)
+            )
+        }
+
+        return CameraDisconnectedTransitionResult(
+            newState: .paused(.noProfile),
+            action: .switchToFallback(startMonitoring: false)
+        )
+    }
+
+    /// Determine state impact of a display configuration change.
+    static func stateWhenDisplayConfigurationChanges(
+        currentState: AppState,
+        trackingSource: TrackingSource,
+        pauseOnTheGoEnabled: Bool,
+        isLaptopOnlyConfiguration: Bool,
+        hasAnyCamera: Bool,
+        hasMatchingProfileCamera: Bool,
+        selectedCameraMatchesProfile: Bool
+    ) -> DisplayConfigurationTransitionResult {
+        guard currentState != .disabled else {
+            return DisplayConfigurationTransitionResult(
+                newState: currentState,
+                shouldSwitchToProfileCamera: false,
+                shouldStartMonitoring: false
+            )
+        }
+
+        if pauseOnTheGoEnabled && isLaptopOnlyConfiguration {
+            return DisplayConfigurationTransitionResult(
+                newState: .paused(.onTheGo),
+                shouldSwitchToProfileCamera: false,
+                shouldStartMonitoring: false
+            )
+        }
+
+        guard trackingSource == .camera else {
+            return DisplayConfigurationTransitionResult(
+                newState: currentState,
+                shouldSwitchToProfileCamera: false,
+                shouldStartMonitoring: false
+            )
+        }
+
+        guard hasAnyCamera else {
+            return DisplayConfigurationTransitionResult(
+                newState: .paused(.cameraDisconnected),
+                shouldSwitchToProfileCamera: false,
+                shouldStartMonitoring: false
+            )
+        }
+
+        if hasMatchingProfileCamera {
+            return DisplayConfigurationTransitionResult(
+                newState: .monitoring,
+                shouldSwitchToProfileCamera: !selectedCameraMatchesProfile,
+                shouldStartMonitoring: true
+            )
+        }
+
+        return DisplayConfigurationTransitionResult(
+            newState: .paused(.noProfile),
+            shouldSwitchToProfileCamera: false,
+            shouldStartMonitoring: false
+        )
+    }
+
+    /// Determine state impact when user changes selected camera in settings.
+    static func stateWhenCameraSelectionChanges(
+        currentState: AppState,
+        trackingSource: TrackingSource
+    ) -> AppState {
+        guard trackingSource == .camera else { return currentState }
+        return .paused(.noProfile)
+    }
+
+    /// Determine state impact when user manually switches tracking source.
+    static func stateWhenSwitchingTrackingSource(
+        currentState: AppState,
+        currentSource: TrackingSource,
+        newSource: TrackingSource,
+        isNewSourceCalibrated: Bool
+    ) -> SourceSwitchTransitionResult {
+        guard newSource != currentSource else {
+            return SourceSwitchTransitionResult(
+                newSource: currentSource,
+                newState: currentState,
+                didSwitchSource: false,
+                shouldStartMonitoring: false
+            )
+        }
+
+        let newState: AppState = isNewSourceCalibrated ? .monitoring : .paused(.noProfile)
+        return SourceSwitchTransitionResult(
+            newSource: newSource,
+            newState: newState,
+            didSwitchSource: true,
+            shouldStartMonitoring: isNewSourceCalibrated
+        )
     }
 }

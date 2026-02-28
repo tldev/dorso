@@ -4,7 +4,7 @@ import Foundation
 
 // MARK: - Profile Data
 
-struct ProfileData: Codable {
+struct ProfileData: Codable, Equatable {
     let goodPostureY: CGFloat
     let badPostureY: CGFloat
     let neutralY: CGFloat

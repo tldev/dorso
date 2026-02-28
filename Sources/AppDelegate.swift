@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import Vision
 import os.log
+import ComposableArchitecture
 
 private let log = OSLog(subsystem: "com.thelazydeveloper.dorso", category: "AppDelegate")
 
@@ -17,6 +18,12 @@ extension MenuBarIconType {
         case .calibrating: return .calibrating
         }
     }
+}
+
+struct InitialSetupContext {
+    let profile: ProfileData?
+    let profileCameraAvailable: Bool
+    let hasValidAirPodsCalibration: Bool
 }
 
 // MARK: - App Delegate
@@ -50,6 +57,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         didSet {
             if oldValue != trackingSource {
                 syncDetectorToState()
+                if trackingActionDispatchDepth == 0 {
+                    trackingStore.send(.setManualSource(trackingSource))
+                }
             }
         }
     }
@@ -100,6 +110,26 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     let screenLockObserver = ScreenLockObserver()
     let hotkeyManager = HotkeyManager()
     var stateBeforeLock: AppState?
+    private var trackingActionDispatchDepth = 0
+    lazy var trackingStore: StoreOf<TrackingFeature> = {
+        Store(initialState: TrackingFeature.State()) {
+            TrackingFeature()
+        } withDependencies: { [weak self] dependencies in
+            dependencies.trackingEffectExecutor.execute = { intent in
+                guard let self else { return }
+                await self.executeTrackingEffectIntent(intent)
+            }
+        }
+    }()
+    var trackingEffectIntentObserver: ((TrackingFeature.EffectIntent) -> Void)?
+    var calibrationPermissionDeniedAlertDecision: ((TrackingSource) -> Bool)?
+    var cameraCalibrationRetryAlertDecision: ((String?) -> Bool)?
+    var openPrivacySettingsHandler: (() -> Void)?
+    var retryCalibrationHandler: (() -> Void)?
+    var beginMonitoringSessionHandler: (() -> Void)?
+    var showOnboardingHandler: (() -> Void)?
+    var initialSetupContextOverride: (() -> InitialSetupContext)?
+    var syncDetectorToStateOverride: (() -> Void)?
 
     // Detection state - consolidated into PostureEngine types
     var monitoringState = PostureMonitoringState()
@@ -158,9 +188,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     var setupComplete = false
+    var marketingModeOverride: Bool?
 
     var isMarketingMode: Bool {
-        UserDefaults.standard.bool(forKey: "MarketingMode")
+        if let marketingModeOverride {
+            return marketingModeOverride
+        }
+        return UserDefaults.standard.bool(forKey: "MarketingMode")
             || CommandLine.arguments.contains("--marketing-mode")
     }
 
@@ -174,6 +208,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             let oldState = _state
             _state = newValue
             handleStateTransition(from: oldState, to: newValue)
+            if trackingActionDispatchDepth == 0 {
+                trackingStore.send(.setAppState(newValue))
+            }
         }
     }
 
@@ -193,7 +230,36 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         syncUIToState()
     }
 
+    @discardableResult
+    private func sendTrackingAction(
+        _ action: TrackingFeature.Action,
+        applyStateTransition: Bool = true
+    ) async -> (oldState: TrackingFeature.State, newState: TrackingFeature.State) {
+        trackingActionDispatchDepth += 1
+        defer { trackingActionDispatchDepth -= 1 }
+
+        let oldState = trackingStore.withState { $0 }
+        let storeTask = trackingStore.send(action)
+        await storeTask.finish()
+        let newState = trackingStore.withState { $0 }
+
+        stateBeforeLock = newState.stateBeforeLock
+
+        if applyStateTransition {
+            if newState.appState != state {
+                state = newState.appState
+            }
+        }
+
+        return (oldState, newState)
+    }
+
     private func syncDetectorToState() {
+        if let syncDetectorToStateOverride {
+            syncDetectorToStateOverride()
+            return
+        }
+
         let shouldRun = PostureEngine.shouldDetectorRun(for: state, trackingSource: trackingSource)
 
         // Always stop the other detector so in-flight starts are cancelled
@@ -211,7 +277,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     if !success, let error = error {
                         os_log(.error, log: log, "Failed to start detector: %{public}@", error)
                         Task { @MainActor in
-                            self?.state = .paused(.cameraDisconnected)
+                            guard let self else { return }
+                            await self.sendTrackingAction(.runtimeDetectorStartFailed(trackingSource: self.trackingSource))
                         }
                     }
                 }
@@ -277,7 +344,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             AnalyticsManager.shared.injectMarketingData()
         }
 
-        initialSetupFlow()
+        Task { @MainActor in
+            await self.initialSetupFlow()
+        }
     }
 
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -313,31 +382,22 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         airPodsDetector.onConnectionStateChange = { [weak self] isConnected in
             Task { @MainActor in
-                self?.handleConnectionStateChange(isConnected)
+                await self?.handleConnectionStateChange(isConnected)
             }
         }
     }
 
-    private func handleConnectionStateChange(_ isConnected: Bool) {
-        // Only AirPods uses connection state changes currently
-        guard trackingSource == .airpods else { return }
+    private func handleConnectionStateChange(_ isConnected: Bool) async {
+        let transition = await sendTrackingAction(.airPodsConnectionChanged(isConnected))
 
-        if isConnected {
-            // AirPods back in ears - resume if we were paused due to removal
-            if state == .paused(.airPodsRemoved) {
-                os_log(.info, log: log, "AirPods back in ears - resuming monitoring")
-                startMonitoring()
-            }
-        } else {
-            // AirPods removed - pause monitoring
-            if state == .monitoring {
-                os_log(.info, log: log, "AirPods removed - pausing monitoring")
-                state = .paused(.airPodsRemoved)
-                isCurrentlySlouching = false
-                postureWarningIntensity = 0
-                updateBlur()
-                syncUIToState()
-            }
+        if isConnected,
+           transition.oldState.appState == .paused(.airPodsRemoved),
+           transition.newState.appState == .monitoring {
+            os_log(.info, log: log, "AirPods back in ears - resuming monitoring")
+        } else if !isConnected,
+                  transition.oldState.appState == .monitoring,
+                  transition.newState.appState == .paused(.airPodsRemoved) {
+            os_log(.info, log: log, "AirPods removed - pausing monitoring")
         }
     }
 
@@ -416,7 +476,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         // Display configuration changes
         displayMonitor.onDisplayConfigurationChange = { [weak self] in
             Task { @MainActor in
-                self?.handleDisplayConfigurationChange()
+                await self?.handleDisplayConfigurationChange()
             }
         }
         displayMonitor.startMonitoring()
@@ -424,12 +484,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         // Camera hot-plug
         cameraObserver.onCameraConnected = { [weak self] device in
             Task { @MainActor in
-                self?.handleCameraConnected(device)
+                await self?.handleCameraConnected(device)
             }
         }
         cameraObserver.onCameraDisconnected = { [weak self] device in
             Task { @MainActor in
-                self?.handleCameraDisconnected(device)
+                await self?.handleCameraDisconnected(device)
             }
         }
         cameraObserver.startObserving()
@@ -437,12 +497,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         // Screen lock/unlock
         screenLockObserver.onScreenLocked = { [weak self] in
             Task { @MainActor in
-                self?.handleScreenLocked()
+                await self?.handleScreenLocked()
             }
         }
         screenLockObserver.onScreenUnlocked = { [weak self] in
             Task { @MainActor in
-                self?.handleScreenUnlocked()
+                await self?.handleScreenUnlocked()
             }
         }
         screenLockObserver.startObserving()
@@ -453,7 +513,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             shortcut: toggleShortcut,
             onToggle: { [weak self] in
                 Task { @MainActor in
-                    self?.toggleEnabled()
+                    await self?.toggleEnabled()
                 }
             }
         )
@@ -467,7 +527,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         menuBarManager.onToggleEnabled = { [weak self] in
             Task { @MainActor in
-                self?.toggleEnabled()
+                await self?.toggleEnabled()
             }
         }
         menuBarManager.onRecalibrate = { [weak self] in
@@ -494,20 +554,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Menu Actions
 
-    private func toggleEnabled() {
-        if state == .disabled {
-            if !isCalibrated {
-                state = .paused(.noProfile)
-            } else if trackingSource == .camera && !cameraDetector.isAvailable {
-                state = .paused(.cameraDisconnected)
-            } else if trackingSource == .airpods && !airPodsDetector.isAvailable {
-                state = .paused(.cameraDisconnected)
-            } else {
-                startMonitoring()
-            }
-        } else {
-            state = .disabled
-        }
+    private func toggleEnabled() async {
+        await sendTrackingAction(
+            .toggleEnabled(
+                trackingSource: trackingSource,
+                isCalibrated: isCalibrated,
+                detectorAvailable: activeDetector.isAvailable
+            )
+        )
         saveSettings()
     }
 
@@ -532,41 +586,20 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Initial Setup Flow
 
-    func initialSetupFlow() {
+    func initialSetupFlow() async {
         guard !setupComplete else { return }
         setupComplete = true
 
-        if isMarketingMode {
-            startMonitoring()
-            return
-        }
-
-        // Check if we have existing calibration
-        let configKey = DisplayMonitor.getCurrentConfigKey()
-
-        if trackingSource == .camera {
-            if let profile = loadProfile(forKey: configKey) {
-                let cameras = cameraDetector.getAvailableCameras()
-                if cameras.contains(where: { $0.uniqueID == profile.cameraID }) {
-                    cameraDetector.selectedCameraID = profile.cameraID
-                    cameraCalibration = CameraCalibrationData(
-                        goodPostureY: profile.goodPostureY,
-                        badPostureY: profile.badPostureY,
-                        neutralY: profile.neutralY,
-                        postureRange: profile.postureRange,
-                        cameraID: profile.cameraID
-                    )
-                    startMonitoring()
-                    return
-                }
-            }
-        } else if let calibration = airPodsCalibration, calibration.isValid {
-            startMonitoring()
-            return
-        }
-
-        // No valid calibration - show onboarding
-        showOnboarding()
+        let context = makeInitialSetupContext()
+        _ = await sendTrackingAction(
+            .initialSetupEvaluated(
+                isMarketingMode: isMarketingMode,
+                hasCameraProfile: context.profile != nil,
+                profileCameraAvailable: context.profileCameraAvailable,
+                hasValidAirPodsCalibration: context.hasValidAirPodsCalibration,
+                cameraProfile: context.profile
+            )
+        )
     }
 
     func showOnboarding() {
@@ -578,7 +611,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in
                 guard let self else { return }
 
-                self.trackingSource = source
+                await self.switchTrackingSource(to: source)
                 if let cameraID = cameraID {
                     self.cameraDetector.selectedCameraID = cameraID
                 }
@@ -592,23 +625,27 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Tracking Source Management
 
-    func switchTrackingSource(to source: TrackingSource) {
-        guard source != trackingSource else { return }
-
-        // Stop current detector
-        activeDetector.stop()
-
-        trackingSource = source
-        saveSettings()
-
-        // Check if calibration exists for the new source
-        if isCalibrated {
-            startMonitoring()
-        } else {
-            // No calibration - pause and wait for user to calibrate
-            // Don't auto-start calibration as it requires async permission and device availability
-            state = .paused(.noProfile)
+    func switchTrackingSource(to source: TrackingSource) async {
+        let isNewSourceCalibrated: Bool
+        switch source {
+        case .camera:
+            isNewSourceCalibrated = isMarketingMode || (cameraCalibration?.isValid ?? false)
+        case .airpods:
+            isNewSourceCalibrated = isMarketingMode || (airPodsCalibration?.isValid ?? false)
         }
+
+        await sendTrackingAction(
+            .switchTrackingSource(
+                source,
+                isNewSourceCalibrated: isNewSourceCalibrated
+            )
+        )
+    }
+
+    func setPauseOnTheGoEnabled(_ isEnabled: Bool) async {
+        pauseOnTheGo = isEnabled
+        saveSettings()
+        await sendTrackingAction(.pauseOnTheGoSettingChanged(isEnabled: isEnabled))
     }
 
     // MARK: - Calibration
@@ -627,26 +664,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 if !authorized {
                     os_log(.error, log: log, "Authorization denied for %{public}@", self.trackingSource.displayName)
 
-                    // Reset state since we're not proceeding
-                    self.state = self.isCalibrated ? .monitoring : .paused(.noProfile)
-
-                    let alert = NSAlert()
-                    alert.alertStyle = .warning
-                    alert.messageText = L("alert.permissionRequired")
-                    alert.informativeText = self.trackingSource == .airpods
-                        ? L("alert.permissionRequired.airpods")
-                        : L("alert.permissionRequired.camera")
-                    alert.addButton(withTitle: L("alert.openSettings"))
-                    alert.addButton(withTitle: L("common.cancel"))
-                    NSApp.activate(ignoringOtherApps: true)
-                    if alert.runModal() == .alertFirstButtonReturn {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy")!)
-                    }
+                    await self.sendTrackingAction(
+                        .calibrationAuthorizationDenied(isCalibrated: self.isCalibrated)
+                    )
                     return
                 }
 
                 // Authorization granted - now start calibration
-                self.state = .calibrating
+                await self.sendTrackingAction(.calibrationAuthorizationGranted)
                 self.startDetectorAndShowCalibration()
             }
         }
@@ -665,19 +690,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
                 if !success {
                     os_log(.error, log: log, "Failed to start detector for calibration: %{public}@", error ?? "unknown")
-                    self.state = .paused(.cameraDisconnected)
-                    if self.trackingSource == .camera {
-                        let alert = NSAlert()
-                        alert.alertStyle = .warning
-                        alert.messageText = L("alert.cameraNotAvailable")
-                        alert.informativeText = error ?? L("alert.cameraNotAvailable.message")
-                        alert.addButton(withTitle: L("alert.tryAgain"))
-                        alert.addButton(withTitle: L("common.cancel"))
-                        NSApp.activate(ignoringOtherApps: true)
-                        if alert.runModal() == .alertFirstButtonReturn {
-                            self.startCalibration()
-                        }
-                    }
+                    await self.sendTrackingAction(.calibrationStartFailed(errorMessage: error))
                     return
                 }
 
@@ -686,12 +699,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     detector: self.activeDetector,
                     onComplete: { [weak self] values in
                         Task { @MainActor in
-                            self?.finishCalibration(values: values)
+                            await self?.finishCalibration(values: values)
                         }
                     },
                     onCancel: { [weak self] in
                         Task { @MainActor in
-                            self?.cancelCalibration()
+                            await self?.cancelCalibration()
                         }
                     }
                 )
@@ -699,9 +712,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func finishCalibration(values: [CalibrationSample]) {
+    func finishCalibration(values: [CalibrationSample]) async {
         guard values.count >= 4 else {
-            cancelCalibration()
+            await cancelCalibration()
             return
         }
 
@@ -709,7 +722,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Create calibration data using the detector
         guard let calibration = activeDetector.createCalibrationData(from: values) else {
-            cancelCalibration()
+            await cancelCalibration()
             return
         }
 
@@ -733,42 +746,27 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         saveSettings()
         calibrationController = nil
 
-        monitoringState.reset()
-
-        startMonitoring()
+        await sendTrackingAction(.calibrationCompleted)
     }
 
-    func cancelCalibration() {
+    func cancelCalibration() async {
         calibrationController = nil
-        if isCalibrated {
-            startMonitoring()
-        } else {
-            state = .paused(.noProfile)
-        }
+        await sendTrackingAction(.calibrationCancelled(isCalibrated: isCalibrated))
     }
 
-    func startMonitoring() {
-        if isMarketingMode {
-            state = .monitoring
-            return
-        }
+    func startMonitoring() async {
+        let transition = await sendTrackingAction(
+            .startMonitoringRequested(
+                isMarketingMode: isMarketingMode,
+                trackingSource: trackingSource,
+                isCalibrated: isCalibrated,
+                isConnected: activeDetector.isConnected
+            )
+        )
 
-        guard let calibration = currentCalibration else {
-            state = .paused(.noProfile)
-            return
-        }
-
-        // For AirPods, check if they're actually in ears before monitoring
-        if trackingSource == .airpods && !activeDetector.isConnected {
+        if transition.newState.appState == .paused(.airPodsRemoved) {
             os_log(.info, log: log, "AirPods not in ears - pausing instead of monitoring")
-            activeDetector.beginMonitoring(with: calibration, intensity: activeIntensity, deadZone: activeDeadZone)
-            state = .paused(.airPodsRemoved)
-            return
         }
-
-        lastPostureReadingTime = nil
-        activeDetector.beginMonitoring(with: calibration, intensity: activeIntensity, deadZone: activeDeadZone)
-        state = .monitoring
     }
 
     // MARK: - Camera Management (for Settings compatibility)
@@ -778,9 +776,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func restartCamera() {
-        guard trackingSource == .camera, let cameraID = selectedCameraID else { return }
-        cameraDetector.switchCamera(to: cameraID)
-        state = .paused(.noProfile)
+        guard trackingSource == .camera, selectedCameraID != nil else { return }
+
+        Task { @MainActor in
+            await self.applyCameraSelectionTransition()
+        }
     }
 
     func applyDetectionMode() {
@@ -809,128 +809,418 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Camera Hot-Plug
 
-    private func handleCameraConnected(_ device: AVCaptureDevice) {
-        guard trackingSource == .camera else { return }
-        syncUIToState()
+    private func applyCameraCalibration(from profile: ProfileData) {
+        cameraCalibration = CameraCalibrationData(
+            goodPostureY: profile.goodPostureY,
+            badPostureY: profile.badPostureY,
+            neutralY: profile.neutralY,
+            postureRange: profile.postureRange,
+            cameraID: profile.cameraID
+        )
+    }
 
-        guard case .paused(let reason) = state else { return }
+    private func makeInitialSetupContext() -> InitialSetupContext {
+        if let initialSetupContextOverride {
+            return initialSetupContextOverride()
+        }
 
         let configKey = DisplayMonitor.getCurrentConfigKey()
-        if let profile = loadProfile(forKey: configKey),
-           profile.cameraID == device.uniqueID {
-            cameraDetector.selectedCameraID = profile.cameraID
-            cameraCalibration = CameraCalibrationData(
-                goodPostureY: profile.goodPostureY,
-                badPostureY: profile.badPostureY,
-                neutralY: profile.neutralY,
-                postureRange: profile.postureRange,
-                cameraID: profile.cameraID
-            )
-            cameraDetector.switchCamera(to: profile.cameraID)
-            startMonitoring()
-        } else if reason == .cameraDisconnected {
-            state = .paused(.noProfile)
+        let profile = loadProfile(forKey: configKey)
+        let cameras = cameraDetector.getAvailableCameras()
+        let profileCameraAvailable = profile.map { profile in
+            cameras.contains(where: { $0.uniqueID == profile.cameraID })
+        } ?? false
+
+        return InitialSetupContext(
+            profile: profile,
+            profileCameraAvailable: profileCameraAvailable,
+            hasValidAirPodsCalibration: airPodsCalibration?.isValid ?? false
+        )
+    }
+
+    private func executeTrackingEffectIntent(_ intent: TrackingFeature.EffectIntent) async {
+        trackingEffectIntentObserver?(intent)
+
+        switch intent {
+        case .applyStartupCameraProfile(let matchingProfile):
+            guard let matchingProfile else { return }
+            cameraDetector.selectedCameraID = matchingProfile.cameraID
+            applyCameraCalibration(from: matchingProfile)
+        case .startMonitoring:
+            await startMonitoring()
+        case .beginMonitoringSession:
+            if let beginMonitoringSessionHandler {
+                beginMonitoringSessionHandler()
+                return
+            }
+            guard let calibration = currentCalibration else { return }
+            lastPostureReadingTime = nil
+            activeDetector.beginMonitoring(with: calibration, intensity: activeIntensity, deadZone: activeDeadZone)
+        case .showOnboarding:
+            if let showOnboardingHandler {
+                showOnboardingHandler()
+            } else {
+                showOnboarding()
+            }
+        case .syncUI:
+            syncUIToState()
+        case .stopDetector(let source):
+            let detector: PostureDetector = source == .camera ? cameraDetector : airPodsDetector
+            detector.stop()
+        case .setTrackingSource(let source):
+            trackingSource = source
+        case .persistTrackingSource:
+            saveSettings()
+        case .resetMonitoringState:
+            monitoringState.reset()
+        case .showCalibrationPermissionDeniedAlert:
+            await showCalibrationPermissionDeniedAlert()
+        case .openPrivacySettings:
+            openPrivacySettings()
+        case .showCameraCalibrationRetryAlert(let message):
+            await showCameraCalibrationRetryAlert(message: message)
+        case .retryCalibration:
+            if let retryCalibrationHandler {
+                retryCalibrationHandler()
+            } else {
+                startCalibration()
+            }
+        case .switchCamera(let switchIntent):
+            switch switchIntent {
+            case .matchingProfile(let matchingProfile):
+                guard let matchingProfile else { return }
+                cameraDetector.selectedCameraID = matchingProfile.cameraID
+                applyCameraCalibration(from: matchingProfile)
+                cameraDetector.switchCamera(to: matchingProfile.cameraID)
+            case let .fallback(fallbackCameraID, fallbackProfile):
+                guard let fallbackCameraID else { return }
+                cameraDetector.selectedCameraID = fallbackCameraID
+                if let fallbackProfile, fallbackProfile.cameraID == fallbackCameraID {
+                    applyCameraCalibration(from: fallbackProfile)
+                }
+                cameraDetector.switchCamera(to: fallbackCameraID)
+            case .selectedCamera:
+                guard let selectedCameraID else { return }
+                cameraDetector.switchCamera(to: selectedCameraID)
+            }
         }
     }
 
-    private func handleCameraDisconnected(_ device: AVCaptureDevice) {
-        guard trackingSource == .camera else { return }
-
-        guard device.uniqueID == selectedCameraID else {
-            syncUIToState()
+    private func showCalibrationPermissionDeniedAlert() async {
+        if let calibrationPermissionDeniedAlertDecision {
+            if calibrationPermissionDeniedAlertDecision(trackingSource) {
+                await sendTrackingAction(.calibrationOpenSettingsRequested)
+            }
             return
         }
 
-        let cameras = cameraDetector.getAvailableCameras()
-
-        if let fallbackCamera = cameras.first {
-            cameraDetector.selectedCameraID = fallbackCamera.uniqueID
-            cameraDetector.switchCamera(to: fallbackCamera.uniqueID)
-
-            let configKey = DisplayMonitor.getCurrentConfigKey()
-            if let profile = loadProfile(forKey: configKey), profile.cameraID == fallbackCamera.uniqueID {
-                cameraCalibration = CameraCalibrationData(
-                    goodPostureY: profile.goodPostureY,
-                    badPostureY: profile.badPostureY,
-                    neutralY: profile.neutralY,
-                    postureRange: profile.postureRange,
-                    cameraID: profile.cameraID
-                )
-                startMonitoring()
-            } else {
-                state = .paused(.noProfile)
-            }
-        } else {
-            state = .paused(.cameraDisconnected)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L("alert.permissionRequired")
+        alert.informativeText = trackingSource == .airpods
+            ? L("alert.permissionRequired.airpods")
+            : L("alert.permissionRequired.camera")
+        alert.addButton(withTitle: L("alert.openSettings"))
+        alert.addButton(withTitle: L("common.cancel"))
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            await sendTrackingAction(.calibrationOpenSettingsRequested)
         }
+    }
+
+    private func openPrivacySettings() {
+        if let openPrivacySettingsHandler {
+            openPrivacySettingsHandler()
+            return
+        }
+
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func showCameraCalibrationRetryAlert(message: String?) async {
+        if let cameraCalibrationRetryAlertDecision {
+            if cameraCalibrationRetryAlertDecision(message) {
+                await sendTrackingAction(.calibrationRetryRequested)
+            }
+            return
+        }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L("alert.cameraNotAvailable")
+        alert.informativeText = message ?? L("alert.cameraNotAvailable.message")
+        alert.addButton(withTitle: L("alert.tryAgain"))
+        alert.addButton(withTitle: L("common.cancel"))
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            await sendTrackingAction(.calibrationRetryRequested)
+        }
+    }
+
+    private struct CameraDisconnectContext {
+        let disconnectedCameraIsSelected: Bool
+        let hasFallbackCamera: Bool
+        let fallbackHasMatchingProfile: Bool
+        let fallbackCamera: AVCaptureDevice?
+        let fallbackProfile: ProfileData?
+    }
+
+    private struct CameraConnectedContext {
+        let hasMatchingProfile: Bool
+        let profile: ProfileData?
+    }
+
+    private func makeCameraDisconnectContext(for device: AVCaptureDevice) -> CameraDisconnectContext {
+        let disconnectedCameraIsSelected = device.uniqueID == selectedCameraID
+        let cameras = cameraDetector.getAvailableCameras()
+        let fallbackCamera = cameras.first
+        let configKey = DisplayMonitor.getCurrentConfigKey()
+        let profile = loadProfile(forKey: configKey)
+        let fallbackHasMatchingProfile = fallbackCamera != nil && profile?.cameraID == fallbackCamera?.uniqueID
+
+        return CameraDisconnectContext(
+            disconnectedCameraIsSelected: disconnectedCameraIsSelected,
+            hasFallbackCamera: fallbackCamera != nil,
+            fallbackHasMatchingProfile: fallbackHasMatchingProfile,
+            fallbackCamera: fallbackCamera,
+            fallbackProfile: profile
+        )
+    }
+
+    private func makeCameraConnectedContext(for device: AVCaptureDevice) -> CameraConnectedContext {
+        let configKey = DisplayMonitor.getCurrentConfigKey()
+        let profile = loadProfile(forKey: configKey)
+
+        return CameraConnectedContext(
+            hasMatchingProfile: profile?.cameraID == device.uniqueID,
+            profile: profile
+        )
+    }
+
+    private struct DisplayConfigurationContext {
+        let pauseOnTheGoEnabled: Bool
+        let isLaptopOnlyConfiguration: Bool
+        let hasAnyCamera: Bool
+        let hasMatchingProfileCamera: Bool
+        let selectedCameraMatchesProfile: Bool
+        let profile: ProfileData?
+    }
+
+    private func makeDisplayConfigurationContext() -> DisplayConfigurationContext {
+        let cameras = cameraDetector.getAvailableCameras()
+        let hasAnyCamera = !cameras.isEmpty
+        let configKey = DisplayMonitor.getCurrentConfigKey()
+        let profile = loadProfile(forKey: configKey)
+        let hasMatchingProfileCamera = profile.map { profile in
+            cameras.contains(where: { $0.uniqueID == profile.cameraID })
+        } ?? false
+        let selectedCameraMatchesProfile = profile.map { profile in
+            selectedCameraID == profile.cameraID
+        } ?? false
+
+        return DisplayConfigurationContext(
+            pauseOnTheGoEnabled: pauseOnTheGo,
+            isLaptopOnlyConfiguration: DisplayMonitor.isLaptopOnlyConfiguration(),
+            hasAnyCamera: hasAnyCamera,
+            hasMatchingProfileCamera: hasMatchingProfileCamera,
+            selectedCameraMatchesProfile: selectedCameraMatchesProfile,
+            profile: profile
+        )
+    }
+
+    private func applyCameraConnectedTransition(
+        hasMatchingProfile: Bool,
+        matchingProfile: ProfileData?
+    ) async {
+        await sendTrackingAction(
+            .cameraConnected(
+                hasMatchingProfile: hasMatchingProfile,
+                matchingProfile: matchingProfile
+            )
+        )
+    }
+
+    private func applyCameraSelectionTransition() async {
+        await sendTrackingAction(.cameraSelectionChanged)
+    }
+
+    private func applyDisplayConfigurationTransition(
+        pauseOnTheGoEnabled: Bool,
+        isLaptopOnlyConfiguration: Bool,
+        hasAnyCamera: Bool,
+        hasMatchingProfileCamera: Bool,
+        selectedCameraMatchesProfile: Bool,
+        matchingProfile: ProfileData?
+    ) async {
+        await sendTrackingAction(
+            .displayConfigurationChanged(
+                pauseOnTheGoEnabled: pauseOnTheGoEnabled,
+                isLaptopOnlyConfiguration: isLaptopOnlyConfiguration,
+                hasAnyCamera: hasAnyCamera,
+                hasMatchingProfileCamera: hasMatchingProfileCamera,
+                selectedCameraMatchesProfile: selectedCameraMatchesProfile,
+                matchingProfile: matchingProfile
+            )
+        )
+    }
+
+    private func applyCameraDisconnectedTransition(
+        disconnectedCameraIsSelected: Bool,
+        hasFallbackCamera: Bool,
+        fallbackHasMatchingProfile: Bool,
+        fallbackCamera: AVCaptureDevice?,
+        fallbackProfile: ProfileData?
+    ) async {
+        await sendTrackingAction(
+            .cameraDisconnected(
+                disconnectedCameraIsSelected: disconnectedCameraIsSelected,
+                hasFallbackCamera: hasFallbackCamera,
+                fallbackHasMatchingProfile: fallbackHasMatchingProfile,
+                fallbackCameraID: fallbackCamera?.uniqueID,
+                fallbackProfile: fallbackProfile
+            )
+        )
+    }
+
+    private func handleCameraConnected(_ device: AVCaptureDevice) async {
+        guard trackingSource == .camera else { return }
+        let context = makeCameraConnectedContext(for: device)
+
+        await applyCameraConnectedTransition(
+            hasMatchingProfile: context.hasMatchingProfile,
+            matchingProfile: context.profile
+        )
+    }
+
+    private func handleCameraDisconnected(_ device: AVCaptureDevice) async {
+        guard trackingSource == .camera else { return }
+        let context = makeCameraDisconnectContext(for: device)
+
+        await applyCameraDisconnectedTransition(
+            disconnectedCameraIsSelected: context.disconnectedCameraIsSelected,
+            hasFallbackCamera: context.hasFallbackCamera,
+            fallbackHasMatchingProfile: context.fallbackHasMatchingProfile,
+            fallbackCamera: context.fallbackCamera,
+            fallbackProfile: context.fallbackProfile
+        )
     }
 
     // MARK: - Screen Lock Detection
 
-    private func handleScreenLocked() {
-        guard state.isActive || (state != .disabled && state != .paused(.screenLocked)) else { return }
-        stateBeforeLock = state
-        state = .paused(.screenLocked)
+    private func handleScreenLocked() async {
+        await sendTrackingAction(.screenLocked)
     }
 
-    private func handleScreenUnlocked() {
-        guard case .paused(.screenLocked) = state else { return }
-
-        if let previousState = stateBeforeLock {
-            stateBeforeLock = nil
-            switch previousState {
-            case .monitoring:
-                // Re-enter monitoring via startMonitoring() so detector monitoring
-                // state and calibration are re-applied after the pause stopped them.
-                startMonitoring()
-            default:
-                state = previousState
-            }
-        } else {
-            startMonitoring()
-        }
+    private func handleScreenUnlocked() async {
+        await sendTrackingAction(.screenUnlocked)
     }
 
     // MARK: - Display Configuration
 
-    private func handleDisplayConfigurationChange() {
+    private func handleDisplayConfigurationChange() async {
         rebuildOverlayWindows()
 
         guard state != .disabled else { return }
+        let context = makeDisplayConfigurationContext()
 
-        if pauseOnTheGo && DisplayMonitor.isLaptopOnlyConfiguration() {
-            state = .paused(.onTheGo)
-            return
-        }
-
-        guard trackingSource == .camera else { return }
-
-        let cameras = cameraDetector.getAvailableCameras()
-        let configKey = DisplayMonitor.getCurrentConfigKey()
-        let profile = loadProfile(forKey: configKey)
-
-        if cameras.isEmpty {
-            state = .paused(.cameraDisconnected)
-            return
-        }
-
-        if let profile = profile,
-           cameras.contains(where: { $0.uniqueID == profile.cameraID }) {
-            if selectedCameraID != profile.cameraID {
-                cameraDetector.selectedCameraID = profile.cameraID
-                cameraDetector.switchCamera(to: profile.cameraID)
-            }
-            cameraCalibration = CameraCalibrationData(
-                goodPostureY: profile.goodPostureY,
-                badPostureY: profile.badPostureY,
-                neutralY: profile.neutralY,
-                postureRange: profile.postureRange,
-                cameraID: profile.cameraID
-            )
-            startMonitoring()
-        } else {
-            state = .paused(.noProfile)
-        }
+        await applyDisplayConfigurationTransition(
+            pauseOnTheGoEnabled: context.pauseOnTheGoEnabled,
+            isLaptopOnlyConfiguration: context.isLaptopOnlyConfiguration,
+            hasAnyCamera: context.hasAnyCamera,
+            hasMatchingProfileCamera: context.hasMatchingProfileCamera,
+            selectedCameraMatchesProfile: context.selectedCameraMatchesProfile,
+            matchingProfile: context.profile
+        )
     }
 
+}
+
+extension AppDelegate {
+    func dispatchCameraConnectedTransitionForTesting(
+        hasMatchingProfile: Bool,
+        matchingProfile: ProfileData?
+    ) async {
+        await applyCameraConnectedTransition(
+            hasMatchingProfile: hasMatchingProfile,
+            matchingProfile: matchingProfile
+        )
+    }
+
+    func dispatchCameraSelectionTransitionForTesting() async {
+        await applyCameraSelectionTransition()
+    }
+
+    func dispatchDisplayConfigurationTransitionForTesting(
+        pauseOnTheGoEnabled: Bool,
+        isLaptopOnlyConfiguration: Bool,
+        hasAnyCamera: Bool,
+        hasMatchingProfileCamera: Bool,
+        selectedCameraMatchesProfile: Bool,
+        matchingProfile: ProfileData?
+    ) async {
+        await applyDisplayConfigurationTransition(
+            pauseOnTheGoEnabled: pauseOnTheGoEnabled,
+            isLaptopOnlyConfiguration: isLaptopOnlyConfiguration,
+            hasAnyCamera: hasAnyCamera,
+            hasMatchingProfileCamera: hasMatchingProfileCamera,
+            selectedCameraMatchesProfile: selectedCameraMatchesProfile,
+            matchingProfile: matchingProfile
+        )
+    }
+
+    func dispatchCameraDisconnectedTransitionForTesting(
+        disconnectedCameraIsSelected: Bool,
+        hasFallbackCamera: Bool,
+        fallbackHasMatchingProfile: Bool,
+        fallbackCamera: AVCaptureDevice?,
+        fallbackProfile: ProfileData?
+    ) async {
+        await applyCameraDisconnectedTransition(
+            disconnectedCameraIsSelected: disconnectedCameraIsSelected,
+            hasFallbackCamera: hasFallbackCamera,
+            fallbackHasMatchingProfile: fallbackHasMatchingProfile,
+            fallbackCamera: fallbackCamera,
+            fallbackProfile: fallbackProfile
+        )
+    }
+
+    func dispatchScreenLockedTransitionForTesting() async {
+        await sendTrackingAction(.screenLocked)
+    }
+
+    func dispatchScreenUnlockedTransitionForTesting() async {
+        await sendTrackingAction(.screenUnlocked)
+    }
+
+    func dispatchCalibrationAuthorizationDeniedTransitionForTesting() async {
+        await sendTrackingAction(
+            .calibrationAuthorizationDenied(isCalibrated: isCalibrated)
+        )
+    }
+
+    func dispatchCalibrationStartFailedTransitionForTesting(
+        errorMessage: String?
+    ) async {
+        await sendTrackingAction(.calibrationStartFailed(errorMessage: errorMessage))
+    }
+
+    func dispatchSwitchTrackingSourceTransitionForTesting(
+        _ source: TrackingSource
+    ) async {
+        let isNewSourceCalibrated: Bool
+        switch source {
+        case .camera:
+            isNewSourceCalibrated = isMarketingMode || (cameraCalibration?.isValid ?? false)
+        case .airpods:
+            isNewSourceCalibrated = isMarketingMode || (airPodsCalibration?.isValid ?? false)
+        }
+
+        await sendTrackingAction(
+            .switchTrackingSource(
+                source,
+                isNewSourceCalibrated: isNewSourceCalibrated
+            )
+        )
+    }
 }

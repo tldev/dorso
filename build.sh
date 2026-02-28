@@ -19,10 +19,10 @@ MIN_MACOS="13.0"
 
 # Check for App Store build flag
 APP_STORE_BUILD=false
-SWIFT_FLAGS=""
+SWIFT_BUILD_FLAGS=()
 if [[ "$*" == *"--appstore"* ]]; then
     APP_STORE_BUILD=true
-    SWIFT_FLAGS="-D APP_STORE"
+    SWIFT_BUILD_FLAGS=(-Xswiftc -D -Xswiftc APP_STORE)
     echo "Building for App Store (no private APIs)..."
 fi
 
@@ -55,7 +55,7 @@ mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
 
 # Compile Swift code
-echo "Compiling Swift sources..."
+echo "Compiling Swift sources with SwiftPM..."
 echo "Building universal binary (arm64 + x86_64)..."
 
 # Get all Swift source files
@@ -68,35 +68,21 @@ for f in $SWIFT_FILES; do
 done
 echo ""
 
-swiftc \
-    -O \
-    -whole-module-optimization \
-    $SWIFT_FLAGS \
-    -target arm64-apple-macos$MIN_MACOS \
-    -sdk $(xcrun --show-sdk-path) \
-    -framework AppKit \
-    -framework AVFoundation \
-    -framework Vision \
-    -framework CoreImage \
-    -framework CoreMotion \
-    -framework IOBluetooth \
-    -o "$MACOS_DIR/${APP_NAME}_arm64" \
-    $SWIFT_FILES
+swift build -c release --arch arm64 --product Dorso "${SWIFT_BUILD_FLAGS[@]}"
+swift build -c release --arch x86_64 --product Dorso "${SWIFT_BUILD_FLAGS[@]}"
 
-swiftc \
-    -O \
-    -whole-module-optimization \
-    $SWIFT_FLAGS \
-    -target x86_64-apple-macos$MIN_MACOS \
-    -sdk $(xcrun --show-sdk-path) \
-    -framework AppKit \
-    -framework AVFoundation \
-    -framework Vision \
-    -framework CoreImage \
-    -framework CoreMotion \
-    -framework IOBluetooth \
-    -o "$MACOS_DIR/${APP_NAME}_x86" \
-    $SWIFT_FILES
+ARM64_BINARY="$SCRIPT_DIR/.build/arm64-apple-macosx/release/Dorso"
+X86_BINARY="$SCRIPT_DIR/.build/x86_64-apple-macosx/release/Dorso"
+
+if [ ! -f "$ARM64_BINARY" ] || [ ! -f "$X86_BINARY" ]; then
+    echo -e "${RED}Error: Expected SwiftPM binaries not found.${NC}"
+    echo "  arm64: $ARM64_BINARY"
+    echo "  x86_64: $X86_BINARY"
+    exit 1
+fi
+
+cp "$ARM64_BINARY" "$MACOS_DIR/${APP_NAME}_arm64"
+cp "$X86_BINARY" "$MACOS_DIR/${APP_NAME}_x86"
 
 # Create universal binary
 lipo -create -output "$MACOS_DIR/$APP_NAME" \
