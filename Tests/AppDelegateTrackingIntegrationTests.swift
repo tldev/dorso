@@ -640,7 +640,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     }
 
     @MainActor
-    func testFinishCalibrationEmitsResetThenRestartAndTransitionsToMonitoring() async {
+    func testFinishCalibrationEmitsRestartAndTransitionsToMonitoring() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
         appDelegate.menuBarManager.setup()
@@ -664,7 +664,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         await appDelegate.finishCalibration(values: samples)
 
         let expectedPrefix: [TrackingFeature.EffectIntent] = [
-            .resetMonitoringState,
             .startMonitoring
         ]
         XCTAssertEqual(Array(executedIntents.prefix(expectedPrefix.count)), expectedPrefix)

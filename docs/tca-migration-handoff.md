@@ -995,6 +995,107 @@ TCA migration is complete only when all items below are true:
   - `swift test --filter AppDelegateTrackingIntegrationTests` passed (28 tests).
   - `swift test` passed (362 tests, 0 failures).
 
+### 2026-02-28 - Completed Chunk 35 (Codex)
+
+- Finalized AppDelegate thin-shell hardening for tracking orchestration:
+  - Introduced `AppDelegate.TrackingCoordinator` as the tracking adapter execution owner.
+  - Moved tracking orchestration/dispatch/runtime handlers from `AppDelegate` into coordinator methods:
+    - tracking transition dispatch/commit helpers (`sendTrackingAction`, `applyTrackingStoreTransition`, state/UI/detector sync),
+    - startup/onboarding/source-switch/pause-on-the-go flows,
+    - calibration lifecycle and remediation alert handling,
+    - camera/screen/display transition context assembly and reducer dispatch paths,
+    - `trackingRuntime` execution handlers.
+  - Kept `AppDelegate` method surface as thin delegations to preserve existing call sites and test seams.
+- Result:
+  - Tracking behavior decisions remain reducer-owned in `TrackingFeature`.
+  - AppDelegate now serves as a shell over reducer dispatch plus runtime IO delegation through the coordinator.
+- End-state reassessment after this chunk:
+  - Item 1 (`Unified reducer transition boundary`): `true`.
+  - Item 2 (`AppDelegate adapter-only role`): `true`.
+  - Item 3 (`Contract parity proven`): `true`.
+  - Item 4 (`Startup paths reducer-aligned`): `true`.
+  - Item 5 (`Migration guardrails preserved`): `true`.
+- Validation:
+  - Full suite `swift test` passed (362 tests, 0 failures).
+  - `./build.sh` passed and produced `/Users/tjohnell/projects/dorso/build/Dorso.app` (universal binary).
+
+### 2026-02-28 - Completed Chunk 36 (Codex)
+
+- Executed strict-TCA hardening for posture runtime behavior by moving remaining tracking runtime state/decision flow into reducer state/actions:
+  - In `Sources/TrackingFeature.swift`:
+    - Added reducer-owned posture runtime state:
+      - `monitoringState`
+      - `postureConfig`
+      - `lastPostureReadingTime`
+    - Added reducer actions for posture pipeline:
+      - `.setPostureConfiguration(intensity:warningOnsetDelay:)`
+      - `.postureReadingReceived(_:isMarketingMode:)`
+      - `.awayStateChanged(_:isMarketingMode:)`
+    - Moved posture reading/away decision logic into reducer:
+      - reducer now calls `PostureEngine.processReading(...)` and `PostureEngine.processAwayChange(...)`,
+      - maps resulting effects to `trackingRuntime` dependency calls.
+    - Added reducer-level active->non-active runtime reset post-processing:
+      - when transitioning from active states to non-active states, reducer resets posture monitoring runtime state (`monitoringState`) and clears `lastPostureReadingTime`.
+  - Expanded `TrackingRuntimeClient` dependency surface for reducer-owned posture effects:
+    - `updateBlur`
+    - `trackAnalytics`
+    - `recordSlouchEvent`
+- Updated AppDelegate adapter wiring to execute reducer-owned posture effects without local decision logic:
+  - Added runtime handlers/dependency wiring:
+    - `runtimeUpdateBlur`
+    - `runtimeTrackAnalytics`
+    - `runtimeRecordSlouchEvent`
+  - Removed AppDelegate-owned posture runtime state fields and direct posture mutation path:
+    - removed local `monitoringState`, `postureConfig`, `lastPostureReadingTime` ownership.
+  - Detector callbacks now dispatch reducer actions for posture/away events rather than mutating AppDelegate runtime state:
+    - `handlePostureReading(...)` dispatches `.postureReadingReceived(...)`
+    - `handleAwayStateChange(...)` dispatches `.awayStateChanged(...)`
+  - `applyActiveSettingsProfile()` now dispatches reducer posture configuration updates via `.setPostureConfiguration(...)`.
+- Test/runtime harness updates:
+  - Updated runtime recorder clients in:
+    - `Tests/TrackingFeatureTests.swift`
+    - `Tests/TrackingReducerScenarioHarness.swift`
+  - Added reducer tests covering posture event action paths/effect emission:
+    - posture reading state/effect path
+    - analytics/blur effect emission with elapsed interval
+    - away-state update with UI/blur effects
+    - marketing-mode away no-op
+- End-state reassessment after this chunk:
+  - Item 1 (`Unified reducer transition boundary`): `true`.
+  - Item 2 (`AppDelegate adapter-only role`): `true`.
+  - Item 3 (`Contract parity proven`): `true`.
+  - Item 4 (`Startup paths reducer-aligned`): `true`.
+  - Item 5 (`Migration guardrails preserved`): `true`.
+- Validation:
+  - `swift test --filter TrackingFeatureTests` passed (39 tests).
+  - `swift test --filter AppDelegateTrackingIntegrationTests` passed (28 tests).
+  - Full suite `swift test` passed (366 tests, 0 failures).
+  - `./build.sh` passed and produced `/Users/tjohnell/projects/dorso/build/Dorso.app` (universal binary).
+
+### 2026-02-28 - Completed Chunk 37 (Codex)
+
+- Removed remaining no-op migration seam to keep tracking flow strictly reducer-driven without placeholder runtime intents:
+  - Removed `EffectIntent.resetMonitoringState` from `TrackingFeature`.
+  - Removed `TrackingRuntimeClient.resetMonitoringState`.
+  - `calibrationCompleted` now:
+    - resets reducer-owned posture runtime state directly,
+    - emits only `.startMonitoring` runtime intent.
+- Removed corresponding AppDelegate runtime wiring/handlers for the deleted reset intent.
+- Preserved parity contract timelines after removing reset intent:
+  - Updated reducer scenario harness reset flag derivation for calibration-complete timeline parity.
+- Updated test naming/assertions to match final behavior:
+  - `TrackingFeatureTests` calibration-complete test now asserts restart intent only.
+  - `AppDelegateTrackingIntegrationTests` calibration-finish test now asserts restart intent only.
+- End-state reassessment after this chunk:
+  - Item 1 (`Unified reducer transition boundary`): `true`.
+  - Item 2 (`AppDelegate adapter-only role`): `true`.
+  - Item 3 (`Contract parity proven`): `true`.
+  - Item 4 (`Startup paths reducer-aligned`): `true`.
+  - Item 5 (`Migration guardrails preserved`): `true`.
+- Validation:
+  - `swift test --filter "TrackingFeatureTests|AppDelegateTrackingIntegrationTests|TrackingParityReplayTests"` passed (68 tests, 0 failures).
+  - Full suite `swift test` passed (366 tests, 0 failures).
+
 ## Recommended Next Steps (For Next Agent)
 
 None

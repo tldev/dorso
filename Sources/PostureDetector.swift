@@ -4,7 +4,7 @@ import AppKit
 // MARK: - Posture Reading
 
 /// Represents a single posture measurement from any detection source
-struct PostureReading {
+struct PostureReading: Equatable {
     let timestamp: Date
     let isBadPosture: Bool
     let severity: Double  // 0.0 (good) to 1.0 (very bad)

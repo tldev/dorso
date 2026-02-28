@@ -34,9 +34,15 @@ private extension TrackingRuntimeClient {
                 await recorder.record(.switchCamera(.selectedCamera))
             },
             syncUI: { await recorder.record(.syncUI) },
+            updateBlur: { await recorder.record(.updateBlur) },
+            trackAnalytics: { interval, isSlouching in
+                await recorder.record(
+                    .trackAnalytics(interval: interval, isSlouching: isSlouching)
+                )
+            },
+            recordSlouchEvent: { await recorder.record(.recordSlouchEvent) },
             stopDetector: { source in await recorder.record(.stopDetector(source)) },
             persistTrackingSource: { await recorder.record(.persistTrackingSource) },
-            resetMonitoringState: { await recorder.record(.resetMonitoringState) },
             showCalibrationPermissionDeniedAlert: {
                 await recorder.record(.showCalibrationPermissionDeniedAlert)
             },
@@ -216,6 +222,98 @@ final class TrackingFeatureTests: XCTestCase {
         )
 
         await store.send(.pauseOnTheGoSettingChanged(isEnabled: true))
+    }
+
+    @MainActor
+    func testPostureReadingReceivedUpdatesMonitoringStateAndEmitsPostureEffects() async {
+        let recorder = EffectIntentRecorder()
+        var initialState = TrackingFeature.State(
+            appState: .monitoring,
+            manualSource: .camera
+        )
+        initialState.postureConfig.frameThreshold = 1
+        initialState.postureConfig.warningOnsetDelay = 0
+
+        let store = makeStore(initialState: initialState, recorder: recorder)
+        let reading = PostureReading(
+            timestamp: Date(timeIntervalSince1970: 100),
+            isBadPosture: true,
+            severity: 0.7
+        )
+
+        await store.send(.postureReadingReceived(reading, isMarketingMode: false)) {
+            $0.monitoringState.isCurrentlySlouching = true
+            $0.monitoringState.consecutiveBadFrames = 1
+            $0.monitoringState.postureWarningIntensity = 0.7
+            $0.monitoringState.badPostureStartTime = reading.timestamp
+            $0.lastPostureReadingTime = reading.timestamp
+        }
+        await store.finish()
+        await assertIntents([.recordSlouchEvent, .syncUI, .updateBlur], recorder: recorder)
+    }
+
+    @MainActor
+    func testPostureReadingReceivedWithPriorTimestampEmitsAnalyticsAndBlur() async {
+        let recorder = EffectIntentRecorder()
+        var initialState = TrackingFeature.State(
+            appState: .monitoring,
+            manualSource: .camera
+        )
+        initialState.lastPostureReadingTime = Date(timeIntervalSince1970: 100)
+
+        let store = makeStore(initialState: initialState, recorder: recorder)
+        let reading = PostureReading(
+            timestamp: Date(timeIntervalSince1970: 101.5),
+            isBadPosture: false,
+            severity: 0
+        )
+
+        await store.send(.postureReadingReceived(reading, isMarketingMode: false)) {
+            $0.monitoringState.consecutiveGoodFrames = 1
+            $0.lastPostureReadingTime = reading.timestamp
+        }
+        await store.finish()
+        await assertIntents(
+            [
+                .trackAnalytics(interval: 1.5, isSlouching: false),
+                .updateBlur
+            ],
+            recorder: recorder
+        )
+    }
+
+    @MainActor
+    func testAwayStateChangedUpdatesReducerStateAndEmitsUIAndBlur() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                manualSource: .camera
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.awayStateChanged(true, isMarketingMode: false)) {
+            $0.monitoringState.isCurrentlyAway = true
+        }
+        await store.finish()
+        await assertIntents([.syncUI, .updateBlur], recorder: recorder)
+    }
+
+    @MainActor
+    func testAwayStateChangedInMarketingModeProducesNoEffects() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                manualSource: .camera
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.awayStateChanged(true, isMarketingMode: true))
+        await store.finish()
+        await assertIntents([], recorder: recorder)
     }
 
     @MainActor
@@ -633,7 +731,7 @@ final class TrackingFeatureTests: XCTestCase {
     }
 
     @MainActor
-    func testCalibrationCompletedEmitsResetAndRestartMonitoringIntents() async {
+    func testCalibrationCompletedEmitsRestartMonitoringIntent() async {
         let recorder = EffectIntentRecorder()
         let store = makeStore(
             initialState: TrackingFeature.State(
@@ -651,7 +749,7 @@ final class TrackingFeatureTests: XCTestCase {
             $0.appState = .monitoring
         }
         await store.finish()
-        await assertIntents([.resetMonitoringState, .startMonitoring], recorder: recorder)
+        await assertIntents([.startMonitoring], recorder: recorder)
     }
 
     @MainActor

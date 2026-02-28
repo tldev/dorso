@@ -28,9 +28,11 @@ struct TrackingFeature: Reducer {
         case showOnboarding
         case switchCamera(CameraSwitchIntent)
         case syncUI
+        case updateBlur
+        case trackAnalytics(interval: TimeInterval, isSlouching: Bool)
+        case recordSlouchEvent
         case stopDetector(TrackingSource)
         case persistTrackingSource
-        case resetMonitoringState
         case showCalibrationPermissionDeniedAlert
         case openPrivacySettings
         case showCameraCalibrationRetryAlert(message: String?)
@@ -47,6 +49,9 @@ struct TrackingFeature: Reducer {
         var autoReturnEnabled: Bool = false
 
         var stateBeforeLock: AppState?
+        var monitoringState = PostureMonitoringState()
+        var postureConfig = PostureConfig()
+        var lastPostureReadingTime: Date?
 
         var activeSource: TrackingSource { manualSource }
     }
@@ -63,7 +68,10 @@ struct TrackingFeature: Reducer {
         case setManualSource(TrackingSource)
         case setPreferredSource(TrackingSource)
         case setAutoReturnEnabled(Bool)
+        case setPostureConfiguration(intensity: Double, warningOnsetDelay: TimeInterval)
         case pauseOnTheGoSettingChanged(isEnabled: Bool)
+        case postureReadingReceived(PostureReading, isMarketingMode: Bool)
+        case awayStateChanged(Bool, isMarketingMode: Bool)
         case initialSetupEvaluated(
             isMarketingMode: Bool,
             hasCameraProfile: Bool,
@@ -120,13 +128,23 @@ struct TrackingFeature: Reducer {
 
     var body: some ReducerOf<Self> {
         Reduce { state, action in
+            let previousAppState = state.appState
+
+            func finish(_ effect: Effect<Action> = .none) -> Effect<Action> {
+                if previousAppState.isActive, !state.appState.isActive {
+                    state.monitoringState.reset()
+                    state.lastPostureReadingTime = nil
+                }
+                return effect
+            }
+
             switch action {
             case .appLaunched:
-                return .none
+                return finish()
 
             case .setAppState(let appState):
                 state.appState = appState
-                return .none
+                return finish()
 
             case let .toggleEnabled(trackingSource, isCalibrated, detectorAvailable):
                 state.manualSource = trackingSource
@@ -137,37 +155,105 @@ struct TrackingFeature: Reducer {
                         trackingSource: trackingSource
                     )
                     if state.appState == .monitoring {
-                        return run { runtime in
+                        return finish(run { runtime in
                             await runtime.startMonitoring()
-                        }
+                        })
                     }
                 } else {
                     state.appState = .disabled
                 }
-                return .none
+                return finish()
 
             case .setTrackingMode(let mode):
                 state.trackingMode = mode
-                return .none
+                return finish()
 
             case .setManualSource(let source):
                 state.manualSource = source
-                return .none
+                return finish()
 
             case .setPreferredSource(let source):
                 state.preferredSource = source
-                return .none
+                return finish()
 
             case .setAutoReturnEnabled(let enabled):
                 state.autoReturnEnabled = enabled
-                return .none
+                return finish()
+
+            case let .setPostureConfiguration(intensity, warningOnsetDelay):
+                state.postureConfig.intensity = CGFloat(intensity)
+                state.postureConfig.warningOnsetDelay = warningOnsetDelay
+                return finish()
 
             case .pauseOnTheGoSettingChanged(let isEnabled):
                 state.appState = PostureEngine.stateWhenPauseOnTheGoSettingChanges(
                     currentState: state.appState,
                     isEnabled: isEnabled
                 )
-                return .none
+                return finish()
+
+            case let .postureReadingReceived(reading, isMarketingMode):
+                guard state.appState == .monitoring else { return finish() }
+
+                if isMarketingMode {
+                    state.monitoringState.isCurrentlySlouching = false
+                    state.monitoringState.postureWarningIntensity = 0
+                    state.monitoringState.consecutiveBadFrames = 0
+                    return finish(run { runtime in
+                        await runtime.syncUI()
+                        await runtime.updateBlur()
+                    })
+                }
+
+                let actualElapsed: TimeInterval?
+                if let last = state.lastPostureReadingTime {
+                    let raw = reading.timestamp.timeIntervalSince(last)
+                    actualElapsed = min(max(0, raw), 2.0)
+                } else {
+                    actualElapsed = nil
+                }
+                state.lastPostureReadingTime = reading.timestamp
+
+                let result = PostureEngine.processReading(
+                    reading,
+                    state: state.monitoringState,
+                    config: state.postureConfig,
+                    currentTime: reading.timestamp,
+                    frameInterval: actualElapsed ?? 0
+                )
+                state.monitoringState = result.newState
+
+                return finish(run { runtime in
+                    for effect in result.effects {
+                        switch effect {
+                        case .trackAnalytics(let interval, let isSlouching):
+                            if actualElapsed != nil {
+                                await runtime.trackAnalytics(interval, isSlouching)
+                            }
+                        case .recordSlouchEvent:
+                            await runtime.recordSlouchEvent()
+                        case .updateUI:
+                            await runtime.syncUI()
+                        case .updateBlur:
+                            await runtime.updateBlur()
+                        }
+                    }
+                })
+
+            case let .awayStateChanged(isAway, isMarketingMode):
+                guard state.appState == .monitoring, !isMarketingMode else { return finish() }
+
+                let result = PostureEngine.processAwayChange(
+                    isAway: isAway,
+                    state: state.monitoringState
+                )
+                state.monitoringState = result.newState
+
+                guard result.shouldUpdateUI else { return finish() }
+                return finish(run { runtime in
+                    await runtime.syncUI()
+                    await runtime.updateBlur()
+                })
 
             case let .initialSetupEvaluated(
                 isMarketingMode,
@@ -185,10 +271,10 @@ struct TrackingFeature: Reducer {
                 )
 
                 guard result.shouldApplyStartupCameraProfile || result.shouldStartMonitoring || result.shouldShowOnboarding else {
-                    return .none
+                    return finish()
                 }
 
-                return run { runtime in
+                return finish(run { runtime in
                     if result.shouldApplyStartupCameraProfile {
                         await runtime.applyStartupCameraProfile(cameraProfile)
                     }
@@ -198,10 +284,11 @@ struct TrackingFeature: Reducer {
                     if result.shouldShowOnboarding {
                         await runtime.showOnboarding()
                     }
-                }
+                })
 
             case let .startMonitoringRequested(isMarketingMode, trackingSource, isCalibrated, isConnected):
                 state.manualSource = trackingSource
+                state.lastPostureReadingTime = nil
                 let result = PostureEngine.stateWhenMonitoringStarts(
                     isMarketingMode: isMarketingMode,
                     trackingSource: trackingSource,
@@ -210,11 +297,11 @@ struct TrackingFeature: Reducer {
                 )
                 state.appState = result.newState
                 if result.shouldBeginMonitoringSession {
-                    return run { runtime in
+                    return finish(run { runtime in
                         await runtime.beginMonitoringSession()
-                    }
+                    })
                 }
-                return .none
+                return finish()
 
             case .airPodsConnectionChanged(let isConnected):
                 let result = PostureEngine.stateWhenAirPodsConnectionChanges(
@@ -224,11 +311,11 @@ struct TrackingFeature: Reducer {
                 )
                 state.appState = result.newState
                 if result.shouldRestartMonitoring {
-                    return run { runtime in
+                    return finish(run { runtime in
                         await runtime.startMonitoring()
-                    }
+                    })
                 }
-                return .none
+                return finish()
 
             case .cameraConnected(let hasMatchingProfile, let matchingProfile):
                 let previousState = state.appState
@@ -240,18 +327,18 @@ struct TrackingFeature: Reducer {
                 state.appState = result.newState
 
                 if result.shouldSelectAndStartMonitoring {
-                    return run { runtime in
+                    return finish(run { runtime in
                         await runtime.switchCameraToMatchingProfile(matchingProfile)
                         await runtime.startMonitoring()
-                    }
+                    })
                 }
 
                 if result.newState == previousState {
-                    return run { runtime in
+                    return finish(run { runtime in
                         await runtime.syncUI()
-                    }
+                    })
                 }
-                return .none
+                return finish()
 
             case .cameraDisconnected(
                 let disconnectedCameraIsSelected,
@@ -271,73 +358,74 @@ struct TrackingFeature: Reducer {
 
                 switch result.action {
                 case .none:
-                    return .none
+                    return finish()
                 case .syncUIOnly:
-                    return run { runtime in
+                    return finish(run { runtime in
                         await runtime.syncUI()
-                    }
+                    })
                 case .switchToFallback(let startMonitoring):
-                    return run { runtime in
+                    return finish(run { runtime in
                         await runtime.switchCameraToFallback(fallbackCameraID, fallbackProfile)
                         if startMonitoring {
                             await runtime.startMonitoring()
                         }
-                    }
+                    })
                 }
 
             case .calibrationAuthorizationDenied(let isCalibrated):
                 state.appState = PostureEngine.stateWhenCalibrationAuthorizationDenied(
                     isCalibrated: isCalibrated
                 )
-                return run { runtime in
+                return finish(run { runtime in
                     await runtime.showCalibrationPermissionDeniedAlert()
-                }
+                })
 
             case .calibrationOpenSettingsRequested:
-                return run { runtime in
+                return finish(run { runtime in
                     await runtime.openPrivacySettings()
-                }
+                })
 
             case .calibrationRetryRequested:
-                return run { runtime in
+                return finish(run { runtime in
                     await runtime.retryCalibration()
-                }
+                })
 
             case .calibrationAuthorizationGranted:
                 state.appState = PostureEngine.stateWhenCalibrationAuthorizationGranted()
-                return .none
+                return finish()
 
             case .calibrationStartFailed(let errorMessage):
                 state.appState = PostureEngine.unavailableState(for: state.activeSource)
                 if state.activeSource == .camera {
-                    return run { runtime in
+                    return finish(run { runtime in
                         await runtime.showCameraCalibrationRetryAlert(errorMessage)
-                    }
+                    })
                 }
-                return .none
+                return finish()
 
             case .runtimeDetectorStartFailed(let trackingSource):
                 state.manualSource = trackingSource
                 state.appState = PostureEngine.unavailableState(for: trackingSource)
-                return .none
+                return finish()
 
             case .calibrationCancelled(let isCalibrated):
                 state.appState = PostureEngine.stateWhenCalibrationCancels(
                     isCalibrated: isCalibrated
                 )
                 if isCalibrated {
-                    return run { runtime in
+                    return finish(run { runtime in
                         await runtime.startMonitoring()
-                    }
+                    })
                 }
-                return .none
+                return finish()
 
             case .calibrationCompleted:
+                state.monitoringState.reset()
+                state.lastPostureReadingTime = nil
                 state.appState = PostureEngine.stateWhenCalibrationCompletes()
-                return run { runtime in
-                    await runtime.resetMonitoringState()
+                return finish(run { runtime in
                     await runtime.startMonitoring()
-                }
+                })
 
             case .screenLocked:
                 let result = PostureEngine.stateWhenScreenLocks(
@@ -347,7 +435,7 @@ struct TrackingFeature: Reducer {
                 )
                 state.appState = result.newState
                 state.stateBeforeLock = result.stateBeforeLock
-                return .none
+                return finish()
 
             case .screenUnlocked:
                 let result = PostureEngine.stateWhenScreenUnlocks(
@@ -357,11 +445,11 @@ struct TrackingFeature: Reducer {
                 state.appState = result.newState
                 state.stateBeforeLock = result.stateBeforeLock
                 if result.shouldRestartMonitoring {
-                    return run { runtime in
+                    return finish(run { runtime in
                         await runtime.startMonitoring()
-                    }
+                    })
                 }
-                return .none
+                return finish()
 
             case let .displayConfigurationChanged(
                 pauseOnTheGoEnabled,
@@ -383,17 +471,17 @@ struct TrackingFeature: Reducer {
                 state.appState = result.newState
 
                 guard result.shouldSwitchToProfileCamera || result.shouldStartMonitoring else {
-                    return .none
+                    return finish()
                 }
 
-                return run { runtime in
+                return finish(run { runtime in
                     if result.shouldSwitchToProfileCamera {
                         await runtime.switchCameraToMatchingProfile(matchingProfile)
                     }
                     if result.shouldStartMonitoring {
                         await runtime.startMonitoring()
                     }
-                }
+                })
 
             case .cameraSelectionChanged:
                 state.appState = PostureEngine.stateWhenCameraSelectionChanges(
@@ -401,11 +489,11 @@ struct TrackingFeature: Reducer {
                     trackingSource: state.activeSource
                 )
                 if state.activeSource == .camera {
-                    return run { runtime in
+                    return finish(run { runtime in
                         await runtime.switchCameraToSelected()
-                    }
+                    })
                 }
-                return .none
+                return finish()
 
             case .switchTrackingSource(let newSource, let isNewSourceCalibrated):
                 let previousSource = state.activeSource
@@ -420,10 +508,10 @@ struct TrackingFeature: Reducer {
                 state.appState = result.newState
 
                 guard result.didSwitchSource || result.shouldStartMonitoring else {
-                    return .none
+                    return finish()
                 }
 
-                return run { runtime in
+                return finish(run { runtime in
                     if result.didSwitchSource {
                         await runtime.stopDetector(previousSource)
                         await runtime.persistTrackingSource()
@@ -431,7 +519,7 @@ struct TrackingFeature: Reducer {
                     if result.shouldStartMonitoring {
                         await runtime.startMonitoring()
                     }
-                }
+                })
             }
         }
     }
@@ -446,9 +534,11 @@ struct TrackingRuntimeClient {
     var switchCameraToFallback: @Sendable (String?, ProfileData?) async -> Void
     var switchCameraToSelected: @Sendable () async -> Void
     var syncUI: @Sendable () async -> Void
+    var updateBlur: @Sendable () async -> Void
+    var trackAnalytics: @Sendable (TimeInterval, Bool) async -> Void
+    var recordSlouchEvent: @Sendable () async -> Void
     var stopDetector: @Sendable (TrackingSource) async -> Void
     var persistTrackingSource: @Sendable () async -> Void
-    var resetMonitoringState: @Sendable () async -> Void
     var showCalibrationPermissionDeniedAlert: @Sendable () async -> Void
     var openPrivacySettings: @Sendable () async -> Void
     var showCameraCalibrationRetryAlert: @Sendable (String?) async -> Void
@@ -465,9 +555,11 @@ extension TrackingRuntimeClient {
         switchCameraToFallback: { _, _ in },
         switchCameraToSelected: {},
         syncUI: {},
+        updateBlur: {},
+        trackAnalytics: { _, _ in },
+        recordSlouchEvent: {},
         stopDetector: { _ in },
         persistTrackingSource: {},
-        resetMonitoringState: {},
         showCalibrationPermissionDeniedAlert: {},
         openPrivacySettings: {},
         showCameraCalibrationRetryAlert: { _ in },

@@ -33,9 +33,15 @@ private extension TrackingRuntimeClient {
                 await recorder.append(.switchCamera(.selectedCamera))
             },
             syncUI: { await recorder.append(.syncUI) },
+            updateBlur: { await recorder.append(.updateBlur) },
+            trackAnalytics: { interval, isSlouching in
+                await recorder.append(
+                    .trackAnalytics(interval: interval, isSlouching: isSlouching)
+                )
+            },
+            recordSlouchEvent: { await recorder.append(.recordSlouchEvent) },
             stopDetector: { source in await recorder.append(.stopDetector(source)) },
             persistTrackingSource: { await recorder.append(.persistTrackingSource) },
-            resetMonitoringState: { await recorder.append(.resetMonitoringState) },
             showCalibrationPermissionDeniedAlert: {
                 await recorder.append(.showCalibrationPermissionDeniedAlert)
             },
@@ -197,11 +203,12 @@ struct TrackingReducerScenarioHarness {
             }
             return false
         }
-        let resetMonitoringRequested = intents.contains { intent in
-            if case .resetMonitoringState = intent {
-                return true
-            }
-            return false
+        let resetMonitoringRequested: Bool
+        switch event {
+        case .calibrationCompleted:
+            resetMonitoringRequested = true
+        default:
+            resetMonitoringRequested = false
         }
         let fallbackSwitchRequested = intents.contains { intent in
             if case .switchCamera(.fallback(cameraID: _, profile: _)) = intent {
