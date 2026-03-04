@@ -5,6 +5,22 @@ All notable changes to Dorso will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-03-03
+
+### Added
+- Automatic tracking mode — Dorso intelligently switches between Camera and AirPods based on availability, using your preferred source when possible
+- New tracking settings UI showing device status, calibration state, and active source at a glance
+
+### Changed
+- Migrated core tracking logic to The Composable Architecture (TCA) for more predictable state management and comprehensive test coverage
+
+### Fixed
+- Improved French and Spanish translations for more natural phrasing
+
+### Acknowledgments
+- Thanks to [@bradystroud](https://github.com/bradystroud) for suggesting automatic source switching in [#66](https://github.com/tldev/dorso/issues/66)
+- Thanks to [@emmanuelprecieuxargent](https://github.com/emmanuelprecieuxargent) for improving French ([#71](https://github.com/tldev/dorso/pull/71)) and Spanish ([#73](https://github.com/tldev/dorso/pull/73)) translations
+
 ## [1.9.2] - 2026-02-22
 
 ### Fixed
