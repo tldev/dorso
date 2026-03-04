@@ -21,6 +21,9 @@ enum SettingsKeys {
     static let toggleShortcutModifiers = "toggleShortcutModifiers"
     static let detectionMode = "detectionMode"
     static let trackingSource = "trackingSource"
+    static let trackingMode = "trackingMode"
+    static let preferredSource = "preferredSource"
+    static let autoReturnEnabled = "autoReturnEnabled"
     static let airPodsCalibration = "airPodsCalibration"
 
     // Legacy keys (migrated on load)

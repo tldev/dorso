@@ -22,7 +22,8 @@ struct PostureUIState: Equatable {
         isCalibrated: Bool,
         isCurrentlyAway: Bool,
         isCurrentlySlouching: Bool,
-        trackingSource: TrackingSource
+        trackingSource: TrackingSource,
+        isOnFallback: Bool = false
     ) -> PostureUIState {
         switch appState {
         case .disabled:
@@ -45,7 +46,9 @@ struct PostureUIState: Equatable {
             let (statusText, icon) = monitoringState(
                 isCalibrated: isCalibrated,
                 isCurrentlyAway: isCurrentlyAway,
-                isCurrentlySlouching: isCurrentlySlouching
+                isCurrentlySlouching: isCurrentlySlouching,
+                isOnFallback: isOnFallback,
+                fallbackSource: trackingSource
             )
             return PostureUIState(
                 statusText: statusText,
@@ -68,18 +71,22 @@ struct PostureUIState: Equatable {
     private static func monitoringState(
         isCalibrated: Bool,
         isCurrentlyAway: Bool,
-        isCurrentlySlouching: Bool
+        isCurrentlySlouching: Bool,
+        isOnFallback: Bool = false,
+        fallbackSource: TrackingSource = .camera
     ) -> (String, MenuBarIconType) {
         guard isCalibrated else {
             return (L("status.starting"), .good)
         }
 
+        let suffix = isOnFallback ? " (\(fallbackSource.displayName))" : ""
+
         if isCurrentlyAway {
-            return (L("status.away"), .away)
+            return (L("status.away") + suffix, .away)
         } else if isCurrentlySlouching {
-            return (L("status.slouching"), .bad)
+            return (L("status.slouching") + suffix, .bad)
         } else {
-            return (L("status.goodPosture"), .good)
+            return (L("status.goodPosture") + suffix, .good)
         }
     }
 

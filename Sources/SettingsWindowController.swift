@@ -56,6 +56,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         if let appDelegate = appDelegate, !appDelegate.showInDock {
             NSApp.setActivationPolicy(.accessory)
         }
+        appDelegate?.onCalibrationComplete = nil
+        appDelegate?.onActiveSourceChanged = nil
     }
 
     private func isWindowOnScreen(_ window: NSWindow) -> Bool {

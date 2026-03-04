@@ -108,10 +108,19 @@
 
 "settings.title" = "設定";
 "settings.tracking" = "トラッキング";
+"settings.tracking.help" = "手動は1つのソースを使用します。自動はカメラとAirPodsの間で切り替え、優先ソースを可能な限り使用します。";
 "settings.noCameras" = "カメラなし";
 "settings.connected" = "接続済み";
 "settings.notConnected" = "未接続";
 "settings.recalibrate" = "再キャリブレーション";
+"settings.mode.manual" = "手動";
+"settings.mode.automatic" = "自動";
+"settings.preferred" = "優先";
+"settings.active" = "使用中";
+"settings.calibrated" = "校正済み";
+"settings.notCalibrated" = "未校正";
+"settings.preferredNeedsCalibration" = "優先デバイスの校正が必要です";
+"settings.calibratePreferred" = "校正する";
 "settings.profile" = "プロファイル";
 "settings.profile.help" = "異なる状況に合わせた設定を保存できます。プロファイルを切り替えて、すべての設定を即座に適用できます。";
 "settings.profile.new" = "新規";

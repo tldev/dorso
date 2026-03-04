@@ -108,10 +108,19 @@
 
 "settings.title" = "Settings";
 "settings.tracking" = "Tracking";
+"settings.tracking.help" = "Manual uses one source. Automatic switches between Camera and AirPods based on availability, using your preferred source when possible.";
 "settings.noCameras" = "No cameras";
 "settings.connected" = "Connected";
 "settings.notConnected" = "Not connected";
 "settings.recalibrate" = "Recalibrate";
+"settings.mode.manual" = "Manual";
+"settings.mode.automatic" = "Automatic";
+"settings.preferred" = "Preferred";
+"settings.active" = "Active";
+"settings.calibrated" = "Calibrated";
+"settings.notCalibrated" = "Not calibrated";
+"settings.preferredNeedsCalibration" = "Preferred device needs calibration";
+"settings.calibratePreferred" = "Calibrate";
 "settings.profile" = "Profile";
 "settings.profile.help" = "Save different configurations for different situations. Switch profiles to instantly apply all settings below.";
 "settings.profile.new" = "New";

@@ -349,6 +349,118 @@ struct BrightnessSliderView: View {
     }
 }
 
+// MARK: - Compact Mode Picker
+
+struct CompactModePicker: View {
+    @Binding var selection: TrackingMode
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach([TrackingMode.manual, .automatic], id: \.self) { mode in
+                Button(action: { selection = mode }) {
+                    Text(mode == .manual ? L("settings.mode.manual") : L("settings.mode.automatic"))
+                        .font(.system(size: 10, weight: selection == mode ? .semibold : .regular))
+                        .foregroundColor(selection == mode ? .onBrandCyan : .primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(selection == mode ? Color.brandCyan : Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.primary.opacity(0.06))
+        )
+    }
+}
+
+// MARK: - Device Status Row
+
+struct DeviceStatusRow: View {
+    let source: TrackingSource
+    let isCalibrated: Bool
+    let isConnected: Bool
+    let isPreferred: Bool
+    var isActive: Bool = false
+    var cameraDropdown: AnyView? = nil
+    let onCalibrate: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // Device icon and name
+            Image(systemName: source.icon)
+                .font(.system(size: 10))
+                .foregroundColor(isPreferred ? .brandCyan : .secondary)
+                .frame(width: 14)
+
+            Text(source.displayName)
+                .font(.system(size: 11, weight: isPreferred ? .medium : .regular))
+                .frame(width: 55, alignment: .leading)
+
+            // Calibration status
+            HStack(spacing: 3) {
+                Image(systemName: isCalibrated ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 9))
+                    .foregroundColor(isCalibrated ? .green : .orange)
+                Text(isCalibrated ? L("settings.calibrated") : L("settings.notCalibrated"))
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+
+            if source == .camera, let dropdown = cameraDropdown {
+                dropdown
+            } else if source == .airpods {
+                // Connection status
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(isConnected ? Color.green : Color.secondary.opacity(0.3))
+                        .frame(width: 6, height: 6)
+                    Text(isConnected ? L("settings.connected") : L("settings.notConnected"))
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            if isActive {
+                Text(L("settings.active"))
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.brandCyan)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.brandCyan.opacity(0.12)))
+            }
+
+            // Calibrate button
+            Button(action: onCalibrate) {
+                Text(L("settings.recalibrate"))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.onBrandCyan)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(Color.brandCyan)
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+        )
+    }
+}
+
 // MARK: - Compact Tracking Source Picker
 
 struct CompactTrackingSourcePicker: View {
@@ -439,7 +551,12 @@ struct SettingsView: View {
     @State private var toggleShortcut: KeyboardShortcut
     @State private var detectionModeSlider: Double
     @State private var trackingSource: TrackingSource
+    @State private var trackingModeSelection: TrackingMode
+    @State private var preferredSource: TrackingSource
     @State private var airPodsAvailable: Bool
+    @State private var cameraCalibrated: Bool
+    @State private var airPodsCalibrated: Bool
+    @State private var activeSource: TrackingSource
     @State private var settingsProfiles: [SettingsProfile]
     @State private var selectedSettingsProfileID: String
     @State private var lastSelectedSettingsProfileID: String
@@ -497,7 +614,12 @@ struct SettingsView: View {
         _toggleShortcut = State(initialValue: appDelegate.toggleShortcut)
         _detectionModeSlider = State(initialValue: Double(detectionModes.firstIndex(of: profileDetectionMode) ?? 0))
         _trackingSource = State(initialValue: appDelegate.trackingSource)
+        _trackingModeSelection = State(initialValue: appDelegate.trackingStore.withState { $0.trackingMode })
+        _preferredSource = State(initialValue: appDelegate.trackingStore.withState { $0.preferredSource })
         _airPodsAvailable = State(initialValue: appDelegate.airPodsDetector.isAvailable)
+        _cameraCalibrated = State(initialValue: appDelegate.cameraCalibration?.isValid ?? false)
+        _airPodsCalibrated = State(initialValue: appDelegate.airPodsCalibration?.isValid ?? false)
+        _activeSource = State(initialValue: appDelegate.activeTrackingSource)
         settingsProfileManager.ensureProfilesLoaded()
         let snapshot = settingsProfileManager.profilesState()
         let profiles = snapshot.profiles
@@ -561,78 +683,165 @@ struct SettingsView: View {
 
             SubtleDivider()
 
-            // Tracking row (not part of profile)
-            HStack(spacing: 8) {
-                Text(L("settings.tracking"))
-                    .font(.system(size: 11, weight: .medium))
-                    .frame(width: 82, alignment: .leading)
+            // Tracking section (not part of profile)
+            VStack(spacing: 6) {
+                // Mode row
+                HStack(spacing: 8) {
+                    Text(L("settings.tracking"))
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(width: 82, alignment: .leading)
 
-                CompactTrackingSourcePicker(
-                    selection: $trackingSource,
-                    airPodsAvailable: airPodsAvailable
-                )
-                .frame(width: 130)
-                .onChange(of: trackingSource) { newValue in
-                    if newValue != appDelegate.trackingSource {
-                        Task { @MainActor in
-                            await appDelegate.switchTrackingSource(to: newValue)
-                        }
-                    }
-                }
+                    CompactModePicker(selection: $trackingModeSelection)
+                        .frame(width: 150)
 
-                if trackingSource == .camera {
-                    if availableCameras.isEmpty {
-                        Text(L("settings.noCameras"))
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                    } else {
-                        Picker("", selection: $selectedCameraID) {
-                            ForEach(availableCameras, id: \.id) { camera in
-                                Text(camera.name).tag(camera.id)
+                    HelpButton(text: L("settings.tracking.help"))
+                        .onChange(of: trackingModeSelection) { newValue in
+                            Task { @MainActor in
+                                await appDelegate.setTrackingMode(newValue)
+                                activeSource = appDelegate.activeTrackingSource
                             }
                         }
-                        .labelsHidden()
-                        .frame(maxWidth: .infinity)
-                        .onChange(of: selectedCameraID) { newValue in
-                            if newValue != appDelegate.selectedCameraID {
-                                appDelegate.selectedCameraID = newValue
-                                appDelegate.saveSettings()
-                                appDelegate.restartCamera()
-                            }
-                        }
-                    }
-                } else {
-                    // AirPods status
-                    HStack(spacing: 4) {
-                        Image(systemName: airPodsAvailable ? "checkmark.circle.fill" : "exclamationmark.circle")
-                            .foregroundColor(airPodsAvailable ? .green : .secondary)
-                            .font(.system(size: 10))
-                        Text(airPodsAvailable ? L("settings.connected") : L("settings.notConnected"))
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                    }
+
                     Spacer()
                 }
+                .frame(height: 26)
 
-                // Recalibrate button
-                Button(action: { appDelegate.startCalibration() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text(L("settings.recalibrate"))
-                            .font(.system(size: 11, weight: .medium))
+                if trackingModeSelection == .manual {
+                    // Manual mode: source picker + device row for selected source
+                    HStack(spacing: 8) {
+                        Text("")
+                            .frame(width: 82)
+
+                        CompactTrackingSourcePicker(
+                            selection: $trackingSource,
+                            airPodsAvailable: airPodsAvailable
+                        )
+                        .frame(width: 150)
+                        .onChange(of: trackingSource) { newValue in
+                            if newValue != appDelegate.trackingSource {
+                                Task { @MainActor in
+                                    await appDelegate.switchTrackingSource(to: newValue)
+                                }
+                            }
+                        }
+
+                        Spacer()
                     }
-                    .foregroundColor(.onBrandCyan)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.brandCyan)
+                    .frame(height: 26)
+
+                    DeviceStatusRow(
+                        source: trackingSource,
+                        isCalibrated: trackingSource == .camera ? cameraCalibrated : airPodsCalibrated,
+                        isConnected: trackingSource == .camera ? !availableCameras.isEmpty : airPodsAvailable,
+                        isPreferred: false,
+                        isActive: appDelegate.state.isActive,
+                        cameraDropdown: trackingSource == .camera && !availableCameras.isEmpty ? AnyView(
+                            Picker("", selection: $selectedCameraID) {
+                                ForEach(availableCameras, id: \.id) { camera in
+                                    Text(camera.name).tag(camera.id)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(maxWidth: 140)
+                            .onChange(of: selectedCameraID) { newValue in
+                                if newValue != appDelegate.selectedCameraID {
+                                    appDelegate.selectedCameraID = newValue
+                                    appDelegate.saveSettings()
+                                    appDelegate.restartCamera()
+                                }
+                            }
+                        ) : nil,
+                        onCalibrate: {
+                            appDelegate.startCalibration()
+                        }
                     )
+                } else {
+                    // Automatic mode layout
+                    VStack(spacing: 6) {
+                        // Preferred source picker
+                        HStack(spacing: 8) {
+                            Text(L("settings.preferred"))
+                                .font(.system(size: 11, weight: .medium))
+                                .frame(width: 82, alignment: .leading)
+
+                            CompactTrackingSourcePicker(
+                                selection: $preferredSource,
+                                airPodsAvailable: true
+                            )
+                            .frame(width: 150)
+                            .onChange(of: preferredSource) { newValue in
+                                Task { @MainActor in
+                                    await appDelegate.setPreferredSource(newValue)
+                                    activeSource = appDelegate.activeTrackingSource
+                                }
+                            }
+
+                            Spacer()
+                        }
+                        .frame(height: 26)
+
+                        // Device status rows
+                        DeviceStatusRow(
+                            source: .camera,
+                            isCalibrated: cameraCalibrated,
+                            isConnected: !availableCameras.isEmpty,
+                            isPreferred: preferredSource == .camera,
+                            isActive: activeSource == .camera && appDelegate.state.isActive,
+                            cameraDropdown: availableCameras.isEmpty ? nil : AnyView(
+                                Picker("", selection: $selectedCameraID) {
+                                    ForEach(availableCameras, id: \.id) { camera in
+                                        Text(camera.name).tag(camera.id)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(maxWidth: 140)
+                                .onChange(of: selectedCameraID) { newValue in
+                                    if newValue != appDelegate.selectedCameraID {
+                                        appDelegate.selectedCameraID = newValue
+                                        appDelegate.saveSettings()
+                                        appDelegate.restartCamera()
+                                    }
+                                }
+                            ),
+                            onCalibrate: {
+                                appDelegate.startCalibrationForSource(.camera)
+                            }
+                        )
+
+                        DeviceStatusRow(
+                            source: .airpods,
+                            isCalibrated: airPodsCalibrated,
+                            isConnected: airPodsAvailable,
+                            isPreferred: preferredSource == .airpods,
+                            isActive: activeSource == .airpods && appDelegate.state.isActive,
+                            onCalibrate: {
+                                appDelegate.startCalibrationForSource(.airpods)
+                            }
+                        )
+
+                        // Warning banner when preferred device not calibrated
+                        if (preferredSource == .camera && !cameraCalibrated)
+                            || (preferredSource == .airpods && !airPodsCalibrated)
+                        {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.orange)
+                                Text(L("settings.preferredNeedsCalibration"))
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(Color.orange.opacity(0.08))
+                            )
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
             }
-            .frame(height: 26)
             .padding(.vertical, 10)
 
             // Profile Section Card
@@ -938,6 +1147,18 @@ struct SettingsView: View {
         } message: {
             Text(L("settings.profile.deleteMessage"))
         }
+        .onAppear {
+            appDelegate.onCalibrationComplete = {
+                cameraCalibrated = appDelegate.cameraCalibration?.isValid ?? false
+                airPodsCalibrated = appDelegate.airPodsCalibration?.isValid ?? false
+                activeSource = appDelegate.activeTrackingSource
+            }
+            appDelegate.onActiveSourceChanged = {
+                activeSource = appDelegate.activeTrackingSource
+            }
+        }
+        // Cleanup happens in SettingsWindowController.windowWillClose
+        // (not onDisappear, which fires when calibration window covers this view)
     }
 
     private func syncProfileSettings() {

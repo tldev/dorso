@@ -37,23 +37,68 @@ struct TrackingFeature: Reducer {
         case openPrivacySettings
         case showCameraCalibrationRetryAlert(message: String?)
         case retryCalibration
+        case startCalibrationForSource(TrackingSource)
     }
 
     struct State: Equatable {
         var appState: AppState = .disabled
 
-        // Manual mode remains the runtime policy during migration.
         var trackingMode: TrackingMode = .manual
         var manualSource: TrackingSource = .camera
         var preferredSource: TrackingSource = .camera
-        var autoReturnEnabled: Bool = false
+        var autoReturnEnabled: Bool = true
+        var activeSource: TrackingSource = .camera
+
+        var cameraReadiness = TrackingSourceReadiness()
+        var airPodsReadiness = TrackingSourceReadiness()
 
         var stateBeforeLock: AppState?
         var monitoringState = PostureMonitoringState()
         var postureConfig = PostureConfig()
         var lastPostureReadingTime: Date?
 
-        var activeSource: TrackingSource { manualSource }
+        init(
+            appState: AppState = .disabled,
+            trackingMode: TrackingMode = .manual,
+            manualSource: TrackingSource = .camera,
+            preferredSource: TrackingSource = .camera,
+            autoReturnEnabled: Bool = true,
+            activeSource: TrackingSource? = nil,
+            cameraReadiness: TrackingSourceReadiness = TrackingSourceReadiness(),
+            airPodsReadiness: TrackingSourceReadiness = TrackingSourceReadiness(),
+            stateBeforeLock: AppState? = nil,
+            monitoringState: PostureMonitoringState = PostureMonitoringState(),
+            postureConfig: PostureConfig = PostureConfig(),
+            lastPostureReadingTime: Date? = nil
+        ) {
+            self.appState = appState
+            self.trackingMode = trackingMode
+            self.manualSource = manualSource
+            self.preferredSource = preferredSource
+            self.autoReturnEnabled = autoReturnEnabled
+            self.activeSource = activeSource ?? manualSource
+            self.cameraReadiness = cameraReadiness
+            self.airPodsReadiness = airPodsReadiness
+            self.stateBeforeLock = stateBeforeLock
+            self.monitoringState = monitoringState
+            self.postureConfig = postureConfig
+            self.lastPostureReadingTime = lastPostureReadingTime
+        }
+
+        func readiness(for source: TrackingSource) -> TrackingSourceReadiness {
+            switch source {
+            case .camera: return cameraReadiness
+            case .airpods: return airPodsReadiness
+            }
+        }
+
+        var fallbackSource: TrackingSource {
+            preferredSource == .camera ? .airpods : .camera
+        }
+
+        var isOnFallback: Bool {
+            trackingMode == .automatic && activeSource != preferredSource
+        }
     }
 
     enum Action: Equatable {
@@ -101,7 +146,7 @@ struct TrackingFeature: Reducer {
         case calibrationStartFailed(errorMessage: String?)
         case runtimeDetectorStartFailed(trackingSource: TrackingSource)
         case calibrationCancelled(isCalibrated: Bool)
-        case calibrationCompleted
+        case calibrationCompleted(source: TrackingSource)
         case screenLocked
         case screenUnlocked
         case displayConfigurationChanged(
@@ -114,6 +159,7 @@ struct TrackingFeature: Reducer {
         )
         case cameraSelectionChanged
         case switchTrackingSource(TrackingSource, isNewSourceCalibrated: Bool)
+        case sourceReadinessChanged(source: TrackingSource, readiness: TrackingSourceReadiness)
     }
 
     @Dependency(\.trackingRuntime) var trackingRuntime
@@ -148,6 +194,7 @@ struct TrackingFeature: Reducer {
 
             case let .toggleEnabled(trackingSource, isCalibrated, detectorAvailable):
                 state.manualSource = trackingSource
+                state.activeSource = trackingSource
                 if state.appState == .disabled {
                     state.appState = PostureEngine.stateWhenEnabling(
                         isCalibrated: isCalibrated,
@@ -166,14 +213,36 @@ struct TrackingFeature: Reducer {
 
             case .setTrackingMode(let mode):
                 state.trackingMode = mode
+                if mode == .automatic {
+                    return finish(resolveAutomaticSource(&state))
+                }
+                // Switching back to manual: activeSource follows manualSource
+                let previousSource = state.activeSource
+                state.activeSource = state.manualSource
+                let sourceChanged = state.activeSource != previousSource
+                if sourceChanged && state.appState == .monitoring {
+                    return finish(run { runtime in
+                        await runtime.beginMonitoringSession()
+                    })
+                }
                 return finish()
 
             case .setManualSource(let source):
+                let previousSource = state.activeSource
                 state.manualSource = source
+                state.activeSource = source
+                if state.activeSource != previousSource && state.appState == .monitoring {
+                    return finish(run { runtime in
+                        await runtime.beginMonitoringSession()
+                    })
+                }
                 return finish()
 
             case .setPreferredSource(let source):
                 state.preferredSource = source
+                if state.trackingMode == .automatic {
+                    return finish(resolveAutomaticSource(&state))
+                }
                 return finish()
 
             case .setAutoReturnEnabled(let enabled):
@@ -288,6 +357,7 @@ struct TrackingFeature: Reducer {
 
             case let .startMonitoringRequested(isMarketingMode, trackingSource, isCalibrated, isConnected):
                 state.manualSource = trackingSource
+                state.activeSource = trackingSource
                 state.lastPostureReadingTime = nil
                 let result = PostureEngine.stateWhenMonitoringStarts(
                     isMarketingMode: isMarketingMode,
@@ -304,6 +374,10 @@ struct TrackingFeature: Reducer {
                 return finish()
 
             case .airPodsConnectionChanged(let isConnected):
+                state.airPodsReadiness.connected = isConnected
+                if state.trackingMode == .automatic, state.appState != .disabled {
+                    return finish(resolveAutomaticSource(&state))
+                }
                 let result = PostureEngine.stateWhenAirPodsConnectionChanges(
                     currentState: state.appState,
                     trackingSource: state.activeSource,
@@ -318,6 +392,13 @@ struct TrackingFeature: Reducer {
                 return finish()
 
             case .cameraConnected(let hasMatchingProfile, let matchingProfile):
+                state.cameraReadiness.connected = true
+                if hasMatchingProfile {
+                    state.cameraReadiness.calibrated = true
+                }
+                if state.trackingMode == .automatic, state.appState != .disabled {
+                    return finish(resolveAutomaticSource(&state))
+                }
                 let previousState = state.appState
                 let result = PostureEngine.stateWhenCameraConnects(
                     currentState: state.appState,
@@ -347,6 +428,12 @@ struct TrackingFeature: Reducer {
                 let fallbackCameraID,
                 let fallbackProfile
             ):
+                if disconnectedCameraIsSelected {
+                    state.cameraReadiness.connected = hasFallbackCamera
+                }
+                if state.trackingMode == .automatic, state.appState != .disabled {
+                    return finish(resolveAutomaticSource(&state))
+                }
                 let result = PostureEngine.stateWhenCameraDisconnects(
                     currentState: state.appState,
                     trackingSource: state.activeSource,
@@ -405,6 +492,7 @@ struct TrackingFeature: Reducer {
 
             case .runtimeDetectorStartFailed(let trackingSource):
                 state.manualSource = trackingSource
+                state.activeSource = trackingSource
                 state.appState = PostureEngine.unavailableState(for: trackingSource)
                 return finish()
 
@@ -419,9 +507,17 @@ struct TrackingFeature: Reducer {
                 }
                 return finish()
 
-            case .calibrationCompleted:
+            case .calibrationCompleted(let source):
                 state.monitoringState.reset()
                 state.lastPostureReadingTime = nil
+                // Update calibrated flag for the source that was just calibrated
+                switch source {
+                case .camera: state.cameraReadiness.calibrated = true
+                case .airpods: state.airPodsReadiness.calibrated = true
+                }
+                if state.trackingMode == .automatic {
+                    return finish(resolveAutomaticSource(&state))
+                }
                 state.appState = PostureEngine.stateWhenCalibrationCompletes()
                 return finish(run { runtime in
                     await runtime.startMonitoring()
@@ -505,6 +601,7 @@ struct TrackingFeature: Reducer {
                 )
 
                 state.manualSource = result.newSource
+                state.activeSource = result.newSource
                 state.appState = result.newState
 
                 guard result.didSwitchSource || result.shouldStartMonitoring else {
@@ -520,7 +617,61 @@ struct TrackingFeature: Reducer {
                         await runtime.startMonitoring()
                     }
                 })
+
+            case .sourceReadinessChanged(let source, let readiness):
+                switch source {
+                case .camera: state.cameraReadiness = readiness
+                case .airpods: state.airPodsReadiness = readiness
+                }
+                if state.trackingMode == .automatic, state.appState != .disabled {
+                    return finish(resolveAutomaticSource(&state))
+                }
+                return finish()
             }
+        }
+    }
+
+    // MARK: - Automatic Mode Source Resolution
+
+    private func resolveAutomaticSource(_ state: inout State) -> Effect<Action> {
+        let previousSource = state.activeSource
+        let previousAppState = state.appState
+        let prefReadiness = state.readiness(for: state.preferredSource)
+        let fbReadiness = state.readiness(for: state.fallbackSource)
+        let result = PostureEngine.resolveActiveSource(
+            preferred: state.preferredSource,
+            currentActive: state.activeSource,
+            currentState: state.appState,
+            preferredReadiness: prefReadiness,
+            fallbackReadiness: fbReadiness,
+            autoReturn: state.autoReturnEnabled
+        )
+
+        state.activeSource = result.activeSource ?? previousSource
+        state.appState = result.newState
+
+        let sourceChanged = state.activeSource != previousSource
+        let needsBeginMonitoring = result.newState == .monitoring
+            && (sourceChanged || previousAppState != .monitoring)
+        let needsStopOld = sourceChanged && previousAppState.isActive
+
+        guard sourceChanged || needsBeginMonitoring || result.newState != previousAppState else {
+            return .none
+        }
+
+        // Don't call startMonitoring() here — it sends .startMonitoringRequested which
+        // overwrites activeSource with manualSource, causing a loop. The detector switch
+        // is handled synchronously by applyTrackingStoreTransition via syncDetectorToState.
+        // We call beginMonitoringSession to set up calibration data on the new detector.
+        return run { runtime in
+            if needsStopOld {
+                await runtime.stopDetector(previousSource)
+            }
+            if needsBeginMonitoring {
+                await runtime.beginMonitoringSession()
+            }
+            await runtime.persistTrackingSource()
+            await runtime.syncUI()
         }
     }
 }
@@ -543,6 +694,7 @@ struct TrackingRuntimeClient {
     var openPrivacySettings: @Sendable () async -> Void
     var showCameraCalibrationRetryAlert: @Sendable (String?) async -> Void
     var retryCalibration: @Sendable () async -> Void
+    var startCalibrationForSource: @Sendable (TrackingSource) async -> Void
 }
 
 extension TrackingRuntimeClient {
@@ -563,7 +715,8 @@ extension TrackingRuntimeClient {
         showCalibrationPermissionDeniedAlert: {},
         openPrivacySettings: {},
         showCameraCalibrationRetryAlert: { _ in },
-        retryCalibration: {}
+        retryCalibration: {},
+        startCalibrationForSource: { _ in }
     )
 }
 

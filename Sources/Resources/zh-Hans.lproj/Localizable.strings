@@ -108,10 +108,19 @@
 
 "settings.title" = "设置";
 "settings.tracking" = "追踪";
+"settings.tracking.help" = "手动使用单一来源。自动根据可用性在摄像头和AirPods之间切换，优先使用您选择的来源。";
 "settings.noCameras" = "无摄像头";
 "settings.connected" = "已连接";
 "settings.notConnected" = "未连接";
 "settings.recalibrate" = "重新校准";
+"settings.mode.manual" = "手动";
+"settings.mode.automatic" = "自动";
+"settings.preferred" = "首选";
+"settings.active" = "活跃";
+"settings.calibrated" = "已校准";
+"settings.notCalibrated" = "未校准";
+"settings.preferredNeedsCalibration" = "首选设备需要校准";
+"settings.calibratePreferred" = "校准";
 "settings.profile" = "配置文件";
 "settings.profile.help" = "为不同场景保存不同的配置。切换配置文件即可立即应用所有设置。";
 "settings.profile.new" = "新建";

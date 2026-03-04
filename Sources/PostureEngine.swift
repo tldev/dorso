@@ -112,8 +112,68 @@ struct InitialSetupTransitionResult: Equatable {
     let shouldShowOnboarding: Bool
 }
 
+/// Result of automatic source resolution
+struct SourceResolutionResult: Equatable {
+    /// The source to activate, or nil to keep current
+    let activeSource: TrackingSource?
+    let newState: AppState
+    let shouldStartMonitoring: Bool
+}
+
 /// Pure logic engine for posture monitoring - no side effects
 struct PostureEngine {
+
+    // MARK: - Automatic Source Resolution
+
+    /// Resolves which source should be active in automatic mode.
+    /// "Ready" means calibrated AND connected.
+    static func resolveActiveSource(
+        preferred: TrackingSource,
+        currentActive: TrackingSource,
+        currentState: AppState,
+        preferredReadiness: TrackingSourceReadiness,
+        fallbackReadiness: TrackingSourceReadiness,
+        autoReturn: Bool
+    ) -> SourceResolutionResult {
+        let preferredReady = preferredReadiness.calibrated && preferredReadiness.connected
+        let fallbackReady = fallbackReadiness.calibrated && fallbackReadiness.connected
+
+        // Preferred is ready — use it
+        if preferredReady {
+            let shouldStart = currentActive != preferred || !currentState.isActive
+            return SourceResolutionResult(
+                activeSource: preferred,
+                newState: .monitoring,
+                shouldStartMonitoring: shouldStart
+            )
+        }
+
+        // Preferred not ready, fallback is ready — use fallback
+        if fallbackReady {
+            let shouldStart = currentActive != preferred.other || !currentState.isActive
+            return SourceResolutionResult(
+                activeSource: preferred.other,
+                newState: .monitoring,
+                shouldStartMonitoring: shouldStart
+            )
+        }
+
+        // Preferred connected but not calibrated, fallback not ready
+        if preferredReadiness.connected && !preferredReadiness.calibrated {
+            return SourceResolutionResult(
+                activeSource: nil,
+                newState: .paused(.noProfile),
+                shouldStartMonitoring: false
+            )
+        }
+
+        // Neither ready — pause with preferred's unavail reason
+        return SourceResolutionResult(
+            activeSource: nil,
+            newState: unavailableState(for: preferred),
+            shouldStartMonitoring: false
+        )
+    }
 
     // MARK: - Posture Reading Processing
 

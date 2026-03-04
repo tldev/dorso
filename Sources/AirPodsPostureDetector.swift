@@ -170,8 +170,11 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
 
     // MARK: - Connection State (Protocol)
 
-    /// Whether AirPods are currently in ears and receiving motion data
-    var isConnected: Bool { isReceivingMotionData }
+    /// Whether compatible AirPods are paired (available for use)
+    var isConnected: Bool {
+        guard #available(macOS 14.0, *) else { return false }
+        return CMHeadphoneMotionManager().isDeviceMotionAvailable
+    }
 
     /// Callback when connection state changes (AirPods put in or removed from ears)
     var onConnectionStateChange: ((Bool) -> Void)? {
@@ -275,6 +278,31 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
         isActive = false
         isReceivingMotionData = false
         isMonitoring = false
+    }
+
+    // MARK: - Connection Monitoring (for automatic mode fallback)
+
+    /// Start monitoring AirPods connection state without full motion tracking.
+    /// Used in automatic mode to detect when AirPods are put back in.
+    func startConnectionMonitoring() {
+        guard #available(macOS 14.0, *) else { return }
+
+        if motionManager == nil {
+            motionManager = CMHeadphoneMotionManager()
+        }
+        guard let manager = motionManager else { return }
+        manager.delegate = self
+        manager.startConnectionStatusUpdates()
+        os_log(.info, log: log, "Started AirPods connection monitoring (no motion)")
+    }
+
+    /// Stop connection-only monitoring.
+    func stopConnectionMonitoring() {
+        guard #available(macOS 14.0, *) else { return }
+        guard !isActive else { return } // Don't stop if full detector is running
+        motionManager?.stopConnectionStatusUpdates()
+        motionManager?.delegate = nil
+        os_log(.info, log: log, "Stopped AirPods connection monitoring")
     }
 
     // MARK: - Calibration

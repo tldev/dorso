@@ -25,6 +25,9 @@ extension AppDelegate {
             defaults.set(cameraID, forKey: SettingsKeys.lastCameraID)
         }
         defaults.set(trackingSource.rawValue, forKey: SettingsKeys.trackingSource)
+        defaults.set(trackingStore.withState { $0.trackingMode.rawValue }, forKey: SettingsKeys.trackingMode)
+        defaults.set(trackingStore.withState { $0.preferredSource.rawValue }, forKey: SettingsKeys.preferredSource)
+        defaults.set(trackingStore.withState { $0.autoReturnEnabled }, forKey: SettingsKeys.autoReturnEnabled)
         if let airPodsCalibration = airPodsCalibration,
            let data = try? JSONEncoder().encode(airPodsCalibration) {
             defaults.set(data, forKey: SettingsKeys.airPodsCalibration)
@@ -45,6 +48,17 @@ extension AppDelegate {
         if let sourceString = defaults.string(forKey: SettingsKeys.trackingSource),
            let source = TrackingSource(rawValue: sourceString) {
             trackingSource = source
+        }
+        if let modeString = defaults.string(forKey: SettingsKeys.trackingMode),
+           let mode = TrackingMode(rawValue: modeString) {
+            trackingStore.send(.setTrackingMode(mode))
+        }
+        if let prefString = defaults.string(forKey: SettingsKeys.preferredSource),
+           let pref = TrackingSource(rawValue: prefString) {
+            trackingStore.send(.setPreferredSource(pref))
+        }
+        if defaults.object(forKey: SettingsKeys.autoReturnEnabled) != nil {
+            trackingStore.send(.setAutoReturnEnabled(defaults.bool(forKey: SettingsKeys.autoReturnEnabled)))
         }
         if let data = defaults.data(forKey: SettingsKeys.airPodsCalibration),
            let calibration = try? JSONDecoder().decode(AirPodsCalibrationData.self, from: data) {

@@ -50,7 +50,10 @@ private extension TrackingRuntimeClient {
             showCameraCalibrationRetryAlert: { message in
                 await recorder.record(.showCameraCalibrationRetryAlert(message: message))
             },
-            retryCalibration: { await recorder.record(.retryCalibration) }
+            retryCalibration: { await recorder.record(.retryCalibration) },
+            startCalibrationForSource: { source in
+                await recorder.record(.startCalibrationForSource(source))
+            }
         )
     }
 }
@@ -475,6 +478,7 @@ final class TrackingFeatureTests: XCTestCase {
             )
         ) {
             $0.appState = .paused(.noProfile)
+            $0.cameraReadiness.connected = true
         }
         await store.finish()
         await assertIntents([.switchCamera(.fallback())], recorder: recorder)
@@ -496,6 +500,7 @@ final class TrackingFeatureTests: XCTestCase {
         )
 
         await store.send(.airPodsConnectionChanged(true)) {
+            $0.airPodsReadiness.connected = true
             $0.appState = .monitoring
         }
         await store.finish()
@@ -745,7 +750,8 @@ final class TrackingFeatureTests: XCTestCase {
             recorder: recorder
         )
 
-        await store.send(.calibrationCompleted) {
+        await store.send(.calibrationCompleted(source: .airpods)) {
+            $0.airPodsReadiness.calibrated = true
             $0.appState = .monitoring
         }
         await store.finish()
@@ -768,6 +774,8 @@ final class TrackingFeatureTests: XCTestCase {
         )
 
         await store.send(.cameraConnected(hasMatchingProfile: true)) {
+            $0.cameraReadiness.connected = true
+            $0.cameraReadiness.calibrated = true
             $0.appState = .monitoring
         }
         await store.finish()
@@ -926,6 +934,7 @@ final class TrackingFeatureTests: XCTestCase {
         await store.send(.switchTrackingSource(.airpods, isNewSourceCalibrated: false)) {
             $0.appState = .paused(.noProfile)
             $0.manualSource = .airpods
+            $0.activeSource = .airpods
         }
         await store.finish()
         await assertIntents(
@@ -955,6 +964,7 @@ final class TrackingFeatureTests: XCTestCase {
         await store.send(.switchTrackingSource(.airpods, isNewSourceCalibrated: true)) {
             $0.appState = .monitoring
             $0.manualSource = .airpods
+            $0.activeSource = .airpods
         }
         await store.finish()
         await assertIntents(
@@ -983,5 +993,461 @@ final class TrackingFeatureTests: XCTestCase {
         }
 
         await store.send(.switchTrackingSource(.camera, isNewSourceCalibrated: true))
+    }
+
+    // MARK: - Automatic Mode Tests
+
+    private func readyReadiness() -> TrackingSourceReadiness {
+        TrackingSourceReadiness(permissionGranted: true, connected: true, calibrated: true, available: true)
+    }
+
+    private func connectedNotCalibrated() -> TrackingSourceReadiness {
+        TrackingSourceReadiness(permissionGranted: true, connected: true, calibrated: false, available: true)
+    }
+
+    private func disconnectedCalibrated() -> TrackingSourceReadiness {
+        TrackingSourceReadiness(permissionGranted: true, connected: false, calibrated: true, available: true)
+    }
+
+    // MARK: setTrackingMode(.automatic)
+
+    @MainActor
+    func testSetTrackingModeAutomaticWithPreferredReadySwitchesToPreferred() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .manual,
+                manualSource: .camera,
+                preferredSource: .airpods,
+                activeSource: .camera,
+                cameraReadiness: readyReadiness(),
+                airPodsReadiness: readyReadiness()
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.setTrackingMode(.automatic)) {
+            $0.trackingMode = .automatic
+            $0.activeSource = .airpods
+        }
+        await store.finish()
+        await assertIntents(
+            [.stopDetector(.camera), .beginMonitoringSession, .persistTrackingSource, .syncUI],
+            recorder: recorder
+        )
+    }
+
+    @MainActor
+    func testSetTrackingModeAutomaticWithPreferredNotReadyFallsBack() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .manual,
+                manualSource: .camera,
+                preferredSource: .airpods,
+                activeSource: .camera,
+                cameraReadiness: readyReadiness(),
+                airPodsReadiness: disconnectedCalibrated()
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.setTrackingMode(.automatic)) {
+            $0.trackingMode = .automatic
+            // Camera stays active as fallback, no source change
+        }
+        await store.finish()
+        await assertIntents([], recorder: recorder)
+    }
+
+    @MainActor
+    func testSetTrackingModeAutomaticWithNeitherReadyPauses() async {
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .manual,
+                manualSource: .camera,
+                preferredSource: .airpods,
+                activeSource: .camera,
+                cameraReadiness: disconnectedCalibrated(),
+                airPodsReadiness: disconnectedCalibrated()
+            )
+        )
+
+        await store.send(.setTrackingMode(.automatic)) {
+            $0.trackingMode = .automatic
+            $0.appState = .paused(.airPodsRemoved)
+        }
+    }
+
+    // MARK: setTrackingMode(.manual) from automatic
+
+    @MainActor
+    func testSetTrackingModeManualFromAutomaticSwitchesSourceAndBeginsMonitoring() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .automatic,
+                manualSource: .camera,
+                preferredSource: .airpods,
+                activeSource: .airpods,
+                cameraReadiness: readyReadiness(),
+                airPodsReadiness: readyReadiness()
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.setTrackingMode(.manual)) {
+            $0.trackingMode = .manual
+            $0.activeSource = .camera
+        }
+        await store.finish()
+        await assertIntents([.beginMonitoringSession], recorder: recorder)
+    }
+
+    @MainActor
+    func testSetTrackingModeManualSameSourceNoBeginMonitoring() async {
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .automatic,
+                manualSource: .camera,
+                preferredSource: .camera,
+                activeSource: .camera,
+                cameraReadiness: readyReadiness(),
+                airPodsReadiness: readyReadiness()
+            )
+        )
+
+        await store.send(.setTrackingMode(.manual)) {
+            $0.trackingMode = .manual
+        }
+    }
+
+    // MARK: setPreferredSource
+
+    @MainActor
+    func testSetPreferredSourceSwitchesActiveInAutomatic() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .automatic,
+                manualSource: .camera,
+                preferredSource: .airpods,
+                activeSource: .airpods,
+                cameraReadiness: readyReadiness(),
+                airPodsReadiness: readyReadiness()
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.setPreferredSource(.camera)) {
+            $0.preferredSource = .camera
+            $0.activeSource = .camera
+        }
+        await store.finish()
+        await assertIntents(
+            [.stopDetector(.airpods), .beginMonitoringSession, .persistTrackingSource, .syncUI],
+            recorder: recorder
+        )
+    }
+
+    @MainActor
+    func testSetPreferredSourceInManualModeNoResolve() async {
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .manual,
+                manualSource: .camera,
+                preferredSource: .camera,
+                activeSource: .camera,
+                cameraReadiness: readyReadiness(),
+                airPodsReadiness: readyReadiness()
+            )
+        )
+
+        await store.send(.setPreferredSource(.airpods)) {
+            $0.preferredSource = .airpods
+        }
+    }
+
+    // MARK: setManualSource
+
+    @MainActor
+    func testSetManualSourceWhileMonitoringBeginsNewSession() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .manual,
+                manualSource: .camera,
+                activeSource: .camera
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.setManualSource(.airpods)) {
+            $0.manualSource = .airpods
+            $0.activeSource = .airpods
+        }
+        await store.finish()
+        await assertIntents([.beginMonitoringSession], recorder: recorder)
+    }
+
+    @MainActor
+    func testSetManualSourceSameSourceNoEffect() async {
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .manual,
+                manualSource: .camera,
+                activeSource: .camera
+            )
+        )
+
+        await store.send(.setManualSource(.camera))
+    }
+
+    @MainActor
+    func testSetManualSourceWhileNotMonitoringNoBeginSession() async {
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .paused(.noProfile),
+                trackingMode: .manual,
+                manualSource: .camera,
+                activeSource: .camera
+            )
+        )
+
+        await store.send(.setManualSource(.airpods)) {
+            $0.manualSource = .airpods
+            $0.activeSource = .airpods
+        }
+    }
+
+    // MARK: calibrationCompleted in automatic mode
+
+    @MainActor
+    func testCalibrationCompletedInAutomaticModeResolvesAndBeginsMonitoring() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .calibrating,
+                trackingMode: .automatic,
+                manualSource: .camera,
+                preferredSource: .camera,
+                activeSource: .camera,
+                cameraReadiness: connectedNotCalibrated(),
+                airPodsReadiness: readyReadiness()
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.calibrationCompleted(source: .camera)) {
+            $0.cameraReadiness.calibrated = true
+            $0.activeSource = .camera
+            $0.appState = .monitoring
+        }
+        await store.finish()
+        await assertIntents(
+            [.beginMonitoringSession, .persistTrackingSource, .syncUI],
+            recorder: recorder
+        )
+    }
+
+    @MainActor
+    func testCalibrationCompletedForFallbackInAutomaticAutoReturnsToPreferred() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .calibrating,
+                trackingMode: .automatic,
+                manualSource: .camera,
+                preferredSource: .airpods,
+                activeSource: .camera,
+                cameraReadiness: readyReadiness(),
+                airPodsReadiness: connectedNotCalibrated()
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.calibrationCompleted(source: .airpods)) {
+            $0.airPodsReadiness.calibrated = true
+            $0.activeSource = .airpods
+            $0.appState = .monitoring
+        }
+        await store.finish()
+        await assertIntents(
+            [.stopDetector(.camera), .beginMonitoringSession, .persistTrackingSource, .syncUI],
+            recorder: recorder
+        )
+    }
+
+    // MARK: Auto-return via airPodsConnectionChanged
+
+    @MainActor
+    func testAirPodsReconnectInAutomaticModeAutoReturnsToPreferred() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .automatic,
+                manualSource: .camera,
+                preferredSource: .airpods,
+                activeSource: .camera,
+                cameraReadiness: readyReadiness(),
+                airPodsReadiness: disconnectedCalibrated()
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.airPodsConnectionChanged(true)) {
+            $0.airPodsReadiness.connected = true
+            $0.activeSource = .airpods
+        }
+        await store.finish()
+        await assertIntents(
+            [.stopDetector(.camera), .beginMonitoringSession, .persistTrackingSource, .syncUI],
+            recorder: recorder
+        )
+    }
+
+    @MainActor
+    func testAirPodsDisconnectInAutomaticModeFallsBackToCamera() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .automatic,
+                manualSource: .camera,
+                preferredSource: .airpods,
+                activeSource: .airpods,
+                cameraReadiness: readyReadiness(),
+                airPodsReadiness: readyReadiness()
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.airPodsConnectionChanged(false)) {
+            $0.airPodsReadiness.connected = false
+            $0.activeSource = .camera
+        }
+        await store.finish()
+        await assertIntents(
+            [.stopDetector(.airpods), .beginMonitoringSession, .persistTrackingSource, .syncUI],
+            recorder: recorder
+        )
+    }
+
+    // MARK: sourceReadinessChanged
+
+    @MainActor
+    func testSourceReadinessChangedInAutomaticModeTriggersResolve() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .paused(.airPodsRemoved),
+                trackingMode: .automatic,
+                manualSource: .camera,
+                preferredSource: .airpods,
+                activeSource: .camera,
+                cameraReadiness: readyReadiness(),
+                airPodsReadiness: disconnectedCalibrated()
+            ),
+            recorder: recorder
+        )
+
+        let ready = readyReadiness()
+        await store.send(.sourceReadinessChanged(source: .airpods, readiness: ready)) {
+            $0.airPodsReadiness = ready
+            $0.activeSource = .airpods
+            $0.appState = .monitoring
+        }
+        await store.finish()
+        // No stopDetector because previous state was paused (detector wasn't running)
+        await assertIntents(
+            [.beginMonitoringSession, .persistTrackingSource, .syncUI],
+            recorder: recorder
+        )
+    }
+
+    @MainActor
+    func testSourceReadinessChangedInManualModeNoResolve() async {
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                trackingMode: .manual,
+                manualSource: .camera,
+                activeSource: .camera,
+                cameraReadiness: readyReadiness()
+            )
+        )
+
+        let ready = readyReadiness()
+        await store.send(.sourceReadinessChanged(source: .airpods, readiness: ready)) {
+            $0.airPodsReadiness = ready
+        }
+    }
+
+    // MARK: PostureEngine.resolveActiveSource
+
+    @MainActor
+    func testResolveActiveSourcePreferredReadyUsesPreferred() {
+        let result = PostureEngine.resolveActiveSource(
+            preferred: .airpods,
+            currentActive: .camera,
+            currentState: .monitoring,
+            preferredReadiness: readyReadiness(),
+            fallbackReadiness: readyReadiness(),
+            autoReturn: true
+        )
+        XCTAssertEqual(result.activeSource, .airpods)
+        XCTAssertEqual(result.newState, .monitoring)
+    }
+
+    @MainActor
+    func testResolveActiveSourcePreferredNotReadyUsesFallback() {
+        let result = PostureEngine.resolveActiveSource(
+            preferred: .airpods,
+            currentActive: .camera,
+            currentState: .monitoring,
+            preferredReadiness: disconnectedCalibrated(),
+            fallbackReadiness: readyReadiness(),
+            autoReturn: true
+        )
+        XCTAssertEqual(result.activeSource, .camera)
+        XCTAssertEqual(result.newState, .monitoring)
+    }
+
+    @MainActor
+    func testResolveActiveSourceNeitherReadyPauses() {
+        let result = PostureEngine.resolveActiveSource(
+            preferred: .airpods,
+            currentActive: .camera,
+            currentState: .monitoring,
+            preferredReadiness: disconnectedCalibrated(),
+            fallbackReadiness: disconnectedCalibrated(),
+            autoReturn: true
+        )
+        XCTAssertNil(result.activeSource)
+        XCTAssertEqual(result.newState, .paused(.airPodsRemoved))
+    }
+
+    @MainActor
+    func testResolveActiveSourcePreferredConnectedNotCalibratedPausesNoProfile() {
+        let result = PostureEngine.resolveActiveSource(
+            preferred: .airpods,
+            currentActive: .camera,
+            currentState: .monitoring,
+            preferredReadiness: connectedNotCalibrated(),
+            fallbackReadiness: TrackingSourceReadiness(),
+            autoReturn: true
+        )
+        XCTAssertNil(result.activeSource)
+        XCTAssertEqual(result.newState, .paused(.noProfile))
     }
 }

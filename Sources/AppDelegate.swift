@@ -75,15 +75,35 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     var activeDetector: PostureDetector {
-        trackingSource == .camera ? cameraDetector : airPodsDetector
+        activeTrackingSource == .camera ? cameraDetector : airPodsDetector
+    }
+
+    var activeTrackingSource: TrackingSource {
+        trackingStore.withState { $0.activeSource }
+    }
+
+    var trackingMode: TrackingMode {
+        get { trackingStore.withState { $0.trackingMode } }
+        set {
+            let oldState = trackingStore.withState { $0 }
+            trackingStore.send(.setTrackingMode(newValue))
+            let newState = trackingStore.withState { $0 }
+            applyTrackingStoreTransition(from: oldState, to: newState)
+        }
     }
 
     // Calibration data storage
     var cameraCalibration: CameraCalibrationData?
     var airPodsCalibration: AirPodsCalibrationData?
+    /// Which source is currently being calibrated (nil when not calibrating)
+    var calibratingSource: TrackingSource?
+    /// Called when calibration completes successfully (for UI refresh)
+    var onCalibrationComplete: (() -> Void)?
+    /// Called when active source changes (for UI refresh)
+    var onActiveSourceChanged: (() -> Void)?
 
     var currentCalibration: CalibrationData? {
-        trackingSource == .camera ? cameraCalibration : airPodsCalibration
+        activeTrackingSource == .camera ? cameraCalibration : airPodsCalibration
     }
 
     // Legacy camera ID accessor for settings
@@ -177,6 +197,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             }
             dependencies.trackingRuntime.retryCalibration = { [weak self] in
                 await self?.runtimeRetryCalibration()
+            }
+            dependencies.trackingRuntime.startCalibrationForSource = { [weak self] source in
+                await self?.runtimeStartCalibrationForSource(source)
             }
         }
     }()
@@ -490,6 +513,30 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         await trackingCoordinator.setPauseOnTheGoEnabled(isEnabled)
     }
 
+    func setTrackingMode(_ mode: TrackingMode) async {
+        trackingCoordinator.updateSourceReadiness()
+        let oldState = trackingStore.withState { $0 }
+        let storeTask = trackingStore.send(.setTrackingMode(mode))
+        await storeTask.finish()
+        let newState = trackingStore.withState { $0 }
+        applyTrackingStoreTransition(from: oldState, to: newState)
+        saveSettings()
+    }
+
+    func setPreferredSource(_ source: TrackingSource) async {
+        trackingCoordinator.updateSourceReadiness()
+        let oldState = trackingStore.withState { $0 }
+        let storeTask = trackingStore.send(.setPreferredSource(source))
+        await storeTask.finish()
+        let newState = trackingStore.withState { $0 }
+        applyTrackingStoreTransition(from: oldState, to: newState)
+        saveSettings()
+    }
+
+    func startCalibrationForSource(_ source: TrackingSource) {
+        trackingCoordinator.startCalibration(for: source)
+    }
+
     // MARK: - Calibration
 
     func startCalibration() {
@@ -519,7 +566,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func restartCamera() {
-        guard trackingSource == .camera, selectedCameraID != nil else { return }
+        guard activeTrackingSource == .camera, selectedCameraID != nil else { return }
 
         Task { @MainActor in
             await self.applyCameraSelectionTransition()
@@ -635,6 +682,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func runtimeRetryCalibration() async {
         await trackingCoordinator.runtimeRetryCalibration()
+    }
+
+    private func runtimeStartCalibrationForSource(_ source: TrackingSource) async {
+        await trackingCoordinator.runtimeStartCalibrationForSource(source)
     }
 
     private func showCalibrationPermissionDeniedAlert() async {
@@ -766,8 +817,14 @@ extension AppDelegate.TrackingCoordinator {
     ) {
         if applyStateTransition, oldTrackingState.appState != newTrackingState.appState {
             handleStateTransition(from: oldTrackingState.appState, to: newTrackingState.appState)
+        } else if oldTrackingState.activeSource != newTrackingState.activeSource {
+            syncDetectorToState()
+            syncUIToState()
         } else if oldTrackingState.manualSource != newTrackingState.manualSource {
             syncDetectorToState()
+        }
+        if oldTrackingState.activeSource != newTrackingState.activeSource {
+            appDelegate.onActiveSourceChanged?()
         }
     }
 
@@ -813,14 +870,27 @@ extension AppDelegate.TrackingCoordinator {
             return
         }
 
-        let shouldRun = PostureEngine.shouldDetectorRun(for: appDelegate.state, trackingSource: appDelegate.trackingSource)
+        let activeSource = appDelegate.activeTrackingSource
+        let shouldRun = PostureEngine.shouldDetectorRun(for: appDelegate.state, trackingSource: activeSource)
 
         // Always stop the other detector so in-flight starts are cancelled
         // even if that detector has not flipped isActive=true yet.
-        if appDelegate.trackingSource == .camera {
-            appDelegate.airPodsDetector.stop()
+        // But don't stop a detector that's currently being calibrated.
+        let calSource = appDelegate.calibratingSource
+        let isAutomatic = appDelegate.trackingMode == .automatic
+        if activeSource == .camera {
+            if calSource != .airpods {
+                appDelegate.airPodsDetector.stop()
+                // In automatic mode, keep AirPods connection monitoring alive
+                // so we can detect when they're put back in for auto-return.
+                if isAutomatic {
+                    appDelegate.airPodsDetector.startConnectionMonitoring()
+                }
+            }
         } else {
-            appDelegate.cameraDetector.stop()
+            if calSource != .camera { appDelegate.cameraDetector.stop() }
+            // Stop connection-only monitoring since AirPods detector is now active
+            appDelegate.airPodsDetector.stopConnectionMonitoring()
         }
 
         // Start/stop the active detector
@@ -853,12 +923,30 @@ extension AppDelegate.TrackingCoordinator {
             isCalibrated: appDelegate.isCalibrated,
             isCurrentlyAway: appDelegate.isCurrentlyAway,
             isCurrentlySlouching: appDelegate.isCurrentlySlouching,
-            trackingSource: appDelegate.trackingSource
+            trackingSource: appDelegate.activeTrackingSource,
+            isOnFallback: appDelegate.trackingStore.withState { $0.isOnFallback }
         )
 
         appDelegate.menuBarManager.updateStatus(text: uiState.statusText, icon: uiState.icon.menuBarIcon)
         appDelegate.menuBarManager.updateEnabledState(uiState.isEnabled)
         appDelegate.menuBarManager.updateRecalibrateEnabled(uiState.canRecalibrate)
+    }
+
+    func updateSourceReadiness() {
+        let cameraReadiness = TrackingSourceReadiness(
+            permissionGranted: true,
+            connected: !appDelegate.cameraDetector.getAvailableCameras().isEmpty,
+            calibrated: appDelegate.cameraCalibration?.isValid ?? false,
+            available: true
+        )
+        let airPodsReadiness = TrackingSourceReadiness(
+            permissionGranted: true,
+            connected: appDelegate.airPodsDetector.isConnected,
+            calibrated: appDelegate.airPodsCalibration?.isValid ?? false,
+            available: appDelegate.airPodsDetector.isAvailable
+        )
+        appDelegate.trackingStore.send(.sourceReadinessChanged(source: .camera, readiness: cameraReadiness))
+        appDelegate.trackingStore.send(.sourceReadinessChanged(source: .airpods, readiness: airPodsReadiness))
     }
 
     func setupDetectors() {
@@ -935,6 +1023,7 @@ extension AppDelegate.TrackingCoordinator {
         guard !appDelegate.setupComplete else { return }
         appDelegate.setupComplete = true
 
+        updateSourceReadiness()
         let context = appDelegate.makeInitialSetupContext()
         _ = await appDelegate.sendTrackingAction(
             .initialSetupEvaluated(
@@ -995,7 +1084,8 @@ extension AppDelegate.TrackingCoordinator {
         // Prevent multiple concurrent calibrations (use calibrationController as the lock)
         guard appDelegate.calibrationController == nil else { return }
 
-        os_log(.info, log: log, "Starting calibration for %{public}@", appDelegate.trackingSource.displayName)
+        appDelegate.calibratingSource = appDelegate.activeTrackingSource
+        os_log(.info, log: log, "Starting calibration for %{public}@", appDelegate.activeTrackingSource.displayName)
 
         // Request authorization (this shows permission dialog if needed)
         appDelegate.activeDetector.requestAuthorization { [weak self] authorized in
@@ -1003,7 +1093,8 @@ extension AppDelegate.TrackingCoordinator {
                 guard let self else { return }
 
                 if !authorized {
-                    os_log(.error, log: log, "Authorization denied for %{public}@", self.appDelegate.trackingSource.displayName)
+                    os_log(.error, log: log, "Authorization denied for %{public}@", self.appDelegate.activeTrackingSource.displayName)
+                    self.appDelegate.calibratingSource = nil
 
                     await self.appDelegate.sendTrackingAction(
                         .calibrationAuthorizationDenied(isCalibrated: self.appDelegate.isCalibrated)
@@ -1084,13 +1175,17 @@ extension AppDelegate.TrackingCoordinator {
             appDelegate.airPodsCalibration = airPodsCalibration
         }
 
+        let calibratedSource = appDelegate.calibratingSource ?? appDelegate.activeTrackingSource
+        appDelegate.calibratingSource = nil
         appDelegate.saveSettings()
         appDelegate.calibrationController = nil
 
-        await appDelegate.sendTrackingAction(.calibrationCompleted)
+        await appDelegate.sendTrackingAction(.calibrationCompleted(source: calibratedSource))
+        appDelegate.onCalibrationComplete?()
     }
 
     func cancelCalibration() async {
+        appDelegate.calibratingSource = nil
         appDelegate.calibrationController = nil
         await appDelegate.sendTrackingAction(.calibrationCancelled(isCalibrated: appDelegate.isCalibrated))
     }
@@ -1248,6 +1343,107 @@ extension AppDelegate.TrackingCoordinator {
         }
     }
 
+    func runtimeStartCalibrationForSource(_ source: TrackingSource) async {
+        appDelegate.trackingEffectIntentObserver?(.startCalibrationForSource(source))
+        startCalibration(for: source)
+    }
+
+    func startCalibration(for source: TrackingSource) {
+        guard appDelegate.calibrationController == nil else { return }
+
+        appDelegate.calibratingSource = source
+        os_log(.info, log: log, "Starting calibration for %{public}@", source.displayName)
+
+        let detector: PostureDetector = source == .camera ? appDelegate.cameraDetector : appDelegate.airPodsDetector
+        detector.requestAuthorization { [weak self] authorized in
+            Task { @MainActor in
+                guard let self else { return }
+                if !authorized {
+                    await self.appDelegate.sendTrackingAction(
+                        .calibrationAuthorizationDenied(isCalibrated: self.appDelegate.isCalibrated)
+                    )
+                    self.appDelegate.calibratingSource = nil
+                    return
+                }
+                await self.appDelegate.sendTrackingAction(.calibrationAuthorizationGranted)
+                self.startDetectorAndShowCalibration(for: source)
+            }
+        }
+    }
+
+    private func startDetectorAndShowCalibration(for source: TrackingSource) {
+        guard appDelegate.calibrationController == nil else { return }
+
+        let detector: PostureDetector = source == .camera ? appDelegate.cameraDetector : appDelegate.airPodsDetector
+        detector.start { [weak self] success, error in
+            Task { @MainActor in
+                guard let self else { return }
+                if !success {
+                    self.appDelegate.calibratingSource = nil
+                    await self.appDelegate.sendTrackingAction(.calibrationStartFailed(errorMessage: error))
+                    return
+                }
+                self.appDelegate.calibrationController = CalibrationWindowController()
+                self.appDelegate.calibrationController?.start(
+                    detector: detector,
+                    onComplete: { [weak self] values in
+                        Task { @MainActor in
+                            await self?.finishCalibrationForSource(values: values)
+                        }
+                    },
+                    onCancel: { [weak self] in
+                        Task { @MainActor in
+                            await self?.cancelCalibration()
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    func finishCalibrationForSource(values: [CalibrationSample]) async {
+        guard let source = appDelegate.calibratingSource else {
+            await finishCalibration(values: values)
+            return
+        }
+
+        guard values.count >= 4 else {
+            await cancelCalibration()
+            return
+        }
+
+        os_log(.info, log: log, "Finishing calibration for %{public}@ with %d values", source.displayName, values.count)
+
+        let detector: PostureDetector = source == .camera ? appDelegate.cameraDetector : appDelegate.airPodsDetector
+        guard let calibration = detector.createCalibrationData(from: values) else {
+            await cancelCalibration()
+            return
+        }
+
+        if let cameraCalibration = calibration as? CameraCalibrationData {
+            appDelegate.cameraCalibration = cameraCalibration
+            let profile = ProfileData(
+                goodPostureY: cameraCalibration.goodPostureY,
+                badPostureY: cameraCalibration.badPostureY,
+                neutralY: cameraCalibration.neutralY,
+                postureRange: cameraCalibration.postureRange,
+                cameraID: cameraCalibration.cameraID
+            )
+            let configKey = DisplayMonitor.getCurrentConfigKey()
+            appDelegate.saveProfile(forKey: configKey, data: profile)
+        } else if let airPodsCalibration = calibration as? AirPodsCalibrationData {
+            appDelegate.airPodsCalibration = airPodsCalibration
+        }
+
+        let calibratedSource = source
+        appDelegate.calibratingSource = nil
+        appDelegate.saveSettings()
+        appDelegate.calibrationController = nil
+
+        await appDelegate.sendTrackingAction(.calibrationCompleted(source: calibratedSource))
+        appDelegate.onCalibrationComplete?()
+    }
+
     func showCalibrationPermissionDeniedAlert() async {
         if let calibrationPermissionDeniedAlertDecision = appDelegate.calibrationPermissionDeniedAlertDecision {
             if calibrationPermissionDeniedAlertDecision(appDelegate.trackingSource) {
@@ -1256,10 +1452,11 @@ extension AppDelegate.TrackingCoordinator {
             return
         }
 
+        let source = appDelegate.calibratingSource ?? appDelegate.activeTrackingSource
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = L("alert.permissionRequired")
-        alert.informativeText = appDelegate.trackingSource == .airpods
+        alert.informativeText = source == .airpods
             ? L("alert.permissionRequired.airpods")
             : L("alert.permissionRequired.camera")
         alert.addButton(withTitle: L("alert.openSettings"))
@@ -1276,7 +1473,9 @@ extension AppDelegate.TrackingCoordinator {
             return
         }
 
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy") else { return }
+        let source = appDelegate.calibratingSource ?? appDelegate.activeTrackingSource
+        let pane = source == .airpods ? "Privacy_Motion" : "Privacy_Camera"
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(pane)") else { return }
         NSWorkspace.shared.open(url)
     }
 
@@ -1408,7 +1607,9 @@ extension AppDelegate.TrackingCoordinator {
     }
 
     func handleCameraConnected(_ device: AVCaptureDevice) async {
-        guard appDelegate.trackingSource == .camera else { return }
+        guard appDelegate.activeTrackingSource == .camera
+              || appDelegate.trackingStore.withState({ $0.trackingMode }) == .automatic
+        else { return }
         let context = makeCameraConnectedContext(for: device)
 
         await applyCameraConnectedTransition(
@@ -1418,7 +1619,9 @@ extension AppDelegate.TrackingCoordinator {
     }
 
     func handleCameraDisconnected(_ device: AVCaptureDevice) async {
-        guard appDelegate.trackingSource == .camera else { return }
+        guard appDelegate.activeTrackingSource == .camera
+              || appDelegate.trackingStore.withState({ $0.trackingMode }) == .automatic
+        else { return }
         let context = makeCameraDisconnectContext(for: device)
 
         await applyCameraDisconnectedTransition(

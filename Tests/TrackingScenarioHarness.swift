@@ -33,6 +33,9 @@ enum TrackingScenarioEvent: Equatable {
     case cameraSelectionChanged
     case screenLocked
     case screenUnlocked
+    case setTrackingMode(TrackingMode)
+    case setPreferredSource(TrackingSource)
+    case sourceReadinessChanged(source: TrackingSource, readiness: TrackingSourceReadiness)
 }
 
 struct TrackingScenarioSnapshot: Equatable {
@@ -235,6 +238,9 @@ struct TrackingScenarioHarness {
             stateBeforeLock = result.stateBeforeLock
             restartMonitoringRequested = result.shouldRestartMonitoring
             startMonitoringRequested = result.shouldRestartMonitoring
+        case .setTrackingMode, .setPreferredSource, .sourceReadinessChanged:
+            // These are handled by the reducer harness only
+            break
         }
 
         record(

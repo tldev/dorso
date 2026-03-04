@@ -49,7 +49,10 @@ private extension TrackingRuntimeClient {
             showCameraCalibrationRetryAlert: { message in
                 await recorder.append(.showCameraCalibrationRetryAlert(message: message))
             },
-            retryCalibration: { await recorder.append(.retryCalibration) }
+            retryCalibration: { await recorder.append(.retryCalibration) },
+            startCalibrationForSource: { source in
+                await recorder.append(.startCalibrationForSource(source))
+            }
         )
     }
 }
@@ -68,14 +71,20 @@ struct TrackingReducerScenarioHarness {
         trackingSource: TrackingSource,
         isCalibrated: Bool,
         detectorAvailable: Bool,
-        stateBeforeLock: AppState? = nil
+        stateBeforeLock: AppState? = nil,
+        trackingMode: TrackingMode = .manual,
+        preferredSource: TrackingSource = .camera,
+        cameraReadiness: TrackingSourceReadiness = TrackingSourceReadiness(),
+        airPodsReadiness: TrackingSourceReadiness = TrackingSourceReadiness()
     ) {
         reducerState = TrackingFeature.State(
             appState: state,
-            trackingMode: .manual,
+            trackingMode: trackingMode,
             manualSource: trackingSource,
-            preferredSource: .camera,
-            autoReturnEnabled: false,
+            preferredSource: preferredSource,
+            autoReturnEnabled: true,
+            cameraReadiness: cameraReadiness,
+            airPodsReadiness: airPodsReadiness,
             stateBeforeLock: stateBeforeLock
         )
         self.isCalibrated = isCalibrated
@@ -95,6 +104,7 @@ struct TrackingReducerScenarioHarness {
             reducerState.appState = nextState
         case .setTrackingSource(let source):
             reducerState.manualSource = source
+            reducerState.activeSource = source
         case .setCalibrated(let calibrated):
             isCalibrated = calibrated
         case .setDetectorAvailable(let available):
@@ -136,7 +146,7 @@ struct TrackingReducerScenarioHarness {
         case .calibrationCancelled:
             intents = await dispatch(.calibrationCancelled(isCalibrated: isCalibrated))
         case .calibrationCompleted:
-            intents = await dispatch(.calibrationCompleted)
+            intents = await dispatch(.calibrationCompleted(source: reducerState.activeSource))
             isCalibrated = true
         case .airPodsConnectionChanged(let isConnected):
             self.isConnected = isConnected
@@ -177,6 +187,12 @@ struct TrackingReducerScenarioHarness {
             intents = await dispatch(.screenLocked)
         case .screenUnlocked:
             intents = await dispatch(.screenUnlocked)
+        case .setTrackingMode(let mode):
+            intents = await dispatch(.setTrackingMode(mode))
+        case .setPreferredSource(let source):
+            intents = await dispatch(.setPreferredSource(source))
+        case .sourceReadinessChanged(let source, let readiness):
+            intents = await dispatch(.sourceReadinessChanged(source: source, readiness: readiness))
         }
 
         let startMonitoringRequested = intents.contains { intent in

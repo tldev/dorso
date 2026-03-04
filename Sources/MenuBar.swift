@@ -69,16 +69,21 @@ final class MenuBarManager {
 
     // MARK: - Updates
 
+    private var isSetUp: Bool { statusItem != nil }
+
     func updateStatus(text: String, icon: MenuBarIcon) {
+        guard isSetUp else { return }
         statusMenuItem.title = text
         statusItem.button?.image = icon.image
     }
 
     func updateEnabledState(_ enabled: Bool) {
+        guard isSetUp else { return }
         enabledMenuItem.state = enabled ? .on : .off
     }
 
     func updateRecalibrateEnabled(_ enabled: Bool) {
+        guard isSetUp else { return }
         recalibrateMenuItem.isEnabled = enabled
     }
 

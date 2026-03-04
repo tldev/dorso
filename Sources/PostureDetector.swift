@@ -112,6 +112,13 @@ enum TrackingSource: String, Codable, CaseIterable, Identifiable {
             return L("trackingSource.airpods.requirement")
         }
     }
+
+    var other: TrackingSource {
+        switch self {
+        case .camera: return .airpods
+        case .airpods: return .camera
+        }
+    }
 }
 
 // MARK: - Posture Detector Protocol
