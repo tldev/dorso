@@ -13,7 +13,7 @@ set -e
 # Configuration
 APP_NAME="Dorso"
 BUNDLE_ID="com.thelazydeveloper.posturr"
-VERSION="1.10.1"
+VERSION="1.10.2"
 BUILD_NUMBER="8"
 MIN_MACOS="13.0"
 

@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import CoreMotion
 import IOBluetooth
 import os.log
@@ -45,6 +45,25 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
         return CMHeadphoneMotionManager.authorizationStatus() == .authorized
     }
 
+    /// Observer token for app-activation notification (used to detect permission dialog dismissal).
+    private(set) var activationObserver: NSObjectProtocol?
+
+    /// Injectable status check for testing.
+    /// In production this is nil and the real CMHeadphoneMotionManager API is used.
+    var authorizationStatusOverride: (() -> CMAuthorizationStatus)?
+
+    /// When true, skips creating CMHeadphoneMotionManager and starting motion updates.
+    /// Used in tests where CoreMotion isn't available.
+    var skipMotionUpdates: Bool = false
+
+    /// Injectable notification name for testing. Defaults to didBecomeActiveNotification.
+    var activationNotificationName: NSNotification.Name = NSApplication.didBecomeActiveNotification
+
+    @available(macOS 14.0, *)
+    private func currentAuthorizationStatus() -> CMAuthorizationStatus {
+        authorizationStatusOverride?() ?? CMHeadphoneMotionManager.authorizationStatus()
+    }
+
     /// Request Motion & Fitness Activity permission
     func requestAuthorization(completion: @escaping (Bool) -> Void) {
         guard #available(macOS 14.0, *) else {
@@ -52,7 +71,7 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
             return
         }
 
-        let status = CMHeadphoneMotionManager.authorizationStatus()
+        let status = currentAuthorizationStatus()
         os_log(.info, log: log, "requestAuthorization: current status = %{public}@",
                String(describing: status))
 
@@ -64,39 +83,67 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
             os_log(.info, log: log, "Authorization denied/restricted")
             completion(false)
         case .notDetermined:
-            // Need to trigger permission request by starting motion updates
-            if motionManager == nil {
-                motionManager = CMHeadphoneMotionManager()
-            }
-            guard let manager = motionManager else {
-                completion(false)
-                return
-            }
-
-            // Start updates to trigger permission dialog
             os_log(.info, log: log, "Status notDetermined - starting motion updates to trigger dialog")
             var hasCompleted = false
-            manager.startDeviceMotionUpdates(to: .main) { _, _ in
+            let complete: (Bool) -> Void = { [weak self] authorized in
                 guard !hasCompleted else { return }
-                // Check if now authorized
-                let newStatus = CMHeadphoneMotionManager.authorizationStatus()
-                if newStatus == .authorized {
-                    hasCompleted = true
-                    os_log(.info, log: log, "Permission granted via motion callback")
-                    // Stop these temporary updates - will be restarted properly later
-                    manager.stopDeviceMotionUpdates()
-                    DispatchQueue.main.async {
-                        completion(true)
-                    }
-                } else if newStatus == .denied || newStatus == .restricted {
-                    hasCompleted = true
-                    os_log(.info, log: log, "Permission denied via motion callback")
-                    manager.stopDeviceMotionUpdates()
-                    DispatchQueue.main.async {
-                        completion(false)
+                hasCompleted = true
+                if let observer = self?.activationObserver {
+                    NotificationCenter.default.removeObserver(observer)
+                    self?.activationObserver = nil
+                }
+                self?.motionManager?.stopDeviceMotionUpdates()
+                DispatchQueue.main.async {
+                    completion(authorized)
+                }
+            }
+
+            // Start motion updates to trigger the system permission dialog.
+            // The motion data callback also checks status, but only fires when
+            // AirPods are in ears — the activation observer below covers the other case.
+            if !skipMotionUpdates {
+                if motionManager == nil {
+                    motionManager = CMHeadphoneMotionManager()
+                }
+                guard motionManager != nil else {
+                    completion(false)
+                    return
+                }
+
+                motionManager!.startDeviceMotionUpdates(to: .main) { [weak self] _, _ in
+                    guard !hasCompleted else { return }
+                    guard let self else { return }
+                    let newStatus = self.currentAuthorizationStatus()
+                    if newStatus == .authorized {
+                        os_log(.info, log: log, "Permission granted via motion callback")
+                        complete(true)
+                    } else if newStatus == .denied || newStatus == .restricted {
+                        os_log(.info, log: log, "Permission denied via motion callback")
+                        complete(false)
                     }
                 }
-                // If still notDetermined, keep waiting for user to respond to dialog
+            }
+
+            // When the system permission dialog is dismissed, the app regains focus.
+            // Check authorization status at that point to catch approval even when
+            // AirPods aren't in ears (motion data callback won't fire without them).
+            activationObserver = NotificationCenter.default.addObserver(
+                forName: activationNotificationName,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard !hasCompleted else { return }
+                guard let self else { return }
+                let newStatus = self.currentAuthorizationStatus()
+                os_log(.info, log: log, "App activated - checking auth status: %{public}@",
+                       String(describing: newStatus))
+                if newStatus == .authorized {
+                    os_log(.info, log: log, "Permission granted via activation observer")
+                    complete(true)
+                } else if newStatus == .denied || newStatus == .restricted {
+                    os_log(.info, log: log, "Permission denied via activation observer")
+                    complete(false)
+                }
             }
         @unknown default:
             completion(false)
@@ -269,6 +316,10 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
 
     func stop() {
         os_log(.info, log: log, "Stopping AirPods motion tracking")
+        if let observer = activationObserver {
+            NotificationCenter.default.removeObserver(observer)
+            activationObserver = nil
+        }
         if #available(macOS 14.0, *) {
             motionManager?.stopDeviceMotionUpdates()
             motionManager?.stopConnectionStatusUpdates()
