@@ -1,5 +1,5 @@
 /* Info.plist localized strings */
 
-"NSCameraUsageDescription" = "Dorso a besoin d'accéder à la caméra pour surveiller votre posture et flouter l'écran lorsque vous vous avachissez.";
-"NSMotionUsageDescription" = "Dorso a besoin d'accéder aux données de mouvement pour surveiller votre posture via les AirPods.";
+"NSCameraUsageDescription" = "Dorso a besoin d'accéder à la caméra pour surveiller votre posture et vous avertir lorsque vous vous avachissez.";
+"NSMotionUsageDescription" = "Dorso a besoin d'accéder aux données de mouvement pour surveiller votre posture par l'intermédiare des AirPods.";
 "NSBluetoothAlwaysUsageDescription" = "Dorso utilise le Bluetooth pour détecter les AirPods jumelés pour le suivi des mouvements de la tête.";
