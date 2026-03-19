@@ -88,7 +88,7 @@
 "alert.cameraNotAvailable.message" = "Vérifiez que la caméra est connectée et que l'accès à la caméra est autorisé.";
 "alert.tryAgain" = "Réessayer";
 "support.title" = "Soutenir Dorso";
-"support.message" = "Si Dorso vous a aidé avec votre posture et que vous voulez montrer votre soutien, offrez-moi un café.";
+"support.message" = "Dorso vous aide à corriger posture et vous voulez montrer votre soutien? offrez-moi un café.";
 "support.button" = "Offrez-moi un café";
 
 // MARK: - Calibration (CalibrationWindow.swift)
