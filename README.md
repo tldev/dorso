@@ -1,4 +1,4 @@
-# Dorso (<a href="https://tomjohnell.com/i-made-a-mistake-posturr-is-now-dorso/" target="_blank">formerly Posturr</a>)
+# [Dorso](https://dorso.app/)
 
 **A macOS app that blurs your screen when you slouch.**
 
