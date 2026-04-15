@@ -218,7 +218,7 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 
 ## Linux version
 
-Want this on Linux? See [postured](https://github.com/vadi2/postured).
+Want this on Linux? See [postured](https://github.com/vadi2/postured) or [dorso-linux](https://github.com/Gheop/dorso-linux).
 
 ### Contributors
 
