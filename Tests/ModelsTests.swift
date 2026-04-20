@@ -1,7 +1,38 @@
 import XCTest
+#if canImport(AppKit)
+import AppKit
+#endif
 @testable import DorsoCore
 
 final class ModelsTests: XCTestCase {
+
+    // MARK: - MenuBarIcon Tests
+
+    #if canImport(AppKit)
+    func testMenuBarIconImageNonNilForAllCases() {
+        for icon in MenuBarIcon.allCases {
+            XCTAssertNotNil(icon.image, "MenuBarIcon.\(icon.rawValue).image returned nil — status item would have zero width and become invisible")
+        }
+    }
+
+    func testMenuBarIconImageHasNonZeroSize() {
+        for icon in MenuBarIcon.allCases {
+            guard let image = icon.image else {
+                XCTFail("Icon \(icon.rawValue) returned nil image")
+                continue
+            }
+            XCTAssertGreaterThan(image.size.width, 0, "Icon \(icon.rawValue) has zero width")
+            XCTAssertGreaterThan(image.size.height, 0, "Icon \(icon.rawValue) has zero height")
+        }
+    }
+
+    func testMenuBarIconImageIsTemplate() {
+        for icon in MenuBarIcon.allCases {
+            XCTAssertTrue(icon.image?.isTemplate ?? false, "Icon \(icon.rawValue) is not a template image — menu bar tinting for light/dark mode will break")
+        }
+    }
+    #endif
+
 
     // MARK: - AppState Tests
 

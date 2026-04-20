@@ -76,22 +76,13 @@ enum MenuBarIcon: String, CaseIterable {
     var image: NSImage? {
         // Try to load custom PDF icon from Resources/Icons/
         if let url = Bundle.main.url(forResource: rawValue, withExtension: "pdf", subdirectory: "Icons"),
-           let customImage = NSImage(contentsOf: url) {
-            // Resize to menu bar height (18pt) while preserving aspect ratio
+           let customImage = NSImage(contentsOf: url),
+           customImage.size.width > 0, customImage.size.height > 0 {
             let targetHeight: CGFloat = 18
             let aspectRatio = customImage.size.width / customImage.size.height
-            let targetWidth = targetHeight * aspectRatio
-            let targetSize = NSSize(width: targetWidth, height: targetHeight)
-
-            let resizedImage = NSImage(size: targetSize)
-            resizedImage.lockFocus()
-            customImage.draw(in: NSRect(origin: .zero, size: targetSize),
-                           from: NSRect(origin: .zero, size: customImage.size),
-                           operation: .copy,
-                           fraction: 1.0)
-            resizedImage.unlockFocus()
-            resizedImage.isTemplate = true
-            return resizedImage
+            customImage.size = NSSize(width: targetHeight * aspectRatio, height: targetHeight)
+            customImage.isTemplate = true
+            return customImage
         }
 
         // Fall back to SF Symbol

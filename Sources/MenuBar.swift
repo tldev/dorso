@@ -21,7 +21,11 @@ final class MenuBarManager {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
-            button.image = MenuBarIcon.good.image
+            let icon = MenuBarIcon.good.image
+            button.image = icon
+            if icon == nil {
+                button.title = "Dorso"
+            }
         }
 
         let menu = NSMenu()
@@ -81,7 +85,10 @@ final class MenuBarManager {
     func updateStatus(text: String, icon: MenuBarIcon) {
         guard isSetUp else { return }
         statusMenuItem.title = text
-        statusItem.button?.image = icon.image
+        guard let button = statusItem.button else { return }
+        let iconImage = icon.image
+        button.image = iconImage
+        button.title = iconImage == nil ? "Dorso" : ""
     }
 
     func updateEnabledState(_ enabled: Bool) {
