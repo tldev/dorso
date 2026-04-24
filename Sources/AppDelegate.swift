@@ -339,13 +339,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupDetectors()
         setupMenuBar()
-        setupOverlayWindows()
+        withAccessoryActivationPolicy {
+            setupOverlayWindows()
 
-        warningOverlayManager.mode = activeWarningMode
-        warningOverlayManager.warningColor = activeWarningColor
-        appliedWarningColorData = activeSettingsProfile?.warningColorData
-        if activeWarningMode.usesWarningOverlay {
-            warningOverlayManager.setupOverlayWindows()
+            warningOverlayManager.mode = activeWarningMode
+            warningOverlayManager.warningColor = activeWarningColor
+            appliedWarningColorData = activeSettingsProfile?.warningColorData
+            if activeWarningMode.usesWarningOverlay {
+                warningOverlayManager.setupOverlayWindows()
+            }
         }
 
         setupObservers()
@@ -525,6 +527,29 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         if !hasOtherVisibleWindows {
             NSApp.setActivationPolicy(.accessory)
+        }
+    }
+
+    /// Runs `block` while the app is temporarily `.accessory`, then restores
+    /// the previous policy. Overlay and calibration windows only get Space
+    /// semantics that render over a fullscreen app if they're created while
+    /// Dorso is `.accessory` — a `.regular` context (onboarding/Settings open)
+    /// poisons their Space association. We also capture and restore the key
+    /// window so a visible Settings/Onboarding window doesn't get pushed to
+    /// the back when the policy flips.
+    func withAccessoryActivationPolicy(_ block: () -> Void) {
+        let current = NSApp.activationPolicy()
+        if current != .accessory {
+            let previousKeyWindow = NSApp.keyWindow
+            NSApp.setActivationPolicy(.accessory)
+            block()
+            NSApp.setActivationPolicy(current)
+            if let previousKeyWindow {
+                NSApp.activate(ignoringOtherApps: true)
+                previousKeyWindow.makeKeyAndOrderFront(nil)
+            }
+        } else {
+            block()
         }
     }
 

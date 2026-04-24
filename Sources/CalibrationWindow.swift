@@ -261,6 +261,11 @@ class CalibrationWindowController: NSObject {
     // Store the original connection callback to restore later
     var originalConnectionCallback: ((Bool) -> Void)?
 
+    // Activation policy the app had before calibration started. Calibration
+    // forces .accessory because the overlay-above-fullscreen recipe only
+    // behaves reliably when Dorso isn't a .regular app.
+    private var activationPolicyToRestore: NSApplication.ActivationPolicy?
+
     struct CalibrationStep {
         let instruction: String
         let screenIndex: Int
@@ -317,6 +322,16 @@ class CalibrationWindowController: NSObject {
         self.currentStep = 0
         self.capturedValues = []
 
+        // Force .accessory so calibration windows overlay cleanly above a
+        // fullscreen app on the current Space. Onboarding and Settings both
+        // flip Dorso to .regular, and if we launched calibration while still
+        // .regular the overlay could land behind the fullscreen window.
+        let currentPolicy = NSApp.activationPolicy()
+        if currentPolicy != .accessory {
+            activationPolicyToRestore = currentPolicy
+            NSApp.setActivationPolicy(.accessory)
+        }
+
         buildSteps()
 
         // Create calibration window for each screen
@@ -327,7 +342,7 @@ class CalibrationWindowController: NSObject {
                 backing: .buffered,
                 defer: false
             )
-            window.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+            window.level = .aboveFullscreen
             window.isOpaque = false
             window.backgroundColor = .clear
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -369,7 +384,7 @@ class CalibrationWindowController: NSObject {
         // a fullscreen Space). Make the first window key last, so the key state
         // doesn't precede the ordering we just set.
         for window in windows {
-            window.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+            window.level = .aboveFullscreen
             window.orderFrontRegardless()
         }
         windows.first?.makeKeyAndOrderFront(nil)
@@ -395,7 +410,7 @@ class CalibrationWindowController: NSObject {
         isWaitingForConnection = false
 
         for window in windows {
-            window.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+            window.level = .aboveFullscreen
         }
         NSApp.activate(ignoringOtherApps: true)
 
@@ -513,5 +528,10 @@ class CalibrationWindowController: NSObject {
         }
         windows = []
         calibrationViews = []
+
+        if let policy = activationPolicyToRestore {
+            NSApp.setActivationPolicy(policy)
+            activationPolicyToRestore = nil
+        }
     }
 }

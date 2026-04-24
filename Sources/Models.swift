@@ -107,6 +107,15 @@ enum WarningDefaults {
     static let color = NSColor(red: 0.85, green: 0.05, blue: 0.05, alpha: 1.0)
 }
 
+extension NSWindow.Level {
+    /// One below `.popUpMenu` (101) so menu-bar dropdowns open on top, but
+    /// still above fullscreen-app content when combined with
+    /// `.canJoinAllSpaces + .fullScreenAuxiliary` and an `orderFrontRegardless`
+    /// after `NSApp.activate`. Empirically more reliable for cross-app
+    /// fullscreen overlays than `CGShieldingWindowLevel()`.
+    static let aboveFullscreen = NSWindow.Level(rawValue: 100)
+}
+
 // MARK: - Warning Mode
 
 enum WarningMode: String, CaseIterable, Codable {

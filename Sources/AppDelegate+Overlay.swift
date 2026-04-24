@@ -10,7 +10,7 @@ extension AppDelegate {
             let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
             window.isOpaque = false
             window.backgroundColor = .clear
-            window.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+            window.level = .aboveFullscreen
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window.ignoresMouseEvents = true
             window.hasShadow = false
@@ -34,10 +34,12 @@ extension AppDelegate {
         }
         windows.removeAll()
         blurViews.removeAll()
-        setupOverlayWindows()
+        withAccessoryActivationPolicy {
+            setupOverlayWindows()
 
-        if activeWarningMode.usesWarningOverlay {
-            warningOverlayManager.rebuildOverlayWindows()
+            if activeWarningMode.usesWarningOverlay {
+                warningOverlayManager.rebuildOverlayWindows()
+            }
         }
     }
 
@@ -83,7 +85,9 @@ extension AppDelegate {
 
         if newMode.usesWarningOverlay {
             warningOverlayManager.warningColor = activeWarningColor
-            warningOverlayManager.setupOverlayWindows()
+            withAccessoryActivationPolicy {
+                warningOverlayManager.setupOverlayWindows()
+            }
         }
     }
 

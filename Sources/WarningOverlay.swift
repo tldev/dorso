@@ -364,7 +364,7 @@ class WarningOverlayManager {
             )
             window.isOpaque = false
             window.backgroundColor = .clear
-            window.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+            window.level = .aboveFullscreen
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             window.ignoresMouseEvents = true
             window.hasShadow = false
