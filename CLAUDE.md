@@ -132,7 +132,7 @@ After upload:
 
 ## Build Configurations
 
-- `./build.sh --dev` - Fast iteration: debug config, host arch only (~10s warm). Use this during development.
+- `./build.sh --dev` - Fast iteration: debug config, host arch only (~10s warm). Use this during development. Not suitable for distribution — debug binary, non-universal.
 - `./build.sh` - Regular build with private APIs (release, universal, for GitHub/direct distribution)
 - `./build.sh --appstore` - App Store build without private APIs
 - `./build.sh --release` - Regular build + creates ZIP archive

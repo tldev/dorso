@@ -8,15 +8,18 @@ import AVFoundation
 class OnboardingWindowController: NSObject, NSWindowDelegate {
     var window: NSWindow?
     var onComplete: ((TrackingSource, String?) -> Void)?
+    weak var appDelegate: AppDelegate?
 
     private var cameraDetector: CameraPostureDetector?
     private var airPodsDetector: AirPodsPostureDetector?
 
     func show(
+        appDelegate: AppDelegate,
         cameraDetector: CameraPostureDetector,
         airPodsDetector: AirPodsPostureDetector,
         onComplete: @escaping (TrackingSource, String?) -> Void
     ) {
+        self.appDelegate = appDelegate
         self.cameraDetector = cameraDetector
         self.airPodsDetector = airPodsDetector
         self.onComplete = onComplete
@@ -55,6 +58,9 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSWindow {
+            appDelegate?.restoreAccessoryActivationPolicyIfNeeded(excluding: window)
+        }
         // If closed without selection, default to camera
         if let onComplete = onComplete {
             onComplete(.camera, cameraDetector?.selectedCameraID)

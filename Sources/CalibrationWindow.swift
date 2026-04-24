@@ -234,7 +234,6 @@ class CalibrationView: NSView {
             fontSize: 14
         )
     }
-
 }
 
 // MARK: - Calibration Window Controller
@@ -316,6 +315,12 @@ class CalibrationWindowController: NSObject {
     }
 
     func start(detector: PostureDetector, onComplete: @escaping ([CalibrationSample]) -> Void, onCancel: @escaping () -> Void) {
+        // Guard against reentrant start() before cleanup() has run: re-capturing
+        // `originalConnectionCallback` would snapshot a previously-wrapped
+        // callback as the "original," and cleanup would then restore the
+        // wrapper permanently.
+        guard windows.isEmpty else { return }
+
         self.detector = detector
         self.onComplete = onComplete
         self.onCancel = onCancel
@@ -409,10 +414,11 @@ class CalibrationWindowController: NSObject {
     func detectorConnected() {
         isWaitingForConnection = false
 
+        NSApp.activate(ignoringOtherApps: true)
         for window in windows {
             window.level = .aboveFullscreen
+            window.orderFrontRegardless()
         }
-        NSApp.activate(ignoringOtherApps: true)
 
         for view in calibrationViews {
             view.waitingForAirPods = false  // View still uses this name for the UI state
@@ -426,7 +432,10 @@ class CalibrationWindowController: NSObject {
         if !detector.isConnected {
             isWaitingForConnection = true
             for window in windows {
-                window.level = .floating  // Lower level allows system dialogs on top
+                // Yield to system dialogs (e.g., Bluetooth pairing / "put AirPods
+                // in ear") that open at higher levels. Restored to .aboveFullscreen
+                // once the detector reports connected.
+                window.level = .floating
             }
             showWaitingForConnection()
 

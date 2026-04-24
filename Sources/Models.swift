@@ -108,11 +108,19 @@ enum WarningDefaults {
 }
 
 extension NSWindow.Level {
-    /// One below `.popUpMenu` (101) so menu-bar dropdowns open on top, but
-    /// still above fullscreen-app content when combined with
-    /// `.canJoinAllSpaces + .fullScreenAuxiliary` and an `orderFrontRegardless`
-    /// after `NSApp.activate`. Empirically more reliable for cross-app
-    /// fullscreen overlays than `CGShieldingWindowLevel()`.
+    /// One below `.popUpMenu` (101). Renders above fullscreen-app content
+    /// on a fullscreen Space **only** as part of the full recipe:
+    ///   1. App is `.accessory` at the moment the window is created
+    ///      (see `AppDelegate.withAccessoryActivationPolicy`).
+    ///   2. `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`.
+    ///   3. `NSApp.activate(ignoringOtherApps: true)` (only needed when the
+    ///      window must be the key window, e.g. calibration).
+    ///   4. `window.orderFrontRegardless()` after activation.
+    ///
+    /// The numeric level alone is NOT sufficient — it's lower than
+    /// `.floating` and would sit under most app windows without the
+    /// collection-behavior + Space-ordering dance above. We use a value
+    /// just under `.popUpMenu` so system menu dropdowns still open on top.
     static let aboveFullscreen = NSWindow.Level(rawValue: 100)
 }
 

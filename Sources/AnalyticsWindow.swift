@@ -5,7 +5,9 @@ import AppKit
 // MARK: - Window Controller
 
 @MainActor
-class AnalyticsWindowController: NSWindowController {
+class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
+    weak var appDelegate: AppDelegate?
+
     convenience init() {
         let hostingController = NSHostingController(rootView: AnalyticsView())
         let fittingSize = hostingController.sizeThatFits(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
@@ -24,6 +26,13 @@ class AnalyticsWindowController: NSWindowController {
         window.center()
 
         self.init(window: window)
+        window.delegate = self
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSWindow {
+            appDelegate?.restoreAccessoryActivationPolicyIfNeeded(excluding: window)
+        }
     }
 }
 
