@@ -15,7 +15,7 @@ set -e
 APP_NAME="Dorso"
 BUNDLE_ID="com.thelazydeveloper.posturr"
 VERSION="1.11.2"
-BUILD_NUMBER="9"
+BUILD_NUMBER="10"
 MIN_MACOS="13.0"
 
 # Check for App Store build flag
@@ -210,7 +210,7 @@ fi
 
 # Embed provisioning profile for App Store builds
 if [ "$APP_STORE_BUILD" = true ]; then
-    PROFILE_PATH="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/ee9bedd9-b6fa-4db7-b698-21a632a945e9.provisionprofile"
+    PROFILE_PATH="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/de5b793b-6e7a-42da-abb4-19f99ca40041.provisionprofile"
     if [ -f "$PROFILE_PATH" ]; then
         echo "Embedding provisioning profile..."
         cp "$PROFILE_PATH" "$CONTENTS/embedded.provisionprofile"
@@ -260,6 +260,11 @@ fi
 
 # Set executable permission
 chmod +x "$MACOS_DIR/$APP_NAME"
+
+# Strip extended attributes (e.g., com.apple.quarantine on files downloaded
+# from the web). App Store upload rejects bundles containing xattrs with
+# error 91109; notarization can also complain. Must run before signing.
+xattr -cr "$APP_BUNDLE"
 
 # Ad-hoc sign the app bundle for macOS Gatekeeper compatibility
 echo "Signing app bundle..."
