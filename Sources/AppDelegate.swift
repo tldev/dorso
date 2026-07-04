@@ -328,9 +328,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         loadSettings()
 
-        if showInDock {
-            NSApp.setActivationPolicy(.regular)
-        }
+        NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
 
         if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
            let icon = NSImage(contentsOfFile: iconPath) {
