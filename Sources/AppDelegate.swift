@@ -132,6 +132,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
     var showInDock = false
     var pauseOnTheGo = false
+    var useFullScreenOverlay = false
     var settingsWindowController = SettingsWindowController()
     var supportWindowController = SupportWindowController()
     var analyticsWindowController: AnalyticsWindowController?
@@ -344,6 +345,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
             warningOverlayManager.mode = activeWarningMode
             warningOverlayManager.warningColor = activeWarningColor
+            warningOverlayManager.useFullScreenOverlay = useFullScreenOverlay
             appliedWarningColorData = activeSettingsProfile?.warningColorData
             if activeWarningMode.usesWarningOverlay {
                 warningOverlayManager.setupOverlayWindows()

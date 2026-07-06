@@ -6,7 +6,7 @@ extension AppDelegate {
 
     func setupOverlayWindows() {
         for screen in NSScreen.screens {
-            let frame = screen.visibleFrame
+            let frame = useFullScreenOverlay ? screen.frame : screen.visibleFrame
             let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
             window.isOpaque = false
             window.backgroundColor = .clear
@@ -38,6 +38,7 @@ extension AppDelegate {
             setupOverlayWindows()
 
             if activeWarningMode.usesWarningOverlay {
+                warningOverlayManager.useFullScreenOverlay = useFullScreenOverlay
                 warningOverlayManager.rebuildOverlayWindows()
             }
         }
@@ -85,6 +86,7 @@ extension AppDelegate {
 
         if newMode.usesWarningOverlay {
             warningOverlayManager.warningColor = activeWarningColor
+            warningOverlayManager.useFullScreenOverlay = useFullScreenOverlay
             withAccessoryActivationPolicy {
                 warningOverlayManager.setupOverlayWindows()
             }

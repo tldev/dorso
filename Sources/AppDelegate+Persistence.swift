@@ -18,6 +18,7 @@ extension AppDelegate {
         defaults.set(blurWhenAway, forKey: SettingsKeys.blurWhenAway)
         defaults.set(showInDock, forKey: SettingsKeys.showInDock)
         defaults.set(pauseOnTheGo, forKey: SettingsKeys.pauseOnTheGo)
+        defaults.set(useFullScreenOverlay, forKey: SettingsKeys.useFullScreenOverlay)
         defaults.set(toggleShortcutEnabled, forKey: SettingsKeys.toggleShortcutEnabled)
         defaults.set(Int(toggleShortcut.keyCode), forKey: SettingsKeys.toggleShortcutKeyCode)
         defaults.set(Int(toggleShortcut.modifiers.rawValue), forKey: SettingsKeys.toggleShortcutModifiers)
@@ -44,6 +45,7 @@ extension AppDelegate {
         blurWhenAway = defaults.bool(forKey: SettingsKeys.blurWhenAway)
         showInDock = defaults.bool(forKey: SettingsKeys.showInDock)
         pauseOnTheGo = defaults.bool(forKey: SettingsKeys.pauseOnTheGo)
+        useFullScreenOverlay = defaults.bool(forKey: SettingsKeys.useFullScreenOverlay)
         cameraDetector.selectedCameraID = defaults.string(forKey: SettingsKeys.lastCameraID)
         if let sourceString = defaults.string(forKey: SettingsKeys.trackingSource),
            let source = TrackingSource(rawValue: sourceString) {

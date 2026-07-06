@@ -541,6 +541,7 @@ struct SettingsView: View {
     @State private var showInDock: Bool
     @State private var pauseOnTheGo: Bool
     @State private var useCompatibilityMode: Bool
+    @State private var useFullScreenOverlay: Bool
     @State private var selectedCameraID: String
     @State private var availableCameras: [(id: String, name: String)]
     @State private var warningMode: WarningMode
@@ -605,6 +606,7 @@ struct SettingsView: View {
         _showInDock = State(initialValue: appDelegate.showInDock)
         _pauseOnTheGo = State(initialValue: appDelegate.pauseOnTheGo)
         _useCompatibilityMode = State(initialValue: appDelegate.useCompatibilityMode)
+        _useFullScreenOverlay = State(initialValue: appDelegate.useFullScreenOverlay)
         _selectedCameraID = State(initialValue: appDelegate.selectedCameraID ?? cameras.first?.uniqueID ?? "")
         _availableCameras = State(initialValue: cameraList)
         _warningMode = State(initialValue: profileWarningMode)
@@ -1070,6 +1072,23 @@ struct SettingsView: View {
                             await appDelegate.setPauseOnTheGoEnabled(newValue)
                         }
                     }
+                }
+
+                HStack(spacing: 0) {
+                    CompactToggle(
+                        title: L("settings.fullScreenOverlay"),
+                        helpText: L("settings.fullScreenOverlay.help"),
+                        isOn: $useFullScreenOverlay
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onChange(of: useFullScreenOverlay) { newValue in
+                        appDelegate.useFullScreenOverlay = newValue
+                        appDelegate.saveSettings()
+                        appDelegate.rebuildOverlayWindows()
+                    }
+
+                    Spacer()
+                        .frame(maxWidth: .infinity)
                 }
 
                 // Shortcut row

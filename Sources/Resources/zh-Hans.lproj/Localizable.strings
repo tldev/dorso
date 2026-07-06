@@ -154,6 +154,8 @@
 "settings.blurWhenAway.help.airpods" = "离开时应用完全模糊。仅在使用摄像头检测时可用。";
 "settings.pauseOnTheGo" = "移动中暂停";
 "settings.pauseOnTheGo.help" = "仅使用笔记本显示屏时自动暂停";
+"settings.fullScreenOverlay" = "全屏覆盖";
+"settings.fullScreenOverlay.help" = "将效果延伸至程序坞和菜单栏";
 "settings.shortcut" = "快捷键";
 "settings.shortcut.help" = "用于开关 Dorso 的全局快捷键。点击输入框，然后按下您想要的组合键。";
 "settings.shortcut.press" = "请按...";

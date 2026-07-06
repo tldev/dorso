@@ -154,6 +154,8 @@
 "settings.blurWhenAway.help.airpods" = "Applique un flou complet lorsque vous vous absentez. Disponible uniquement avec la détection par caméra.";
 "settings.pauseOnTheGo" = "Pause en déplacement";
 "settings.pauseOnTheGo.help" = "Pause automatique sur écran du portable uniquement";
+"settings.fullScreenOverlay" = "Superposition plein écran";
+"settings.fullScreenOverlay.help" = "Étendre les effets sur le Dock et la barre des menus";
 "settings.shortcut" = "Raccourci";
 "settings.shortcut.help" = "Raccourci clavier global pour activer/désactiver Dorso. Cliquez sur le champ et appuyez sur la nouvelle combinaison de touches souhaitée.";
 "settings.shortcut.press" = "Appuyez...";

@@ -154,6 +154,8 @@
 "settings.blurWhenAway.help.airpods" = "Aplicar desenfoque completo cuando te ausentes. Solo disponible cuando se usa la cámara para la detección.";
 "settings.pauseOnTheGo" = "Pausar en movimiento";
 "settings.pauseOnTheGo.help" = "Pausar automáticamente con pantalla de portátil";
+"settings.fullScreenOverlay" = "Superposición a pantalla completa";
+"settings.fullScreenOverlay.help" = "Extender efectos sobre el Dock y la barra de menús";
 "settings.shortcut" = "Atajo";
 "settings.shortcut.help" = "Atajo de teclado global para activar/desactivar Dorso. Haz clic en el campo y pulsa la combinación de teclas deseada.";
 "settings.shortcut.press" = "Pulsa...";

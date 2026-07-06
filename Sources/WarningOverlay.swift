@@ -352,10 +352,11 @@ class WarningOverlayManager {
     var targetIntensity: CGFloat = 0.0
     var mode: WarningMode = .glow
     var warningColor: NSColor = WarningDefaults.color
+    var useFullScreenOverlay = false
 
     func setupOverlayWindows() {
         for screen in NSScreen.screens {
-            let frame = screen.visibleFrame
+            let frame = useFullScreenOverlay ? screen.frame : screen.visibleFrame
             let window = NSWindow(
                 contentRect: frame,
                 styleMask: [.borderless],

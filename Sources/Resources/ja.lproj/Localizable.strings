@@ -154,6 +154,8 @@
 "settings.blurWhenAway.help.airpods" = "離席時に完全なぼかしを適用。カメラでの検出時のみ利用可能です。";
 "settings.pauseOnTheGo" = "移動中は一時停止";
 "settings.pauseOnTheGo.help" = "ノートパソコンのディスプレイのみの場合に自動一時停止";
+"settings.fullScreenOverlay" = "全画面オーバーレイ";
+"settings.fullScreenOverlay.help" = "Dockとメニューバーにも効果を広げる";
 "settings.shortcut" = "ショートカット";
 "settings.shortcut.help" = "Dorso の有効/無効を切り替えるグローバルキーボードショートカット。フィールドをクリックして、お好みのキーの組み合わせを押してください。";
 "settings.shortcut.press" = "押す...";

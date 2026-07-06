@@ -9,6 +9,7 @@ enum SettingsKeys {
     static let blurWhenAway = "blurWhenAway"
     static let showInDock = "showInDock"
     static let pauseOnTheGo = "pauseOnTheGo"
+    static let useFullScreenOverlay = "useFullScreenOverlay"
     static let lastCameraID = "lastCameraID"
     static let profiles = "profiles"
     static let settingsProfiles = "settingsProfiles"

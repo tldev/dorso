@@ -154,6 +154,8 @@
 "settings.blurWhenAway.help.airpods" = "Apply full blur when you step away. Only available when using camera for detection.";
 "settings.pauseOnTheGo" = "Pause on the go";
 "settings.pauseOnTheGo.help" = "Auto-pause on laptop-only display";
+"settings.fullScreenOverlay" = "Full screen overlay";
+"settings.fullScreenOverlay.help" = "Extend effects over the dock and menu bar";
 "settings.shortcut" = "Shortcut";
 "settings.shortcut.help" = "Global keyboard shortcut to toggle Dorso. Click the field and press your desired key combination.";
 "settings.shortcut.press" = "Press...";

@@ -154,6 +154,8 @@
 "settings.blurWhenAway.help.airpods" = "Volle Unschärfe anwenden, wenn Sie sich entfernen. Nur verfügbar bei Kamera-Erkennung.";
 "settings.pauseOnTheGo" = "Unterwegs pausieren";
 "settings.pauseOnTheGo.help" = "Automatisch pausieren bei reinem Laptop-Display";
+"settings.fullScreenOverlay" = "Vollbild-Overlay";
+"settings.fullScreenOverlay.help" = "Effekte auf Dock und Menüleiste ausdehnen";
 "settings.shortcut" = "Tastenkürzel";
 "settings.shortcut.help" = "Globales Tastenkürzel zum Ein-/Ausschalten von Dorso. Klicken Sie auf das Feld und drücken Sie die gewünschte Tastenkombination.";
 "settings.shortcut.press" = "Drücken...";
