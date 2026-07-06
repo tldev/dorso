@@ -521,12 +521,16 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     func restoreAccessoryActivationPolicyIfNeeded(excluding windowToIgnore: NSWindow? = nil) {
         guard !showInDock else { return }
 
-        let hasOtherVisibleWindows = NSApp.windows.contains { window in
+        // Only titled windows (Settings, Support, Analytics, Onboarding) justify
+        // staying .regular. The borderless overlay windows are visible for the
+        // app's entire lifetime, so counting them here would keep the app in
+        // the Dock and Cmd+Tab switcher forever after the first window opened.
+        let hasOtherVisibleTitledWindows = NSApp.windows.contains { window in
             guard window != windowToIgnore else { return false }
-            return window.isVisible && !window.isMiniaturized
+            return window.isVisible && !window.isMiniaturized && window.styleMask.contains(.titled)
         }
 
-        if !hasOtherVisibleWindows {
+        if !hasOtherVisibleTitledWindows {
             NSApp.setActivationPolicy(.accessory)
         }
     }

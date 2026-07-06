@@ -541,6 +541,10 @@ class CalibrationWindowController: NSObject {
         if let policy = activationPolicyToRestore {
             NSApp.setActivationPolicy(policy)
             activationPolicyToRestore = nil
+            // The window that had flipped the app to .regular may have closed
+            // during calibration; drop back to .accessory if nothing visible
+            // still needs .regular.
+            (NSApp.delegate as? AppDelegate)?.restoreAccessoryActivationPolicyIfNeeded()
         }
     }
 }
