@@ -53,14 +53,14 @@ extension AppDelegate {
         }
         if let modeString = defaults.string(forKey: SettingsKeys.trackingMode),
            let mode = TrackingMode(rawValue: modeString) {
-            trackingStore.send(.setTrackingMode(mode))
+            applyTrackingAction(.setTrackingMode(mode))
         }
         if let prefString = defaults.string(forKey: SettingsKeys.preferredSource),
            let pref = TrackingSource(rawValue: prefString) {
-            trackingStore.send(.setPreferredSource(pref))
+            applyTrackingAction(.setPreferredSource(pref))
         }
         if defaults.object(forKey: SettingsKeys.autoReturnEnabled) != nil {
-            trackingStore.send(.setAutoReturnEnabled(defaults.bool(forKey: SettingsKeys.autoReturnEnabled)))
+            applyTrackingAction(.setAutoReturnEnabled(defaults.bool(forKey: SettingsKeys.autoReturnEnabled)))
         }
         if let data = defaults.data(forKey: SettingsKeys.airPodsCalibration),
            let calibration = try? JSONDecoder().decode(AirPodsCalibrationData.self, from: data) {

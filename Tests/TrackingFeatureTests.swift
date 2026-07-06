@@ -17,44 +17,7 @@ private actor EffectIntentRecorder {
 
 private extension TrackingRuntimeClient {
     static func recording(_ recorder: EffectIntentRecorder) -> Self {
-        Self(
-            startMonitoring: { await recorder.record(.startMonitoring) },
-            beginMonitoringSession: { await recorder.record(.beginMonitoringSession) },
-            applyStartupCameraProfile: { profile in
-                await recorder.record(.applyStartupCameraProfile(profile))
-            },
-            showOnboarding: { await recorder.record(.showOnboarding) },
-            switchCameraToMatchingProfile: { profile in
-                await recorder.record(.switchCamera(.matchingProfile(profile)))
-            },
-            switchCameraToFallback: { cameraID, profile in
-                await recorder.record(.switchCamera(.fallback(cameraID: cameraID, profile: profile)))
-            },
-            switchCameraToSelected: {
-                await recorder.record(.switchCamera(.selectedCamera))
-            },
-            syncUI: { await recorder.record(.syncUI) },
-            updateBlur: { await recorder.record(.updateBlur) },
-            trackAnalytics: { interval, isSlouching in
-                await recorder.record(
-                    .trackAnalytics(interval: interval, isSlouching: isSlouching)
-                )
-            },
-            recordSlouchEvent: { await recorder.record(.recordSlouchEvent) },
-            stopDetector: { source in await recorder.record(.stopDetector(source)) },
-            persistTrackingSource: { await recorder.record(.persistTrackingSource) },
-            showCalibrationPermissionDeniedAlert: {
-                await recorder.record(.showCalibrationPermissionDeniedAlert)
-            },
-            openPrivacySettings: { await recorder.record(.openPrivacySettings) },
-            showCameraCalibrationRetryAlert: { message in
-                await recorder.record(.showCameraCalibrationRetryAlert(message: message))
-            },
-            retryCalibration: { await recorder.record(.retryCalibration) },
-            startCalibrationForSource: { source in
-                await recorder.record(.startCalibrationForSource(source))
-            }
-        )
+        Self(perform: { intent in await recorder.record(intent) })
     }
 }
 

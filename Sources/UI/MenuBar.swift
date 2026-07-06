@@ -24,6 +24,14 @@ final class MenuBarManager {
             button.image = MenuBarIcon.good.image
         }
 
+        statusItem.menu = makeMenu()
+    }
+
+    /// Builds the status menu and retains its mutable items. Separate from
+    /// `setup()` because NSMenu needs no window server connection, so
+    /// headless tests can build the menu and exercise the update methods.
+    @discardableResult
+    func makeMenu() -> NSMenu {
         let menu = NSMenu()
 
         // Status
@@ -71,17 +79,17 @@ final class MenuBarManager {
         quitItem.target = self
         menu.addItem(quitItem)
 
-        statusItem.menu = menu
+        return menu
     }
 
     // MARK: - Updates
 
-    private var isSetUp: Bool { statusItem != nil }
+    private var isSetUp: Bool { statusMenuItem != nil }
 
     func updateStatus(text: String, icon: MenuBarIcon) {
         guard isSetUp else { return }
         statusMenuItem.title = text
-        statusItem.button?.image = icon.image
+        statusItem?.button?.image = icon.image
     }
 
     func updateEnabledState(_ enabled: Bool) {
@@ -95,6 +103,7 @@ final class MenuBarManager {
     }
 
     func updateShortcut(enabled: Bool, shortcut: KeyboardShortcut) {
+        guard isSetUp else { return }
         if enabled {
             enabledMenuItem.keyEquivalent = shortcut.keyCharacter
             enabledMenuItem.keyEquivalentModifierMask = shortcut.modifiers

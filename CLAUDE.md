@@ -187,15 +187,27 @@ Update version in `build.sh` (VERSION variable) before releasing.
 ## Key Files
 
 ### Source Code (in `Sources/`)
-- `main.swift` - App entry point
-- `AppDelegate.swift` - Main app coordinator, state machine, camera capture, posture detection
-- `Models.swift` - Shared types (SettingsKeys, ProfileData, PauseReason, AppState)
-- `Persistence.swift` - SettingsStorage and ProfileStorage classes
-- `DisplayManager.swift` - Display UUID detection and configuration change handling
-- `MenuBar.swift` - MenuBarManager for status bar setup
-- `SettingsWindow.swift` - SwiftUI settings window with SettingsWindowController
-- `CalibrationWindow.swift` - Calibration UI with pulsing ring animation
-- `BlurOverlay.swift` - Private API loading and BlurOverlayManager
+- `App/DorsoMain.swift` - Executable entry point (everything else in `Sources/` builds as the testable `DorsoCore` library)
+- `Core/` - Pure logic, no UI side effects
+  - `TrackingFeature.swift` - TCA reducer owning tracking state; requests side effects as `EffectIntent` values via `TrackingRuntimeClient.perform`
+  - `PostureEngine.swift` - Pure state-transition functions used by the reducer
+  - `AppState.swift`, `Models.swift`, `PostureUIState.swift`, `Analytics.swift`, `Localization.swift`
+- `AppDelegate/` - App coordinator, split by concern
+  - `AppDelegate.swift` - Properties, lifecycle, store dispatch funnels (`applyTrackingAction` sync / `sendTrackingAction` async), and `performTrackingEffect` (the single place reducer effects execute)
+  - `AppDelegate+Tracking.swift` - Detector/UI sync, source switching, monitoring, initial setup
+  - `AppDelegate+Calibration.swift` - Calibration flow and its alerts
+  - `AppDelegate+DeviceEvents.swift` - Camera hot-plug, display config, screen lock
+  - `AppDelegate+Overlay.swift`, `AppDelegate+Persistence.swift`
+- `Detectors/` - `CameraPostureDetector`, `AirPodsPostureDetector`, shared `PostureDetector` protocol
+- `System/` - OS observers (camera hot-plug, display, screen lock) and global hotkey
+- `Settings/` - Settings keys, migrations, profiles
+- `UI/` - Menu bar, overlays (blur, warning), and windows (Settings, Calibration, Onboarding, Analytics, Support)
+
+### Architecture Rules
+- All tracking state lives in the TCA store; `AppDelegate` exposes computed accessors over it, never duplicate stored state.
+- Every store dispatch goes through `applyTrackingAction`/`sendTrackingAction` so transition side effects (detector/UI sync) are never skipped.
+- New reducer side effects: add an `EffectIntent` case and handle it in `performTrackingEffect`. Do not add ad-hoc callbacks.
+- Tests must stay headless: nothing test-reachable in `DorsoCore` may require a window server (`swift test` must pass without one).
 
 ### Build & Release
 - `build.sh` - Build script with App Store support

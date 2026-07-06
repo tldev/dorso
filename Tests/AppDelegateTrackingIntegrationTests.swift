@@ -25,9 +25,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testInitialSetupFlowInMarketingModeRequestsMonitoringAndSkipsOnboarding() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
-        appDelegate.syncDetectorToStateOverride = {}
         appDelegate.marketingModeOverride = true
 
         var executedIntents: [TrackingFeature.EffectIntent] = []
@@ -51,9 +48,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     @MainActor
     func testInitialSetupFlowForCameraWithAvailableProfileAppliesProfileAndStartsMonitoring() async {
         let appDelegate = AppDelegate()
-        appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
         appDelegate.syncDetectorToStateOverride = {}
         appDelegate.beginMonitoringSessionHandler = {}
         appDelegate.marketingModeOverride = false
@@ -97,9 +91,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testInitialSetupFlowForAirPodsWithCalibrationStartsMonitoringWithoutOnboarding() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
-        appDelegate.syncDetectorToStateOverride = {}
         appDelegate.beginMonitoringSessionHandler = {}
         appDelegate.marketingModeOverride = false
         appDelegate.trackingSource = .airpods
@@ -135,9 +126,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testInitialSetupFlowWithoutValidPathShowsOnboarding() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
-        appDelegate.syncDetectorToStateOverride = {}
         appDelegate.marketingModeOverride = false
         appDelegate.trackingSource = .camera
         appDelegate.initialSetupContextOverride = {
@@ -169,9 +157,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testSetPauseOnTheGoEnabledFalseFromOnTheGoPauseResumesMonitoringThroughReducer() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
-        appDelegate.syncDetectorToStateOverride = {}
         appDelegate.state = .paused(.onTheGo)
 
         await appDelegate.setPauseOnTheGoEnabled(false)
@@ -183,9 +168,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     @MainActor
     func testSetPauseOnTheGoEnabledTrueKeepsOnTheGoPauseState() async {
         let appDelegate = AppDelegate()
-        appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
         appDelegate.syncDetectorToStateOverride = {}
         appDelegate.state = .paused(.onTheGo)
 
@@ -199,8 +181,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testCameraConnectedTransitionExecutesSwitchBeforeStartAndPreservesRuntimeFallbackState() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .paused(.cameraDisconnected)
 
@@ -217,7 +197,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchCameraConnectedTransitionForTesting(
+        await appDelegate.applyCameraConnectedTransition(
             hasMatchingProfile: true,
             matchingProfile: profile
         )
@@ -236,8 +216,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testCameraConnectWithoutMatchingProfileFromDisconnectedPausesNoProfileWithoutRecoveryIntents() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .paused(.cameraDisconnected)
 
@@ -246,7 +224,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchCameraConnectedTransitionForTesting(
+        await appDelegate.applyCameraConnectedTransition(
             hasMatchingProfile: false,
             matchingProfile: nil
         )
@@ -259,8 +237,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testDisplayConfigurationTransitionExecutesSwitchBeforeStartAndPreservesRuntimeFallbackState() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .paused(.cameraDisconnected)
 
@@ -277,7 +253,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchDisplayConfigurationTransitionForTesting(
+        await appDelegate.applyDisplayConfigurationTransition(
             pauseOnTheGoEnabled: false,
             isLaptopOnlyConfiguration: false,
             hasAnyCamera: true,
@@ -300,8 +276,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testCameraDisconnectWithFallbackProfileExecutesSwitchBeforeStartAndPreservesRuntimeFallbackState() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .monitoring
 
@@ -310,7 +284,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchCameraDisconnectedTransitionForTesting(
+        await appDelegate.applyCameraDisconnectedTransition(
             disconnectedCameraIsSelected: true,
             hasFallbackCamera: true,
             fallbackHasMatchingProfile: true,
@@ -331,8 +305,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testCameraDisconnectWithFallbackNoProfileCommitsReducerPauseWithoutRestartIntent() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .monitoring
 
@@ -341,7 +313,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchCameraDisconnectedTransitionForTesting(
+        await appDelegate.applyCameraDisconnectedTransition(
             disconnectedCameraIsSelected: true,
             hasFallbackCamera: true,
             fallbackHasMatchingProfile: false,
@@ -361,8 +333,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testCameraDisconnectWithoutFallbackPausesDisconnectedWithoutEffects() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .monitoring
 
@@ -371,7 +341,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchCameraDisconnectedTransitionForTesting(
+        await appDelegate.applyCameraDisconnectedTransition(
             disconnectedCameraIsSelected: true,
             hasFallbackCamera: false,
             fallbackHasMatchingProfile: false,
@@ -387,8 +357,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testCameraDisconnectForNonSelectedCameraRequestsUISyncOnlyAndKeepsState() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .monitoring
 
@@ -397,7 +365,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchCameraDisconnectedTransitionForTesting(
+        await appDelegate.applyCameraDisconnectedTransition(
             disconnectedCameraIsSelected: false,
             hasFallbackCamera: true,
             fallbackHasMatchingProfile: true,
@@ -413,8 +381,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testDisplayPauseOnTheGoPrecedenceSuppressesSwitchAndRestartIntents() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .monitoring
 
@@ -423,7 +389,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchDisplayConfigurationTransitionForTesting(
+        await appDelegate.applyDisplayConfigurationTransition(
             pauseOnTheGoEnabled: true,
             isLaptopOnlyConfiguration: true,
             hasAnyCamera: true,
@@ -440,8 +406,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testDisplayChangeWithoutAnyCameraPausesDisconnectedWithoutRecoveryIntents() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .monitoring
 
@@ -450,7 +414,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchDisplayConfigurationTransitionForTesting(
+        await appDelegate.applyDisplayConfigurationTransition(
             pauseOnTheGoEnabled: false,
             isLaptopOnlyConfiguration: false,
             hasAnyCamera: false,
@@ -467,8 +431,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testDisplayChangeWithoutMatchingProfilePausesNoProfileWithoutRecoveryIntents() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .monitoring
 
@@ -477,7 +439,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchDisplayConfigurationTransitionForTesting(
+        await appDelegate.applyDisplayConfigurationTransition(
             pauseOnTheGoEnabled: false,
             isLaptopOnlyConfiguration: false,
             hasAnyCamera: true,
@@ -494,8 +456,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testScreenLockUnlockFromMonitoringEmitsRestartIntentAndExitsScreenLockedState() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .monitoring
 
@@ -505,12 +465,12 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         }
 
         let lockIntentStartIndex = executedIntents.count
-        await appDelegate.dispatchScreenLockedTransitionForTesting()
+        await appDelegate.handleScreenLocked()
         XCTAssertEqual(Array(executedIntents.dropFirst(lockIntentStartIndex)), [])
         XCTAssertEqual(appDelegate.state, .paused(.screenLocked))
 
         let unlockIntentStartIndex = executedIntents.count
-        await appDelegate.dispatchScreenUnlockedTransitionForTesting()
+        await appDelegate.handleScreenUnlocked()
         XCTAssertEqual(Array(executedIntents.dropFirst(unlockIntentStartIndex)), [.startMonitoring])
         XCTAssertTrue(executedIntents.contains(.startMonitoring))
         XCTAssertNotEqual(appDelegate.state, .paused(.screenLocked))
@@ -520,8 +480,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testCameraSelectionTransitionEmitsSelectedCameraSwitchAndPausesNoProfile() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .monitoring
         appDelegate.trackingSource = .camera
@@ -532,7 +490,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchCameraSelectionTransitionForTesting()
+        await appDelegate.applyCameraSelectionTransition()
 
         XCTAssertEqual(executedIntents, [.switchCamera(.selectedCamera)])
         XCTAssertEqual(appDelegate.state, .paused(.noProfile))
@@ -542,8 +500,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testManualSourceSwitchToUncalibratedSourceStopsSetsAndPersistsWithoutRestartIntent() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .disabled
         appDelegate.trackingSource = .camera
@@ -555,7 +511,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchSwitchTrackingSourceTransitionForTesting(.airpods)
+        await appDelegate.switchTrackingSource(to: .airpods)
         let expectedIntents: [TrackingFeature.EffectIntent] = [
             .stopDetector(.camera),
             .persistTrackingSource
@@ -570,8 +526,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testManualSourceSwitchToCalibratedSourceEmitsRestartAfterStopSetPersist() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .disabled
         appDelegate.trackingSource = .airpods
@@ -583,7 +537,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.dispatchSwitchTrackingSourceTransitionForTesting(.camera)
+        await appDelegate.switchTrackingSource(to: .camera)
         let expectedPrefix: [TrackingFeature.EffectIntent] = [
             .stopDetector(.airpods),
             .persistTrackingSource,
@@ -599,8 +553,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testCancelCalibrationWhenCalibratedEmitsRestartIntentAndReturnsMonitoring() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .calibrating
         appDelegate.trackingSource = .camera
@@ -621,8 +573,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testCancelCalibrationWhenUncalibratedPausesNoProfileWithoutRestartIntent() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .calibrating
         appDelegate.trackingSource = .camera
@@ -643,8 +593,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testFinishCalibrationEmitsRestartAndTransitionsToMonitoring() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
 
         appDelegate.state = .calibrating
         appDelegate.trackingSource = .camera
@@ -674,9 +622,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testCalibrationAuthorizationDeniedWithOpenSettingsDecisionExecutesOpenSettingsIntent() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
-        appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .calibrating
         appDelegate.trackingSource = .camera
@@ -696,7 +641,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             openSettingsInvocations += 1
         }
 
-        await appDelegate.dispatchCalibrationAuthorizationDeniedTransitionForTesting()
+        await appDelegate.sendTrackingAction(.calibrationAuthorizationDenied(isCalibrated: appDelegate.isCalibrated))
 
         XCTAssertEqual(executedIntents, [.showCalibrationPermissionDeniedAlert, .openPrivacySettings])
         XCTAssertEqual(openSettingsInvocations, 1)
@@ -706,9 +651,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     @MainActor
     func testCalibrationAuthorizationDeniedWithCancelDecisionSkipsOpenSettingsIntent() async {
         let appDelegate = AppDelegate()
-        appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .calibrating
@@ -726,7 +668,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             openSettingsInvocations += 1
         }
 
-        await appDelegate.dispatchCalibrationAuthorizationDeniedTransitionForTesting()
+        await appDelegate.sendTrackingAction(.calibrationAuthorizationDenied(isCalibrated: appDelegate.isCalibrated))
 
         XCTAssertEqual(executedIntents, [.showCalibrationPermissionDeniedAlert])
         XCTAssertEqual(openSettingsInvocations, 0)
@@ -761,9 +703,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     func testCalibrationStartFailedForCameraWithRetryDecisionExecutesRetryIntent() async {
         let appDelegate = AppDelegate()
         appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
-        appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .calibrating
         appDelegate.trackingSource = .camera
@@ -782,9 +721,9 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             retryInvocations += 1
         }
 
-        await appDelegate.dispatchCalibrationStartFailedTransitionForTesting(
+        await appDelegate.sendTrackingAction(.calibrationStartFailed(
             errorMessage: "camera unavailable"
-        )
+        ))
 
         XCTAssertEqual(
             executedIntents,
@@ -797,9 +736,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     @MainActor
     func testCalibrationStartFailedForCameraWithCancelDecisionSkipsRetryIntent() async {
         let appDelegate = AppDelegate()
-        appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .calibrating
@@ -816,9 +752,9 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             retryInvocations += 1
         }
 
-        await appDelegate.dispatchCalibrationStartFailedTransitionForTesting(
+        await appDelegate.sendTrackingAction(.calibrationStartFailed(
             errorMessage: nil
-        )
+        ))
 
         XCTAssertEqual(executedIntents, [.showCameraCalibrationRetryAlert(message: nil)])
         XCTAssertEqual(retryInvocations, 0)
@@ -828,9 +764,6 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
     @MainActor
     func testCalibrationStartFailedForAirPodsDoesNotEmitRetryAlertIntent() async {
         let appDelegate = AppDelegate()
-        appDelegate.syncDetectorToStateOverride = {}
-        appDelegate.menuBarManager.setup()
-        defer { NSStatusBar.system.removeStatusItem(appDelegate.menuBarManager.statusItem) }
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .paused(.airPodsRemoved)
@@ -847,9 +780,9 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             return false
         }
 
-        await appDelegate.dispatchCalibrationStartFailedTransitionForTesting(
+        await appDelegate.sendTrackingAction(.calibrationStartFailed(
             errorMessage: "ignored"
-        )
+        ))
 
         XCTAssertEqual(executedIntents, [])
         XCTAssertEqual(retryAlertDecisionCalls, 0)
