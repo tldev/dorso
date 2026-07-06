@@ -6,7 +6,7 @@ extension AppDelegate {
 
     func setupOverlayWindows() {
         for screen in NSScreen.screens {
-            let frame = useFullScreenOverlay ? screen.frame : screen.visibleFrame
+            let frame = screen.overlayFrame(fullScreen: useFullScreenOverlay)
             let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
             window.isOpaque = false
             window.backgroundColor = .clear
@@ -28,17 +28,30 @@ extension AppDelegate {
         }
     }
 
+    /// Pushes the settings that warning overlay windows are built from into the
+    /// manager. Every path that sets up or rebuilds the manager's windows must
+    /// call this first so the manager never renders from stale settings.
+    func syncWarningOverlaySettings() {
+        warningOverlayManager.mode = activeWarningMode
+        warningOverlayManager.warningColor = activeWarningColor
+        warningOverlayManager.useFullScreenOverlay = useFullScreenOverlay
+    }
+
     func rebuildOverlayWindows() {
         for window in windows {
             window.orderOut(nil)
         }
         windows.removeAll()
         blurViews.removeAll()
+        // New blur views start at alpha 0 and fresh window numbers carry no CGS
+        // blur; reset the ramp so updateBlur repaints instead of skipping when
+        // currentBlurRadius == targetBlurRadius.
+        currentBlurRadius = 0
         withAccessoryActivationPolicy {
             setupOverlayWindows()
 
             if activeWarningMode.usesWarningOverlay {
-                warningOverlayManager.useFullScreenOverlay = useFullScreenOverlay
+                syncWarningOverlaySettings()
                 warningOverlayManager.rebuildOverlayWindows()
             }
         }
@@ -63,10 +76,10 @@ extension AppDelegate {
         #endif
     }
 
-    func switchWarningMode(to newMode: WarningMode) {
+    func switchWarningMode() {
         clearBlur()
 
-        warningOverlayManager.mode = newMode
+        syncWarningOverlaySettings()
 
         warningOverlayManager.currentIntensity = 0
         warningOverlayManager.targetIntensity = 0
@@ -84,9 +97,7 @@ extension AppDelegate {
         warningOverlayManager.windows.removeAll()
         warningOverlayManager.overlayViews.removeAll()
 
-        if newMode.usesWarningOverlay {
-            warningOverlayManager.warningColor = activeWarningColor
-            warningOverlayManager.useFullScreenOverlay = useFullScreenOverlay
+        if activeWarningMode.usesWarningOverlay {
             withAccessoryActivationPolicy {
                 warningOverlayManager.setupOverlayWindows()
             }

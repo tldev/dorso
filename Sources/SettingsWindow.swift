@@ -929,7 +929,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity)
                         .onChange(of: warningMode) { newValue in
                             settingsProfileManager.updateActiveProfile(warningMode: newValue)
-                            appDelegate.switchWarningMode(to: newValue)
+                            appDelegate.switchWarningMode()
                         }
 
                     InlineColorPicker(color: $warningColor)

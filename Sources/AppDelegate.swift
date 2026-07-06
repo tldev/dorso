@@ -343,9 +343,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         withAccessoryActivationPolicy {
             setupOverlayWindows()
 
-            warningOverlayManager.mode = activeWarningMode
-            warningOverlayManager.warningColor = activeWarningColor
-            warningOverlayManager.useFullScreenOverlay = useFullScreenOverlay
+            syncWarningOverlaySettings()
             appliedWarningColorData = activeSettingsProfile?.warningColorData
             if activeWarningMode.usesWarningOverlay {
                 warningOverlayManager.setupOverlayWindows()
@@ -1283,7 +1281,7 @@ extension AppDelegate.TrackingCoordinator {
         guard appDelegate.setupComplete else { return }
 
         if appDelegate.warningOverlayManager.mode != appDelegate.activeWarningMode {
-            appDelegate.switchWarningMode(to: appDelegate.activeWarningMode)
+            appDelegate.switchWarningMode()
         }
 
         let desiredColorData = appDelegate.activeSettingsProfile?.warningColorData
