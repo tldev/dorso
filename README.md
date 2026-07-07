@@ -238,3 +238,5 @@ Want this on Linux? See [postured](https://github.com/vadi2/postured) or [dorso-
 - [@emmanuelprecieuxargent](https://github.com/emmanuelprecieuxargent) - Improved French and Spanish translations
 - [@shencangsheng](https://github.com/shencangsheng) - AirPods 4 compatibility detection report
 - [@zhouyeyu](https://github.com/zhouyeyu) - Initial fix for warning overlays and calibration over fullscreen apps
+- [@mattwaler](https://github.com/mattwaler) - Full screen effects toggle
+- [@wensiet](https://github.com/wensiet) - Cmd+Tab visibility bug report and initial fix

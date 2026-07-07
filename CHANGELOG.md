@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Acknowledgments
 - Thanks to [@mattwaler](https://github.com/mattwaler) for contributing the full screen effects feature ([#92](https://github.com/tldev/dorso/pull/92))
+- Thanks to [@wensiet](https://github.com/wensiet) for reporting the Cmd+Tab visibility bug and proposing the initial fix ([#93](https://github.com/tldev/dorso/pull/93))
 
 ## [1.11.2] - 2026-04-24
 
