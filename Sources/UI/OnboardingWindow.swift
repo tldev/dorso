@@ -49,7 +49,7 @@ class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.center()
+        window.centerOnActiveScreen()
 
         self.window = window
         NSApp.setActivationPolicy(.regular)
