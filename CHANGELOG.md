@@ -5,6 +5,22 @@ All notable changes to Dorso will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-07-07
+
+### Added
+- Full screen effects: a new Settings toggle controls whether posture warning effects stay between the Dock and menu bar or cover the entire screen, overlapping both
+
+### Fixed
+- App no longer stays stuck in the Dock and Cmd+Tab switcher after opening any window
+- Active warning overlay no longer vanishes when display configuration changes rebuild the overlay windows
+- Settings and other app windows no longer open partially off-screen on multi-display setups. Windows now open centered on the screen you're using, remember where you last closed them, and stay fully visible when their content resizes
+
+### Changed
+- Major internal restructuring to make the app easier to maintain and less bug-prone: all tracking side effects now flow through a single, compiler-checked path, duplicate calibration flows were unified, and the test suite grew from 367 to 404 tests and now runs headless
+
+### Acknowledgments
+- Thanks to [@mattwaler](https://github.com/mattwaler) for contributing the full screen effects feature ([#92](https://github.com/tldev/dorso/pull/92))
+
 ## [1.11.2] - 2026-04-24
 
 ### Fixed
