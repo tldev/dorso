@@ -34,8 +34,8 @@ final class SupportWindowController: NSObject, NSWindowDelegate {
         window.backgroundColor = NSColor.windowBackgroundColor
 
         let restored = window.setFrameUsingName("SupportWindow")
-        if !restored || !isWindowOnScreen(window) {
-            window.center()
+        if !restored || !window.isFullyOnScreen {
+            window.centerOnActiveScreen()
         }
 
         self.window = window
@@ -51,13 +51,10 @@ final class SupportWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func isWindowOnScreen(_ window: NSWindow) -> Bool {
-        for screen in NSScreen.screens {
-            if screen.visibleFrame.intersects(window.frame) {
-                return true
-            }
-        }
-        return false
+    func windowDidResize(_ notification: Notification) {
+        // Content-driven resizes only (window isn't user-resizable);
+        // keep the new frame fully on screen.
+        (notification.object as? NSWindow)?.constrainToVisibleScreenArea()
     }
 
     func close() {

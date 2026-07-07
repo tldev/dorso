@@ -23,7 +23,7 @@ class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.titlebarAppearsTransparent = false
         window.backgroundColor = NSColor.windowBackgroundColor
-        window.center()
+        window.centerOnActiveScreen()
 
         self.init(window: window)
         window.delegate = self

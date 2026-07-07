@@ -36,10 +36,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.titlebarAppearsTransparent = false
         window.backgroundColor = NSColor.windowBackgroundColor
 
-        // Restore saved position or center on screen
+        // Restore saved position, or center on the screen the user is on.
+        // A saved frame only counts if it is fully visible; a partially
+        // off-screen frame would open cut off.
         let restored = window.setFrameUsingName("SettingsWindow")
-        if !restored || !self.isWindowOnScreen(window) {
-            window.center()
+        if !restored || !window.isFullyOnScreen {
+            window.centerOnActiveScreen()
         }
 
         self.window = window
@@ -59,13 +61,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         appDelegate?.onActiveSourceChanged = nil
     }
 
-    private func isWindowOnScreen(_ window: NSWindow) -> Bool {
-        for screen in NSScreen.screens {
-            if screen.visibleFrame.intersects(window.frame) {
-                return true
-            }
-        }
-        return false
+    func windowDidResize(_ notification: Notification) {
+        // The window isn't user-resizable, so any resize is SwiftUI content
+        // layout (including the post-show layout that can grow the window
+        // past a screen edge). Keep the new frame fully on screen.
+        (notification.object as? NSWindow)?.constrainToVisibleScreenArea()
     }
 
     func close() {
