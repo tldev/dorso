@@ -210,7 +210,7 @@ fi
 
 # Embed provisioning profile for App Store builds
 if [ "$APP_STORE_BUILD" = true ]; then
-    PROFILE_PATH="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/de5b793b-6e7a-42da-abb4-19f99ca40041.provisionprofile"
+    PROFILE_PATH="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/eb353b46-54c5-48f3-ac94-8f7ba507c43f.provisionprofile"
     if [ -f "$PROFILE_PATH" ]; then
         echo "Embedding provisioning profile..."
         cp "$PROFILE_PATH" "$CONTENTS/embedded.provisionprofile"
