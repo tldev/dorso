@@ -5,6 +5,14 @@ All notable changes to Dorso will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-07-17
+
+### Added
+- Pause on battery: a new Settings option that automatically pauses posture tracking while the Mac runs on battery to save power, resuming when AC power returns — including when the Mac was unplugged while the lid was closed
+
+### Acknowledgments
+- Thanks to [@MitchTalmadge](https://github.com/MitchTalmadge) for suggesting this feature ([#90](https://github.com/tldev/dorso/issues/90))
+
 ## [1.12.0] - 2026-07-07
 
 ### Added

@@ -240,3 +240,4 @@ Want this on Linux? See [postured](https://github.com/vadi2/postured) or [dorso-
 - [@zhouyeyu](https://github.com/zhouyeyu) - Initial fix for warning overlays and calibration over fullscreen apps
 - [@mattwaler](https://github.com/mattwaler) - Full screen effects toggle
 - [@wensiet](https://github.com/wensiet) - Cmd+Tab visibility bug report and initial fix
+- [@MitchTalmadge](https://github.com/MitchTalmadge) - Pause on battery feature suggestion
