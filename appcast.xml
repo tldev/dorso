@@ -6,5 +6,18 @@
         <description>Most recent updates to Dorso</description>
         <language>en</language>
         <!-- release.sh inserts new release items below this line -->
+        <item>
+            <title>Version 1.14.0</title>
+            <link>https://github.com/tldev/dorso/releases/tag/v1.14.0</link>
+            <sparkle:version>13</sparkle:version>
+            <sparkle:shortVersionString>1.14.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <sparkle:releaseNotesLink>https://github.com/tldev/dorso/releases/tag/v1.14.0</sparkle:releaseNotesLink>
+            <pubDate>Sun, 19 Jul 2026 10:09:17 -0500</pubDate>
+            <enclosure
+                url="https://github.com/tldev/dorso/releases/download/v1.14.0/Dorso-v1.14.0.zip"
+                sparkle:edSignature="UgJfUZMqQyytTmIHMzYvWy4f1kmJPNLHXkAqfXp1ZHKUquAHLJnNDwNl8+ZzUYQUNJO3gv3xBvGakiEKMu8iAQ==" length="9390030"
+                type="application/octet-stream"/>
+        </item>
     </channel>
 </rss>
