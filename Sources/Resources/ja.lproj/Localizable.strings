@@ -122,6 +122,13 @@
 "settings.mode.manual" = "手動";
 "settings.mode.automatic" = "自動";
 "settings.preferred" = "優先";
+"settings.source" = "ソース";
+"settings.section.response" = "姿勢への反応";
+"settings.section.behavior" = "動作";
+"settings.appearance" = "外観";
+"settings.appearance.auto" = "自動";
+"settings.appearance.light" = "ライト";
+"settings.appearance.dark" = "ダーク";
 "settings.active" = "使用中";
 "settings.calibrated" = "校正済み";
 "settings.notCalibrated" = "未校正";

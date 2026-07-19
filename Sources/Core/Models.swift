@@ -178,3 +178,28 @@ enum DetectionMode: String, CaseIterable, Codable {
         }
     }
 }
+
+// MARK: - App Appearance
+
+/// User-selected window appearance: follow the system or force light/dark.
+public enum AppAppearance: String, CaseIterable, Sendable {
+    case auto
+    case light
+    case dark
+
+    var displayName: String {
+        switch self {
+        case .auto: return L("settings.appearance.auto")
+        case .light: return L("settings.appearance.light")
+        case .dark: return L("settings.appearance.dark")
+        }
+    }
+
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .auto: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
+        }
+    }
+}

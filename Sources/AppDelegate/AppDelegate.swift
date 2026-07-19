@@ -118,6 +118,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     var showInDock = false
+    var appAppearance = AppAppearance.auto
     var pauseOnTheGo = false
     var pauseOnBattery: Bool {
         trackingStore.withState { $0.pauseOnBatteryEnabled }
@@ -368,13 +369,24 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    // MARK: - Appearance
+
+    func applyAppearance() {
+        NSApp.appearance = appAppearance.nsAppearance
+    }
+
     // MARK: - App Lifecycle
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // Ensure analytics storage migration runs as soon as the app launches.
         _ = AnalyticsManager.shared
 
+        // Snappier tooltips: AppKit's ~1.8s default delay makes the compact
+        // status glyphs in Settings feel unexplained
+        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 250])
+
         loadSettings()
+        applyAppearance()
 
         if showInDock {
             NSApp.setActivationPolicy(.regular)
@@ -386,7 +398,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         #if !APP_STORE
-        updaterManager = UpdaterManager()
+        // UI preview launches must not start the updater: with silent
+        // updates enabled it can stage and install a store build over the
+        // dev build mid-iteration
+        if !CommandLine.arguments.contains("--open-settings") {
+            updaterManager = UpdaterManager()
+        }
         #endif
 
         setupDetectors()
@@ -411,6 +428,18 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         if isMarketingMode {
             AnalyticsManager.shared.injectMarketingData()
+        }
+
+        // Dev affordance for UI iteration: open Settings immediately and skip
+        // the tracking setup flow so no camera/permission prompts fire.
+        if CommandLine.arguments.contains("--open-settings") {
+            if CommandLine.arguments.contains("--appearance-dark") {
+                NSApp.appearance = NSAppearance(named: .darkAqua)
+            } else if CommandLine.arguments.contains("--appearance-light") {
+                NSApp.appearance = NSAppearance(named: .aqua)
+            }
+            openSettings()
+            return
         }
 
         Task { @MainActor in

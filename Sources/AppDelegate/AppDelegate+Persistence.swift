@@ -15,6 +15,7 @@ extension AppDelegate {
     func saveSettings() {
         let defaults = UserDefaults.standard
         defaults.set(useCompatibilityMode, forKey: SettingsKeys.useCompatibilityMode)
+        defaults.set(appAppearance.rawValue, forKey: SettingsKeys.appAppearance)
         defaults.set(blurWhenAway, forKey: SettingsKeys.blurWhenAway)
         defaults.set(showInDock, forKey: SettingsKeys.showInDock)
         defaults.set(pauseOnTheGo, forKey: SettingsKeys.pauseOnTheGo)
@@ -43,6 +44,10 @@ extension AppDelegate {
         applyActiveSettingsProfile()
 
         useCompatibilityMode = defaults.bool(forKey: SettingsKeys.useCompatibilityMode)
+        if let appearanceString = defaults.string(forKey: SettingsKeys.appAppearance),
+           let appearance = AppAppearance(rawValue: appearanceString) {
+            appAppearance = appearance
+        }
         blurWhenAway = defaults.bool(forKey: SettingsKeys.blurWhenAway)
         showInDock = defaults.bool(forKey: SettingsKeys.showInDock)
         pauseOnTheGo = defaults.bool(forKey: SettingsKeys.pauseOnTheGo)

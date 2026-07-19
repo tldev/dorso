@@ -16,6 +16,70 @@ extension Color {
     })
 }
 
+// MARK: - Settings Card
+
+/// Section container per the brand guidelines: control-background fill,
+/// subtle border, icon + semibold header with an optional trailing control.
+struct SettingsCard<Trailing: View, Content: View>: View {
+    let icon: String
+    let title: String
+    let helpText: String?
+    @ViewBuilder let trailing: () -> Trailing
+    @ViewBuilder let content: () -> Content
+
+    init(
+        icon: String,
+        title: String,
+        helpText: String? = nil,
+        @ViewBuilder trailing: @escaping () -> Trailing,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.icon = icon
+        self.title = title
+        self.helpText = helpText
+        self.trailing = trailing
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.brandCyan)
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                if let helpText {
+                    HelpButton(text: helpText)
+                }
+                Spacer(minLength: 8)
+                trailing()
+            }
+            content()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+extension SettingsCard where Trailing == EmptyView {
+    init(
+        icon: String,
+        title: String,
+        helpText: String? = nil,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.init(icon: icon, title: title, helpText: helpText, trailing: { EmptyView() }, content: content)
+    }
+}
+
 // MARK: - Compact Slider
 
 struct CompactSlider: View {
@@ -35,14 +99,88 @@ struct CompactSlider: View {
                 HelpButton(text: helpText)
             }
 
-            Slider(value: $value, in: range, step: step)
-                .tint(.brandCyan)
+            SteppedSliderTrack(value: $value, range: range, step: step)
                 .frame(maxWidth: .infinity)
 
             Text(valueLabel)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.brandCyan)
-                .frame(width: 70, alignment: .trailing)
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color.brandCyan.opacity(0.12)))
+                .frame(width: 86, alignment: .trailing)
+        }
+        .frame(height: 22)
+    }
+}
+
+// MARK: - Stepped Slider Track
+
+/// Minimal slider replacement for stepped values: quiet capsule track,
+/// brand-cyan fill, and small step dots only when the step count is low
+/// enough to read (the system slider draws a tick per step, which turns a
+/// 30-step range into visual noise).
+struct SteppedSliderTrack: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+
+    private let thumbRadius: CGFloat = 7
+
+    private var fraction: CGFloat {
+        let span = range.upperBound - range.lowerBound
+        guard span > 0 else { return 0 }
+        return CGFloat((value - range.lowerBound) / span)
+    }
+
+    private var stepCount: Int {
+        max(1, Int(((range.upperBound - range.lowerBound) / step).rounded()))
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let usable = width - thumbRadius * 2
+            let thumbX = thumbRadius + usable * fraction
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(height: 4)
+                Capsule()
+                    .fill(Color.brandCyan.opacity(0.85))
+                    .frame(width: max(0, thumbX), height: 4)
+
+                if stepCount <= 8 {
+                    ForEach(1..<stepCount, id: \.self) { i in
+                        Circle()
+                            .fill(Color.primary.opacity(0.15))
+                            .frame(width: 3, height: 3)
+                            .position(
+                                x: thumbRadius + usable * CGFloat(i) / CGFloat(stepCount),
+                                y: geo.size.height / 2
+                            )
+                    }
+                }
+
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: thumbRadius * 2, height: thumbRadius * 2)
+                    .overlay(Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
+                    .shadow(color: .black.opacity(0.18), radius: 1.5, y: 0.5)
+                    .position(x: thumbX, y: geo.size.height / 2)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in
+                        let f = min(1, max(0, (gesture.location.x - thumbRadius) / usable))
+                        let raw = range.lowerBound + Double(f) * (range.upperBound - range.lowerBound)
+                        let stepped = (raw / step).rounded() * step
+                        value = min(range.upperBound, max(range.lowerBound, stepped))
+                    }
+            )
         }
         .frame(height: 22)
     }
@@ -348,6 +486,39 @@ struct BrightnessSliderView: View {
     }
 }
 
+// MARK: - Compact Segmented Picker
+
+/// Generic brand-styled segmented control for small option sets.
+struct CompactSegmentedPicker<Value: Hashable>: View {
+    @Binding var selection: Value
+    let options: [(value: Value, label: String)]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(options, id: \.value) { option in
+                Button(action: { selection = option.value }) {
+                    Text(option.label)
+                        .font(.system(size: 10, weight: selection == option.value ? .semibold : .regular))
+                        .foregroundColor(selection == option.value ? .onBrandCyan : .primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(selection == option.value ? Color.brandCyan : Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.primary.opacity(0.06))
+        )
+    }
+}
+
 // MARK: - Compact Mode Picker
 
 struct CompactModePicker: View {
@@ -402,15 +573,24 @@ struct DeviceStatusRow: View {
                 .font(.system(size: 11, weight: isPreferred ? .medium : .regular))
                 .frame(width: 55, alignment: .leading)
 
-            // Calibration status
+            // Calibration status: icon-only when the camera picker is there
+            // to give the row context (the dropdown needs the width), icon +
+            // label on rows that would otherwise be unexplained glyphs
+            let showsDropdown = source == .camera && cameraDropdown != nil
             HStack(spacing: 3) {
                 Image(systemName: isCalibrated ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .font(.system(size: 9))
-                    .foregroundColor(isCalibrated ? .green : .orange)
-                Text(isCalibrated ? L("settings.calibrated") : L("settings.notCalibrated"))
                     .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(isCalibrated ? .green : .orange)
+                if !showsDropdown {
+                    Text(isCalibrated ? L("settings.calibrated") : L("settings.notCalibrated"))
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
             }
+            .padding(.horizontal, 2)
+            .frame(minWidth: 18, minHeight: 22)
+            .contentShape(Rectangle())
+            .help(isCalibrated ? L("settings.calibrated") : L("settings.notCalibrated"))
 
             if source == .camera, let dropdown = cameraDropdown {
                 dropdown
@@ -424,6 +604,10 @@ struct DeviceStatusRow: View {
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
+                .padding(.horizontal, 2)
+                .frame(minHeight: 22)
+                .contentShape(Rectangle())
+                .help(isConnected ? L("settings.connected") : L("settings.notConnected"))
             }
 
             Spacer(minLength: 0)
@@ -435,19 +619,25 @@ struct DeviceStatusRow: View {
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
                     .background(Capsule().fill(Color.brandCyan.opacity(0.12)))
+                    .fixedSize()
             }
 
             // Calibrate button
             Button(action: onCalibrate) {
                 Text(L("settings.recalibrate"))
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.onBrandCyan)
+                    .foregroundColor(.brandCyan)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(Color.brandCyan)
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(Color.brandCyan.opacity(0.1))
                     )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .strokeBorder(Color.brandCyan.opacity(0.3), lineWidth: 1)
+                    )
+                    .fixedSize()
             }
             .buttonStyle(.plain)
         }
@@ -697,14 +887,18 @@ struct DiscordIcon: View {
 struct HelpButton: View {
     let text: String
     @State private var showingHelp = false
+    @State private var isHovering = false
 
     var body: some View {
         Button(action: { showingHelp.toggle() }) {
             Image(systemName: "questionmark.circle")
                 .font(.system(size: 10))
-                .foregroundColor(.secondary.opacity(0.5))
+                .foregroundColor(.secondary.opacity(isHovering ? 0.8 : 0.35))
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
         .popover(isPresented: $showingHelp, arrowEdge: .trailing) {
             Text(text)
                 .font(.system(size: 11))
