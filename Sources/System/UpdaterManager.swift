@@ -8,14 +8,15 @@ import Sparkle
 /// App Store builds compile this out entirely; the App Store delivers
 /// updates for those installs.
 @MainActor
-final class UpdaterManager {
-    private let controller: SPUStandardUpdaterController
+final class UpdaterManager: NSObject {
+    private var controller: SPUStandardUpdaterController!
 
-    init() {
+    override init() {
+        super.init()
         controller = SPUStandardUpdaterController(
             startingUpdater: true,
             updaterDelegate: nil,
-            userDriverDelegate: nil
+            userDriverDelegate: self
         )
     }
 
@@ -29,6 +30,26 @@ final class UpdaterManager {
     var automaticallyChecksForUpdates: Bool {
         get { controller.updater.automaticallyChecksForUpdates }
         set { controller.updater.automaticallyChecksForUpdates = newValue }
+    }
+}
+
+// MARK: - Gentle Reminders
+
+extension UpdaterManager: SPUStandardUserDriverDelegate {
+    nonisolated var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    nonisolated func standardUserDriverWillHandleShowingUpdate(
+        _ handleShowingUpdate: Bool,
+        forUpdate update: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        // Sparkle shows scheduled update alerts without activating the app;
+        // for a menu bar app that leaves the alert buried behind other
+        // windows. Bring the app forward so the alert is actually seen.
+        guard !state.userInitiated else { return }
+        MainActor.assumeIsolated {
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 }
 #endif
