@@ -233,6 +233,7 @@ Want this on Linux? See [postured](https://github.com/vadi2/postured) or [dorso-
 - [@claaslange](https://github.com/claaslange) - Camera compatibility issue with professional cameras
 - [@lucapericlp](https://github.com/lucapericlp) - Settings profiles feature
 - [@DengNaichen](https://github.com/DengNaichen) - Sleep/wake camera detection fix
+- [@Shadow1363](https://github.com/Shadow1363) - Auto-update feature suggestion
 - [@Shadow1363](https://github.com/Shadow1363) - Camera-active-while-disabled bug report and reproduction details
 - [@bradystroud](https://github.com/bradystroud) - Automatic source switching feature suggestion
 - [@emmanuelprecieuxargent](https://github.com/emmanuelprecieuxargent) - Improved French and Spanish translations
