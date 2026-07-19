@@ -122,6 +122,13 @@
 "settings.mode.manual" = "手动";
 "settings.mode.automatic" = "自动";
 "settings.preferred" = "首选";
+"settings.source" = "来源";
+"settings.section.response" = "姿势响应";
+"settings.section.behavior" = "行为";
+"settings.appearance" = "外观";
+"settings.appearance.auto" = "自动";
+"settings.appearance.light" = "浅色";
+"settings.appearance.dark" = "深色";
 "settings.active" = "活跃";
 "settings.calibrated" = "已校准";
 "settings.notCalibrated" = "未校准";

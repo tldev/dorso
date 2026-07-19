@@ -26,6 +26,7 @@ struct SettingsView: View {
     @State private var warningColor: Color
     @State private var warningOnsetDelay: Double
     @State private var launchAtLogin: Bool
+    @State private var appAppearance: AppAppearance
     #if !APP_STORE
     @State private var autoCheckForUpdates: Bool
     #endif
@@ -95,6 +96,7 @@ struct SettingsView: View {
         _warningColor = State(initialValue: Color(profileWarningColor))
         _warningOnsetDelay = State(initialValue: profileWarningOnsetDelay)
         _launchAtLogin = State(initialValue: SMAppService.mainApp.status == .enabled)
+        _appAppearance = State(initialValue: appDelegate.appAppearance)
         #if !APP_STORE
         _autoCheckForUpdates = State(initialValue: appDelegate.updaterManager?.automaticallyChecksForUpdates ?? false)
         #endif
@@ -170,44 +172,36 @@ struct SettingsView: View {
                         .background(Capsule().fill(Color.primary.opacity(0.05)))
                 }
             }
-            .padding(.bottom, 10)
+            .padding(.bottom, 12)
 
-            SubtleDivider()
+            VStack(spacing: 10) {
 
-            // Tracking section (not part of profile)
-            VStack(spacing: 6) {
-                // Mode row
-                HStack(spacing: 8) {
-                    Text(L("settings.tracking"))
-                        .font(.system(size: 11, weight: .medium))
-                        .frame(width: 82, alignment: .leading)
-
-                    CompactModePicker(selection: $trackingModeSelection)
-                        .frame(width: 150)
-
-                    HelpButton(text: L("settings.tracking.help"))
-                        .onChange(of: trackingModeSelection) { newValue in
-                            Task { @MainActor in
-                                await appDelegate.setTrackingMode(newValue)
-                                activeSource = appDelegate.activeTrackingSource
-                            }
+            // Tracking card: mode picker in the header, source + device below
+            SettingsCard(icon: "scope", title: L("settings.tracking"), helpText: L("settings.tracking.help")) {
+                CompactModePicker(selection: $trackingModeSelection)
+                    .frame(width: 170)
+                    .onChange(of: trackingModeSelection) { newValue in
+                        Task { @MainActor in
+                            await appDelegate.setTrackingMode(newValue)
+                            activeSource = appDelegate.activeTrackingSource
                         }
-
-                    Spacer()
-                }
-                .frame(height: 26)
+                    }
+            } content: {
+                VStack(spacing: 6) {
 
                 if trackingModeSelection == .manual {
                     // Manual mode: source picker + device row for selected source
                     HStack(spacing: 8) {
-                        Text("")
-                            .frame(width: 82)
+                        Text(L("settings.source"))
+                            .font(.system(size: 11))
+
+                        Spacer()
 
                         CompactTrackingSourcePicker(
                             selection: $trackingSource,
                             airPodsAvailable: airPodsAvailable
                         )
-                        .frame(width: 150)
+                        .frame(width: 170)
                         .onChange(of: trackingSource) { newValue in
                             if newValue != appDelegate.trackingSource {
                                 Task { @MainActor in
@@ -215,8 +209,6 @@ struct SettingsView: View {
                                 }
                             }
                         }
-
-                        Spacer()
                     }
                     .frame(height: 26)
 
@@ -233,7 +225,7 @@ struct SettingsView: View {
                                 }
                             }
                             .labelsHidden()
-                            .frame(maxWidth: 140)
+                            .frame(minWidth: 130, maxWidth: 220)
                             .onChange(of: selectedCameraID) { newValue in
                                 if newValue != appDelegate.selectedCameraID {
                                     appDelegate.selectedCameraID = newValue
@@ -252,22 +244,21 @@ struct SettingsView: View {
                         // Preferred source picker
                         HStack(spacing: 8) {
                             Text(L("settings.preferred"))
-                                .font(.system(size: 11, weight: .medium))
-                                .frame(width: 82, alignment: .leading)
+                                .font(.system(size: 11))
+
+                            Spacer()
 
                             CompactTrackingSourcePicker(
                                 selection: $preferredSource,
                                 airPodsAvailable: true
                             )
-                            .frame(width: 150)
+                            .frame(width: 170)
                             .onChange(of: preferredSource) { newValue in
                                 Task { @MainActor in
                                     await appDelegate.setPreferredSource(newValue)
                                     activeSource = appDelegate.activeTrackingSource
                                 }
                             }
-
-                            Spacer()
                         }
                         .frame(height: 26)
 
@@ -285,7 +276,7 @@ struct SettingsView: View {
                                     }
                                 }
                                 .labelsHidden()
-                                .frame(maxWidth: 140)
+                                .frame(minWidth: 130, maxWidth: 220)
                                 .onChange(of: selectedCameraID) { newValue in
                                     if newValue != appDelegate.selectedCameraID {
                                         appDelegate.selectedCameraID = newValue
@@ -332,20 +323,12 @@ struct SettingsView: View {
                         }
                     }
                 }
+                }
             }
-            .padding(.vertical, 10)
 
-            // Profile Section Card
-            VStack(spacing: 6) {
-                // Profile header row - aligned with Warning row below
-                HStack(spacing: 8) {
-                    HStack(spacing: 3) {
-                        Text(L("settings.profile"))
-                            .font(.system(size: 11, weight: .medium))
-                            .frame(width: 82, alignment: .leading)
-                        HelpButton(text: L("settings.profile.help"))
-                    }
-
+            // Posture response card: profile management in the header,
+            // warning style + tuning sliders below
+            SettingsCard(icon: "slider.horizontal.3", title: L("settings.section.response"), helpText: L("settings.profile.help")) {
                     HStack(spacing: 4) {
                         Picker("", selection: $selectedSettingsProfileID) {
                             ForEach(settingsProfiles) { profile in
@@ -354,7 +337,6 @@ struct SettingsView: View {
                         }
                         .labelsHidden()
                         .frame(width: 100)
-                        .padding(.horizontal, -4)
                         .onChange(of: selectedSettingsProfileID) { newValue in
                             handleProfileSelectionChange(newValue)
                         }
@@ -363,43 +345,45 @@ struct SettingsView: View {
                             newProfileName = ""
                             showingNewProfilePrompt = true
                         }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 10, weight: .semibold))
-                                Text(L("settings.profile.new"))
-                                    .font(.system(size: 11, weight: .medium))
-                            }
-                            .foregroundColor(.onBrandCyan)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(Color.brandCyan)
-                            )
+                            Image(systemName: "plus")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.brandCyan)
+                                .frame(width: 24, height: 20)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(Color.brandCyan.opacity(0.1))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .strokeBorder(Color.brandCyan.opacity(0.3), lineWidth: 1)
+                                )
                         }
                         .buttonStyle(.plain)
+                        .help(L("settings.profile.new"))
 
                         // Delete button - only enabled for non-Default profiles when more than one exists
                         Button(action: {
                             showingDeleteConfirmation = true
                         }) {
                             Image(systemName: "trash")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(canDeleteCurrentProfile ? .white : .secondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 5)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(canDeleteCurrentProfile ? .red.opacity(0.8) : .secondary.opacity(0.4))
+                                .frame(width: 24, height: 20)
                                 .background(
                                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .fill(canDeleteCurrentProfile ? Color.red : Color.secondary.opacity(0.15))
+                                        .fill(canDeleteCurrentProfile ? Color.red.opacity(0.08) : Color.primary.opacity(0.04))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .strokeBorder(canDeleteCurrentProfile ? Color.red.opacity(0.25) : Color.primary.opacity(0.06), lineWidth: 1)
                                 )
                         }
                         .buttonStyle(.plain)
                         .disabled(!canDeleteCurrentProfile)
+                        .help(L("settings.profile.deleteTitle"))
                     }
-
-                    Spacer()
-                }
-                .frame(height: 26)
+            } content: {
+                VStack(spacing: 6) {
 
                 // Warning row
                 HStack(spacing: 8) {
@@ -417,12 +401,16 @@ struct SettingsView: View {
                             appDelegate.switchWarningMode()
                         }
 
-                    InlineColorPicker(color: $warningColor)
-                        .onChange(of: warningColor) { newValue in
-                            let nsColor = NSColor(newValue)
-                            settingsProfileManager.updateActiveProfile(warningColor: nsColor)
-                            appDelegate.updateWarningColor(nsColor)
-                        }
+                    // Color only applies to the drawn warning styles, so the
+                    // swatch would be dead weight next to Blur/None
+                    if warningMode.usesWarningOverlay {
+                        InlineColorPicker(color: $warningColor)
+                            .onChange(of: warningColor) { newValue in
+                                let nsColor = NSColor(newValue)
+                                settingsProfileManager.updateActiveProfile(warningColor: nsColor)
+                                appDelegate.updateWarningColor(nsColor)
+                            }
+                    }
                 }
                 .frame(height: 26)
 
@@ -483,18 +471,26 @@ struct SettingsView: View {
                     settingsProfileManager.updateActiveProfile(detectionMode: detectionModes[index])
                     appDelegate.applyActiveSettingsProfile()
                 }
+                }
             }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(0.04))
-            )
 
-            SubtleDivider()
-                .padding(.top, 6)
+            // Behavior card: appearance in the header (matching the other
+            // cards' header-control pattern), app-level toggles below
+            SettingsCard(icon: "switch.2", title: L("settings.section.behavior")) {
+                CompactSegmentedPicker(
+                    selection: $appAppearance,
+                    options: AppAppearance.allCases.map { ($0, $0.displayName) }
+                )
+                .frame(width: 170)
+                .onChange(of: appAppearance) { newValue in
+                    appDelegate.appAppearance = newValue
+                    appDelegate.saveSettings()
+                    appDelegate.applyAppearance()
+                }
+                .help(L("settings.appearance"))
+            } content: {
+                VStack(spacing: 6) {
 
-            // Behavior Section - 2 column grid with fixed widths
-            VStack(spacing: 6) {
                 HStack(spacing: 0) {
                     CompactToggle(
                         title: L("settings.launchAtLogin"),
@@ -531,6 +527,62 @@ struct SettingsView: View {
                     }
                 }
 
+                #if !APP_STORE
+                HStack(spacing: 0) {
+                    CompactToggle(
+                        title: L("settings.autoUpdates"),
+                        helpText: L("settings.autoUpdates.help"),
+                        isOn: $autoCheckForUpdates
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onChange(of: autoCheckForUpdates) { newValue in
+                        appDelegate.updaterManager?.automaticallyChecksForUpdates = newValue
+                    }
+
+                    CompactToggle(
+                        title: L("settings.compatibilityMode"),
+                        helpText: L("settings.compatibilityMode.help"),
+                        isOn: $useCompatibilityMode
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onChange(of: useCompatibilityMode) { newValue in
+                        appDelegate.useCompatibilityMode = newValue
+                        appDelegate.saveSettings()
+                        // Clear both blur mechanisms, not just the visual
+                        // effect views: the CGS background blur radius of the
+                        // outgoing private-API path survives alpha resets and
+                        // would otherwise stay on screen indefinitely
+                        appDelegate.clearBlur()
+                    }
+                }
+                #endif
+
+                HStack(spacing: 0) {
+                    CompactToggle(
+                        title: L("settings.pauseOnTheGo"),
+                        helpText: L("settings.pauseOnTheGo.help"),
+                        isOn: $pauseOnTheGo
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onChange(of: pauseOnTheGo) { newValue in
+                        Task { @MainActor in
+                            await appDelegate.setPauseOnTheGoEnabled(newValue)
+                        }
+                    }
+
+                    CompactToggle(
+                        title: L("settings.pauseOnBattery"),
+                        helpText: L("settings.pauseOnBattery.help"),
+                        isOn: $pauseOnBattery
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onChange(of: pauseOnBattery) { newValue in
+                        Task { @MainActor in
+                            await appDelegate.setPauseOnBatteryEnabled(newValue)
+                        }
+                    }
+                }
+
                 HStack(spacing: 0) {
                     CompactToggle(
                         title: L("settings.blurWhenAway"),
@@ -547,20 +599,6 @@ struct SettingsView: View {
                     }
 
                     CompactToggle(
-                        title: L("settings.pauseOnTheGo"),
-                        helpText: L("settings.pauseOnTheGo.help"),
-                        isOn: $pauseOnTheGo
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: pauseOnTheGo) { newValue in
-                        Task { @MainActor in
-                            await appDelegate.setPauseOnTheGoEnabled(newValue)
-                        }
-                    }
-                }
-
-                HStack(spacing: 0) {
-                    CompactToggle(
                         title: L("settings.fullScreenOverlay"),
                         helpText: L("settings.fullScreenOverlay.help"),
                         isOn: $useFullScreenOverlay
@@ -571,21 +609,10 @@ struct SettingsView: View {
                         appDelegate.saveSettings()
                         appDelegate.rebuildOverlayWindows()
                     }
-
-                    CompactToggle(
-                        title: L("settings.pauseOnBattery"),
-                        helpText: L("settings.pauseOnBattery.help"),
-                        isOn: $pauseOnBattery
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: pauseOnBattery) { newValue in
-                        Task { @MainActor in
-                            await appDelegate.setPauseOnBatteryEnabled(newValue)
-                        }
-                    }
                 }
 
-                // Shortcut row
+                // Shortcut row (full width so the recorder chip doesn't
+                // disrupt the toggle grid rhythm)
                 HStack(spacing: 0) {
                     CompactShortcutRecorder(
                         shortcut: $toggleShortcut,
@@ -598,47 +625,11 @@ struct SettingsView: View {
                         }
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
-
-                    #if !APP_STORE
-                    CompactToggle(
-                        title: L("settings.compatibilityMode"),
-                        helpText: L("settings.compatibilityMode.help"),
-                        isOn: $useCompatibilityMode
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: useCompatibilityMode) { newValue in
-                        appDelegate.useCompatibilityMode = newValue
-                        appDelegate.saveSettings()
-                        // Clear both blur mechanisms, not just the visual
-                        // effect views: the CGS background blur radius of the
-                        // outgoing private-API path survives alpha resets and
-                        // would otherwise stay on screen indefinitely
-                        appDelegate.clearBlur()
-                    }
-                    #else
-                    Spacer()
-                        .frame(maxWidth: .infinity)
-                    #endif
                 }
-
-                #if !APP_STORE
-                HStack(spacing: 0) {
-                    CompactToggle(
-                        title: L("settings.autoUpdates"),
-                        helpText: L("settings.autoUpdates.help"),
-                        isOn: $autoCheckForUpdates
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: autoCheckForUpdates) { newValue in
-                        appDelegate.updaterManager?.automaticallyChecksForUpdates = newValue
-                    }
-
-                    Spacer()
-                        .frame(maxWidth: .infinity)
                 }
-                #endif
             }
-            .padding(.vertical, 10)
+
+            }
         }
         .padding(16)
         .frame(width: 480)

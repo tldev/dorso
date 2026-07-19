@@ -122,6 +122,13 @@
 "settings.mode.manual" = "Manuel";
 "settings.mode.automatic" = "Automatique";
 "settings.preferred" = "Préférée";
+"settings.source" = "Source";
+"settings.section.response" = "Réponse posturale";
+"settings.section.behavior" = "Comportement";
+"settings.appearance" = "Apparence";
+"settings.appearance.auto" = "Auto";
+"settings.appearance.light" = "Clair";
+"settings.appearance.dark" = "Sombre";
 "settings.active" = "Active";
 "settings.calibrated" = "Calibrée";
 "settings.notCalibrated" = "Non calibrée";

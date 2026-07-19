@@ -6,6 +6,7 @@ enum SettingsKeys {
     static let intensity = "intensity"
     static let deadZone = "deadZone"
     static let useCompatibilityMode = "useCompatibilityMode"
+    static let appAppearance = "appAppearance"
     static let blurWhenAway = "blurWhenAway"
     static let showInDock = "showInDock"
     static let pauseOnTheGo = "pauseOnTheGo"
