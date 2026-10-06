@@ -109,6 +109,7 @@
 "calibration.airpods.putIn" = "Setzen Sie Ihre AirPods ein";
 "calibration.airpods.autoBegin" = "Die Kalibrierung beginnt automatisch";
 "calibration.airpods.escToCancel" = "{Esc} drücken zum Abbrechen";
+"calibration.camera.waiting" = "Warte auf Kamera…";
 
 // MARK: - Settings Window (SettingsWindow.swift)
 

@@ -8,7 +8,8 @@ class CalibrationView: NSView {
     var instructionText: String = L("calibration.lookAtRing")
     var stepText: String = L("calibration.stepOf", 1, 4)
     var showRing: Bool = true
-    var waitingForAirPods: Bool = false
+    var waitingForConnection: Bool = false
+    var waitingSource: TrackingSource = .airpods
     private var keycapSegmentCache: [String: [(text: String, isKeycap: Bool)]] = [:]
 
     override func draw(_ dirtyRect: NSRect) {
@@ -18,9 +19,9 @@ class CalibrationView: NSView {
         NSColor.black.withAlphaComponent(0.85).setFill()
         dirtyRect.fill()
 
-        // Show AirPods waiting state
-        if waitingForAirPods {
-            drawWaitingForAirPods()
+        // Show waiting state until the detector delivers data
+        if waitingForConnection {
+            drawWaitingForConnection()
             return
         }
 
@@ -195,18 +196,22 @@ class CalibrationView: NSView {
         return segments
     }
 
-    private func drawWaitingForAirPods() {
+    private func drawWaitingForConnection() {
+        let icon = waitingSource == .airpods ? "🎧" : "📷"
+        let title = waitingSource == .airpods ? L("calibration.airpods.putIn") : L("calibration.camera.waiting")
+        let subtitle = L("calibration.airpods.autoBegin")
+
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .center
 
-        // Draw pulsing AirPods icon (using SF Symbol or text)
+        // Draw pulsing source icon
         let iconAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 72, weight: .light),
             .foregroundColor: NSColor.cyan.withAlphaComponent(0.7 + 0.3 * sin(pulsePhase)),
             .paragraphStyle: paragraphStyle
         ]
         let iconRect = NSRect(x: 0, y: bounds.midY + 20, width: bounds.width, height: 90)
-        ("🎧" as NSString).draw(in: iconRect, withAttributes: iconAttrs)
+        (icon as NSString).draw(in: iconRect, withAttributes: iconAttrs)
 
         // Main instruction
         let titleAttrs: [NSAttributedString.Key: Any] = [
@@ -215,7 +220,7 @@ class CalibrationView: NSView {
             .paragraphStyle: paragraphStyle
         ]
         let titleRect = NSRect(x: 0, y: bounds.midY - 30, width: bounds.width, height: 45)
-        (L("calibration.airpods.putIn") as NSString).draw(in: titleRect, withAttributes: titleAttrs)
+        (title as NSString).draw(in: titleRect, withAttributes: titleAttrs)
 
         // Subtitle
         let subtitleAttrs: [NSAttributedString.Key: Any] = [
@@ -224,7 +229,7 @@ class CalibrationView: NSView {
             .paragraphStyle: paragraphStyle
         ]
         let subtitleRect = NSRect(x: 0, y: bounds.midY - 70, width: bounds.width, height: 30)
-        (L("calibration.airpods.autoBegin") as NSString).draw(in: subtitleRect, withAttributes: subtitleAttrs)
+        (subtitle as NSString).draw(in: subtitleRect, withAttributes: subtitleAttrs)
 
         // Escape hint (keycap style)
         drawLocalizedHintWithKeycap(
@@ -254,7 +259,7 @@ class CalibrationWindowController: NSObject {
     // The detector being used for calibration
     weak var detector: PostureDetector?
 
-    // Waiting for detector connection (e.g., AirPods in ears)
+    // Waiting for detector connection (AirPods in ears, or camera's first frame)
     var isWaitingForConnection: Bool = false
 
     // Store the original connection callback to restore later
@@ -405,7 +410,8 @@ class CalibrationWindowController: NSObject {
 
     func showWaitingForConnection() {
         for view in calibrationViews {
-            view.waitingForAirPods = true  // View still uses this name for the UI state
+            view.waitingForConnection = true
+            view.waitingSource = detector?.trackingSource ?? .airpods
             view.showRing = false
             view.needsDisplay = true
         }
@@ -421,7 +427,7 @@ class CalibrationWindowController: NSObject {
         }
 
         for view in calibrationViews {
-            view.waitingForAirPods = false  // View still uses this name for the UI state
+            view.waitingForConnection = false
             view.needsDisplay = true
         }
         updateStep()

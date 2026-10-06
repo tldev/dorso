@@ -135,7 +135,7 @@ protocol PostureDetector: AnyObject {
     var isActive: Bool { get }
 
     /// Whether the detector is currently connected and receiving data
-    /// For camera: always true when active. For AirPods: true when in ears.
+    /// For camera: true once a frame has been analyzed since start. For AirPods: true when in ears.
     var isConnected: Bool { get }
 
     /// Human-readable reason if not available
@@ -154,7 +154,7 @@ protocol PostureDetector: AnyObject {
     var onCalibrationUpdate: ((CalibrationSample) -> Void)? { get set }
 
     /// Called when connection state changes (e.g., AirPods removed from ears)
-    /// Not all detectors use this - camera is always "connected" when active
+    /// Camera reports connected once its first frame is analyzed after starting
     var onConnectionStateChange: ((Bool) -> Void)? { get set }
 
     // MARK: - Lifecycle

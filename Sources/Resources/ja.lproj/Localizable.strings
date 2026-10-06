@@ -109,6 +109,7 @@
 "calibration.airpods.putIn" = "AirPods を装着してください";
 "calibration.airpods.autoBegin" = "キャリブレーションが自動的に開始されます";
 "calibration.airpods.escToCancel" = "{Esc} でキャンセル";
+"calibration.camera.waiting" = "カメラを待っています…";
 
 // MARK: - Settings Window (SettingsWindow.swift)
 
