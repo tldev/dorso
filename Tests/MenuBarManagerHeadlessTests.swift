@@ -9,7 +9,9 @@ final class MenuBarManagerHeadlessTests: XCTestCase {
     private enum ItemIndex {
         static let status = 0
         static let enabled = 2
-        static let recalibrate = 3
+        static let resume = 3
+        static let pause = 4
+        static let recalibrate = 5
     }
 
     func testUpdatesBeforeMenuExistsAreSafeNoOps() {
@@ -17,6 +19,7 @@ final class MenuBarManagerHeadlessTests: XCTestCase {
         manager.updateStatus(text: "ignored", icon: .good)
         manager.updateEnabledState(false)
         manager.updateRecalibrateEnabled(false)
+        manager.updatePauseState(canPause: false, isTimedPause: true)
         manager.updateShortcut(enabled: true, shortcut: .defaultShortcut)
     }
 
@@ -49,6 +52,40 @@ final class MenuBarManagerHeadlessTests: XCTestCase {
 
         manager.updateRecalibrateEnabled(true)
         XCTAssertTrue(menu.items[ItemIndex.recalibrate].isEnabled)
+    }
+
+    func testPauseSubmenuOffersEachDuration() {
+        let manager = MenuBarManager()
+        let menu = manager.makeMenu()
+
+        let durations = menu.items[ItemIndex.pause].submenu?.items.compactMap { $0.representedObject as? TimeInterval }
+        XCTAssertEqual(durations, MenuBarManager.pauseDurations)
+    }
+
+    func testPauseMenuInvokesCallbackWithDuration() {
+        let manager = MenuBarManager()
+        let menu = manager.makeMenu()
+        var received: TimeInterval?
+        manager.onPause = { received = $0 }
+
+        let submenu = menu.items[ItemIndex.pause].submenu!
+        submenu.performActionForItem(at: 1)
+
+        XCTAssertEqual(received, MenuBarManager.pauseDurations[1])
+    }
+
+    func testUpdatePauseStateTogglesPauseAndResumeItems() {
+        let manager = MenuBarManager()
+        let menu = manager.makeMenu()
+        XCTAssertTrue(menu.items[ItemIndex.resume].isHidden)
+
+        manager.updatePauseState(canPause: true, isTimedPause: true)
+        XCTAssertTrue(menu.items[ItemIndex.pause].isEnabled)
+        XCTAssertFalse(menu.items[ItemIndex.resume].isHidden)
+
+        manager.updatePauseState(canPause: false, isTimedPause: false)
+        XCTAssertFalse(menu.items[ItemIndex.pause].isEnabled)
+        XCTAssertTrue(menu.items[ItemIndex.resume].isHidden)
     }
 
     func testUpdateShortcutAppliesAndClearsKeyEquivalent() {

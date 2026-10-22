@@ -15,6 +15,8 @@ struct PostureUIState: Equatable {
     let icon: MenuBarIconType
     let isEnabled: Bool
     let canRecalibrate: Bool
+    let canPause: Bool
+    let isTimedPause: Bool
 
     /// Derives the complete UI state from the current app state and flags
     static func derive(
@@ -31,7 +33,9 @@ struct PostureUIState: Equatable {
                 statusText: L("status.disabled"),
                 icon: .paused,
                 isEnabled: false,
-                canRecalibrate: true
+                canRecalibrate: true,
+                canPause: false,
+                isTimedPause: false
             )
 
         case .calibrating:
@@ -39,7 +43,9 @@ struct PostureUIState: Equatable {
                 statusText: L("status.calibrating"),
                 icon: .calibrating,
                 isEnabled: true,
-                canRecalibrate: false
+                canRecalibrate: false,
+                canPause: false,
+                isTimedPause: false
             )
 
         case .monitoring:
@@ -54,16 +60,26 @@ struct PostureUIState: Equatable {
                 statusText: statusText,
                 icon: icon,
                 isEnabled: true,
-                canRecalibrate: true
+                canRecalibrate: true,
+                canPause: true,
+                isTimedPause: false
             )
 
         case .paused(let reason):
             let statusText = pausedStatusText(reason: reason, trackingSource: trackingSource)
+            let isTimedPause: Bool
+            if case .timed = reason {
+                isTimedPause = true
+            } else {
+                isTimedPause = false
+            }
             return PostureUIState(
                 statusText: statusText,
                 icon: .paused,
                 isEnabled: true,
-                canRecalibrate: true
+                canRecalibrate: true,
+                canPause: true,
+                isTimedPause: isTimedPause
             )
         }
     }
@@ -104,6 +120,8 @@ struct PostureUIState: Equatable {
             return L("status.pausedPutInAirPods")
         case .onBattery:
             return L("status.pausedOnBattery")
+        case .timed(let until):
+            return L("status.pausedUntil", DateFormatter.localizedString(from: until, dateStyle: .none, timeStyle: .short))
         }
     }
 }

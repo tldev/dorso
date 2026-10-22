@@ -8,10 +8,18 @@ final class MenuBarManager {
     private var statusMenuItem: NSMenuItem!
     private var enabledMenuItem: NSMenuItem!
     private var recalibrateMenuItem: NSMenuItem!
+    private var resumeMenuItem: NSMenuItem!
+    private var pauseMenuItem: NSMenuItem!
+
+    /// Timed pause lengths offered in the Pause submenu. Each one ends on its
+    /// own; indefinite pausing is what the Enable toggle is for.
+    static let pauseDurations: [TimeInterval] = [5 * 60, 10 * 60, 30 * 60, 60 * 60]
 
     // Callbacks
     var onToggleEnabled: (() -> Void)?
     var onRecalibrate: (() -> Void)?
+    var onPause: ((TimeInterval) -> Void)?
+    var onResume: (() -> Void)?
     var onShowAnalytics: (() -> Void)?
     var onOpenSettings: (() -> Void)?
     var onOpenSupport: (() -> Void)?
@@ -36,6 +44,8 @@ final class MenuBarManager {
     @discardableResult
     func makeMenu() -> NSMenu {
         let menu = NSMenu()
+        // Item enablement is driven by tracking state via the update methods
+        menu.autoenablesItems = false
 
         // Status
         statusMenuItem = NSMenuItem(title: L("menu.status.starting"), action: nil, keyEquivalent: "")
@@ -49,6 +59,17 @@ final class MenuBarManager {
         enabledMenuItem.target = self
         enabledMenuItem.state = .on
         menu.addItem(enabledMenuItem)
+
+        // Resume Now (only shown during a timed pause)
+        resumeMenuItem = NSMenuItem(title: L("menu.resumeNow"), action: #selector(handleResume), keyEquivalent: "")
+        resumeMenuItem.target = self
+        resumeMenuItem.isHidden = true
+        menu.addItem(resumeMenuItem)
+
+        // Timed pause
+        pauseMenuItem = NSMenuItem(title: L("menu.pause"), action: nil, keyEquivalent: "")
+        pauseMenuItem.submenu = makePauseSubmenu()
+        menu.addItem(pauseMenuItem)
 
         // Recalibrate
         recalibrateMenuItem = NSMenuItem(title: L("menu.recalibrate"), action: #selector(handleRecalibrate), keyEquivalent: "r")
@@ -94,6 +115,25 @@ final class MenuBarManager {
         return menu
     }
 
+    private func makePauseSubmenu() -> NSMenu {
+        let formatter = DateComponentsFormatter()
+        formatter.unitsStyle = .full
+        formatter.allowedUnits = [.hour, .minute]
+
+        let submenu = NSMenu()
+        for duration in Self.pauseDurations {
+            let item = NSMenuItem(
+                title: formatter.string(from: duration) ?? "",
+                action: #selector(handlePause(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = duration
+            submenu.addItem(item)
+        }
+        return submenu
+    }
+
     // MARK: - Updates
 
     private var isSetUp: Bool { statusMenuItem != nil }
@@ -114,6 +154,12 @@ final class MenuBarManager {
         recalibrateMenuItem.isEnabled = enabled
     }
 
+    func updatePauseState(canPause: Bool, isTimedPause: Bool) {
+        guard isSetUp else { return }
+        pauseMenuItem.isEnabled = canPause
+        resumeMenuItem.isHidden = !isTimedPause
+    }
+
     func updateShortcut(enabled: Bool, shortcut: KeyboardShortcut) {
         guard isSetUp else { return }
         if enabled {
@@ -129,6 +175,15 @@ final class MenuBarManager {
 
     @objc private func handleToggleEnabled() {
         onToggleEnabled?()
+    }
+
+    @objc private func handlePause(_ sender: NSMenuItem) {
+        guard let duration = sender.representedObject as? TimeInterval else { return }
+        onPause?(duration)
+    }
+
+    @objc private func handleResume() {
+        onResume?()
     }
 
     @objc private func handleRecalibrate() {

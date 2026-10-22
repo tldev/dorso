@@ -418,6 +418,126 @@ final class TrackingFeatureTests: XCTestCase {
         await assertIntents([.startMonitoring], recorder: recorder)
     }
 
+    // MARK: - Timed Pause
+
+    @MainActor
+    func testTimedPauseMasksMonitoringAndSchedulesEnd() async {
+        let recorder = EffectIntentRecorder()
+        let end = Date(timeIntervalSince1970: 1_000)
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                monitoringState: PostureMonitoringState(isCurrentlySlouching: true, postureWarningIntensity: 0.5)
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.timedPauseRequested(until: end)) {
+            $0.timedPauseEnd = end
+            $0.monitoringState = PostureMonitoringState()
+        }
+        XCTAssertEqual(store.state.effectiveAppState, .paused(.timed(until: end)))
+        await store.finish()
+        await assertIntents([.scheduleTimedPauseEnd(end)], recorder: recorder)
+    }
+
+    @MainActor
+    func testTimedPauseIgnoredWhileDisabled() async {
+        let store = makeStore(initialState: TrackingFeature.State(appState: .disabled))
+        await store.send(.timedPauseRequested(until: Date(timeIntervalSince1970: 1_000)))
+    }
+
+    @MainActor
+    func testTimedPauseDropsPostureReadings() async {
+        let end = Date(timeIntervalSince1970: 1_000)
+        let store = makeStore(
+            initialState: TrackingFeature.State(appState: .monitoring, timedPauseEnd: end)
+        )
+        let reading = PostureReading(timestamp: Date(), isBadPosture: true, severity: 1)
+        await store.send(.postureReadingReceived(reading, isMarketingMode: false))
+    }
+
+    @MainActor
+    func testTimedPauseEndResumesMonitoringSession() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                timedPauseEnd: Date(timeIntervalSince1970: 1_000)
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.timedPauseEnded) {
+            $0.timedPauseEnd = nil
+        }
+        XCTAssertEqual(store.state.effectiveAppState, .monitoring)
+        await store.finish()
+        await assertIntents([.cancelTimedPauseEnd, .beginMonitoringSession], recorder: recorder)
+    }
+
+    @MainActor
+    func testTimedPauseEndLandsInBatteryPauseThatStartedUnderneath() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                pauseOnBatteryEnabled: true,
+                timedPauseEnd: Date(timeIntervalSince1970: 1_000)
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.powerSourceChanged(isOnBattery: true)) {
+            $0.isOnBattery = true
+            $0.appState = .paused(.onBattery)
+        }
+        await store.send(.timedPauseEnded) {
+            $0.timedPauseEnd = nil
+        }
+        XCTAssertEqual(store.state.effectiveAppState, .paused(.onBattery))
+        await store.finish()
+        await assertIntents([.cancelTimedPauseEnd], recorder: recorder)
+    }
+
+    @MainActor
+    func testDisablingCancelsTimedPause() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                timedPauseEnd: Date(timeIntervalSince1970: 1_000)
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.toggleEnabled(trackingSource: .camera, isCalibrated: true, detectorAvailable: true)) {
+            $0.appState = .disabled
+            $0.timedPauseEnd = nil
+        }
+        await store.finish()
+        await assertIntents([.cancelTimedPauseEnd], recorder: recorder)
+    }
+
+    @MainActor
+    func testRecalibratingCancelsTimedPause() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                timedPauseEnd: Date(timeIntervalSince1970: 1_000)
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.calibrationAuthorizationGranted) {
+            $0.appState = .calibrating
+            $0.timedPauseEnd = nil
+        }
+        await store.finish()
+        await assertIntents([.cancelTimedPauseEnd], recorder: recorder)
+    }
+
     // MARK: - Pause on Battery
 
     @MainActor

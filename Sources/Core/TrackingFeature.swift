@@ -37,6 +37,8 @@ struct TrackingFeature: Reducer {
         case openPrivacySettings
         case showCameraCalibrationRetryAlert(message: String?)
         case retryCalibration
+        case scheduleTimedPauseEnd(Date)
+        case cancelTimedPauseEnd
     }
 
     struct State: Equatable {
@@ -57,6 +59,10 @@ struct TrackingFeature: Reducer {
         var lastPostureReadingTime: Date?
         var pauseOnBatteryEnabled: Bool = false
         var isOnBattery: Bool = false
+        /// End of a user-requested pause. Layered over `appState` rather than
+        /// replacing it, so device and power transitions keep running
+        /// underneath and decide what tracking resumes into.
+        var timedPauseEnd: Date?
 
         init(
             appState: AppState = .disabled,
@@ -72,7 +78,8 @@ struct TrackingFeature: Reducer {
             postureConfig: PostureConfig = PostureConfig(),
             lastPostureReadingTime: Date? = nil,
             pauseOnBatteryEnabled: Bool = false,
-            isOnBattery: Bool = false
+            isOnBattery: Bool = false,
+            timedPauseEnd: Date? = nil
         ) {
             self.appState = appState
             self.trackingMode = trackingMode
@@ -88,6 +95,16 @@ struct TrackingFeature: Reducer {
             self.lastPostureReadingTime = lastPostureReadingTime
             self.pauseOnBatteryEnabled = pauseOnBatteryEnabled
             self.isOnBattery = isOnBattery
+            self.timedPauseEnd = timedPauseEnd
+        }
+
+        /// The state the user experiences: `appState`, masked by an active
+        /// timed pause. Detectors, posture processing, and UI follow this.
+        var effectiveAppState: AppState {
+            guard let timedPauseEnd, appState != .disabled, appState != .calibrating else {
+                return appState
+            }
+            return .paused(.timed(until: timedPauseEnd))
         }
 
         func readiness(for source: TrackingSource) -> TrackingSourceReadiness {
@@ -167,6 +184,8 @@ struct TrackingFeature: Reducer {
         case cameraSelectionChanged
         case switchTrackingSource(TrackingSource, isNewSourceCalibrated: Bool)
         case sourceReadinessChanged(source: TrackingSource, readiness: TrackingSourceReadiness)
+        case timedPauseRequested(until: Date)
+        case timedPauseEnded
     }
 
     @Dependency(\.trackingRuntime) var trackingRuntime
@@ -186,10 +205,17 @@ struct TrackingFeature: Reducer {
 
     var body: some ReducerOf<Self> {
         Reduce { state, action in
-            let previousAppState = state.appState
+            let previousAppState = state.effectiveAppState
 
             func finish(_ effect: Effect<Action> = .none) -> Effect<Action> {
-                if previousAppState.isActive, !state.appState.isActive {
+                var effect = effect
+                // Disabling or recalibrating is a deliberate user action that
+                // supersedes a timed pause.
+                if state.timedPauseEnd != nil, state.appState == .disabled || state.appState == .calibrating {
+                    state.timedPauseEnd = nil
+                    effect = .merge(effect, perform(.cancelTimedPauseEnd))
+                }
+                if previousAppState.isActive, !state.effectiveAppState.isActive {
                     state.monitoringState.reset()
                     state.lastPostureReadingTime = nil
                 }
@@ -268,7 +294,7 @@ struct TrackingFeature: Reducer {
                 return finish()
 
             case let .postureReadingReceived(reading, isMarketingMode):
-                guard state.appState == .monitoring else { return finish() }
+                guard state.effectiveAppState == .monitoring else { return finish() }
 
                 if isMarketingMode {
                     state.monitoringState.isCurrentlySlouching = false
@@ -313,7 +339,7 @@ struct TrackingFeature: Reducer {
                 return finish(perform(intents))
 
             case let .awayStateChanged(isAway, isMarketingMode):
-                guard state.appState == .monitoring, !isMarketingMode else { return finish() }
+                guard state.effectiveAppState == .monitoring, !isMarketingMode else { return finish() }
 
                 let result = PostureEngine.processAwayChange(
                     isAway: isAway,
@@ -617,6 +643,22 @@ struct TrackingFeature: Reducer {
                     return finish(resolveAutomaticSource(&state))
                 }
                 return finish()
+
+            case .timedPauseRequested(let until):
+                guard state.appState != .disabled, state.appState != .calibrating else { return finish() }
+                state.timedPauseEnd = until
+                return finish(perform(.scheduleTimedPauseEnd(until)))
+
+            case .timedPauseEnded:
+                guard state.timedPauseEnd != nil else { return finish() }
+                state.timedPauseEnd = nil
+                // The detector was stopped for the pause; resume into whatever
+                // state the transitions underneath have settled on.
+                var intents: [EffectIntent] = [.cancelTimedPauseEnd]
+                if PostureEngine.shouldDetectorRun(for: state.appState, trackingSource: state.activeSource) {
+                    intents.append(.beginMonitoringSession)
+                }
+                return finish(perform(intents))
             }
         }
     }

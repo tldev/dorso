@@ -4,6 +4,8 @@
 
 "menu.status.starting" = "Estado: Iniciando...";
 "menu.enable" = "Activar";
+"menu.pause" = "Pausar";
+"menu.resumeNow" = "Reanudar ahora";
 "menu.recalibrate" = "Recalibrar";
 "menu.support" = "Apoyar";
 "menu.analytics" = "Estadísticas";
@@ -39,6 +41,7 @@
 "status.pausedScreenLocked" = "Estado: Pausado (pantalla bloqueada)";
 "status.pausedPutInAirPods" = "Estado: Pausado (ponte los AirPods)";
 "status.pausedOnBattery" = "Estado: Pausado (con batería)";
+"status.pausedUntil" = "Estado: Pausado (hasta %@)";
 
 // MARK: - Menu Bar Icon Accessibility (Models.swift)
 

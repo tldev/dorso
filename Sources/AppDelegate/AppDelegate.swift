@@ -136,6 +136,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     let powerSourceObserver = PowerSourceObserver()
     let hotkeyManager = HotkeyManager()
 
+    /// Ends a timed pause. A wall-clock deadline so a pause that elapses
+    /// while the Mac sleeps ends on wake, not after further awake time.
+    var timedPauseTimer: DispatchSourceTimer?
+
     lazy var trackingStore: StoreOf<TrackingFeature> = {
         Store(initialState: TrackingFeature.State()) {
             TrackingFeature()
@@ -356,6 +360,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 startCalibration()
             }
+
+        case .scheduleTimedPauseEnd(let date):
+            scheduleTimedPauseEnd(at: date)
+
+        case .cancelTimedPauseEnd:
+            cancelTimedPauseEnd()
         }
     }
 
@@ -518,6 +528,16 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarManager.onToggleEnabled = { [weak self] in
             Task { @MainActor in
                 await self?.toggleEnabled()
+            }
+        }
+        menuBarManager.onPause = { [weak self] duration in
+            Task { @MainActor in
+                await self?.pause(for: duration)
+            }
+        }
+        menuBarManager.onResume = { [weak self] in
+            Task { @MainActor in
+                await self?.resumeFromTimedPause()
             }
         }
         menuBarManager.onRecalibrate = { [weak self] in

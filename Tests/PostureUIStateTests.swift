@@ -20,6 +20,52 @@ final class PostureUIStateTests: XCTestCase {
         XCTAssertTrue(uiState.canRecalibrate)
     }
 
+    // MARK: - Timed Pause
+
+    func testTimedPauseShowsResumeTimeAndResumeAction() {
+        let end = Date(timeIntervalSince1970: 1_000)
+        let uiState = PostureUIState.derive(
+            from: .paused(.timed(until: end)),
+            isCalibrated: true,
+            isCurrentlyAway: false,
+            isCurrentlySlouching: false,
+            trackingSource: .camera
+        )
+
+        let time = DateFormatter.localizedString(from: end, dateStyle: .none, timeStyle: .short)
+        XCTAssertEqual(uiState.statusText, L("status.pausedUntil", time))
+        XCTAssertEqual(uiState.icon, .paused)
+        XCTAssertTrue(uiState.isEnabled)
+        XCTAssertTrue(uiState.canPause)
+        XCTAssertTrue(uiState.isTimedPause)
+    }
+
+    func testOtherPausesDoNotShowResumeAction() {
+        let uiState = PostureUIState.derive(
+            from: .paused(.onBattery),
+            isCalibrated: true,
+            isCurrentlyAway: false,
+            isCurrentlySlouching: false,
+            trackingSource: .camera
+        )
+
+        XCTAssertTrue(uiState.canPause)
+        XCTAssertFalse(uiState.isTimedPause)
+    }
+
+    func testDisabledAndCalibratingCannotPause() {
+        for appState in [AppState.disabled, .calibrating] {
+            let uiState = PostureUIState.derive(
+                from: appState,
+                isCalibrated: true,
+                isCurrentlyAway: false,
+                isCurrentlySlouching: false,
+                trackingSource: .camera
+            )
+            XCTAssertFalse(uiState.canPause, "\(appState)")
+        }
+    }
+
     // MARK: - Calibrating State
 
     func testCalibratingState() {
