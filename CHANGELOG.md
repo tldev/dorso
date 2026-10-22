@@ -5,6 +5,13 @@ All notable changes to Dorso will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.1] - 2026-10-22
+
+### Fixed
+- Switching desks no longer pauses tracking when "Pause on the go" is on and only the laptop screen is connected
+- Settings now updates right away when you switch desks, calibrate, or change source from the menu bar, instead of showing stale values until reopened
+- A matching camera reconnecting in automatic mode now loads its saved calibration
+
 ## [1.16.0] - 2026-10-22
 
 ### Added
