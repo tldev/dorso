@@ -216,3 +216,25 @@
 // MARK: - Common
 
 "common.cancel" = "Cancel";
+
+// MARK: - Desks
+
+"menu.desk" = "Desk";
+"menu.manageDesks" = "Manage Desks…";
+"desk.defaultName" = "Desk %d";
+"desk.namePlaceholder" = "Desk name";
+"desk.renameTitle" = "Rename Desk";
+"desk.deleteTitle" = "Delete Desk";
+"desk.deleteMessage" = "Are you sure you want to delete this desk and its calibration? This cannot be undone.";
+"settings.desk" = "Desk";
+"settings.desk.help" = "Each desk keeps its own calibration for this display setup. Switch desks here or from the menu bar.";
+"settings.profile.renameTitle" = "Rename Profile";
+"common.rename" = "Rename";
+"calibration.desk.title" = "Which desk are you at?";
+"calibration.desk.subtitle" = "Switch to a saved desk, or calibrate a new one.";
+"calibration.desk.current" = "Current";
+"calibration.desk.new" = "New desk";
+"calibration.desk.recalibrate" = "Recalibrate current desk";
+"calibration.desk.hint.new" = "At a different desk? Press {N} to save it as a new one";
+"calibration.desk.hint.newSelected" = "Saving as a new desk. Press {N} to undo";
+"calibration.desk.keysHint" = "{↑}{↓} to move   {↩} to select   {Esc} to cancel";

@@ -216,3 +216,25 @@
 // MARK: - Common
 
 "common.cancel" = "Abbrechen";
+
+// MARK: - Desks
+
+"menu.desk" = "Arbeitsplatz";
+"menu.manageDesks" = "Arbeitsplätze verwalten…";
+"desk.defaultName" = "Arbeitsplatz %d";
+"desk.namePlaceholder" = "Name des Arbeitsplatzes";
+"desk.renameTitle" = "Arbeitsplatz umbenennen";
+"desk.deleteTitle" = "Arbeitsplatz löschen";
+"desk.deleteMessage" = "Möchten Sie diesen Arbeitsplatz und seine Kalibrierung wirklich löschen? Dies kann nicht rückgängig gemacht werden.";
+"settings.desk" = "Arbeitsplatz";
+"settings.desk.help" = "Jeder Arbeitsplatz speichert eine eigene Kalibrierung für diese Bildschirmkonfiguration. Wechseln Sie hier oder über die Menüleiste.";
+"settings.profile.renameTitle" = "Profil umbenennen";
+"common.rename" = "Umbenennen";
+"calibration.desk.title" = "An welchem Arbeitsplatz sind Sie?";
+"calibration.desk.subtitle" = "Wechseln Sie zu einem gespeicherten Arbeitsplatz oder kalibrieren Sie einen neuen.";
+"calibration.desk.current" = "Aktuell";
+"calibration.desk.new" = "Neuer Arbeitsplatz";
+"calibration.desk.recalibrate" = "Aktuellen Arbeitsplatz neu kalibrieren";
+"calibration.desk.hint.new" = "An einem anderen Arbeitsplatz? Drücken Sie {N}, um ihn neu zu speichern";
+"calibration.desk.hint.newSelected" = "Wird als neuer Arbeitsplatz gespeichert. {N} drücken zum Rückgängigmachen";
+"calibration.desk.keysHint" = "{↑}{↓} bewegen   {↩} auswählen   {Esc} abbrechen";

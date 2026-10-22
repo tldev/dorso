@@ -59,6 +59,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         }
         appDelegate?.onCalibrationComplete = nil
         appDelegate?.onActiveSourceChanged = nil
+        appDelegate?.onDesksChanged = nil
     }
 
     func windowDidResize(_ notification: Notification) {

@@ -216,3 +216,25 @@
 // MARK: - Common
 
 "common.cancel" = "取消";
+
+// MARK: - Desks
+
+"menu.desk" = "工位";
+"menu.manageDesks" = "管理工位…";
+"desk.defaultName" = "工位 %d";
+"desk.namePlaceholder" = "工位名称";
+"desk.renameTitle" = "重命名工位";
+"desk.deleteTitle" = "删除工位";
+"desk.deleteMessage" = "确定要删除此工位及其校准吗？此操作无法撤销。";
+"settings.desk" = "工位";
+"settings.desk.help" = "每个工位为当前显示器配置保存各自的校准。可在此处或菜单栏中切换工位。";
+"settings.profile.renameTitle" = "重命名配置文件";
+"common.rename" = "重命名";
+"calibration.desk.title" = "你在哪个工位？";
+"calibration.desk.subtitle" = "切换到已保存的工位，或校准一个新工位。";
+"calibration.desk.current" = "当前";
+"calibration.desk.new" = "新工位";
+"calibration.desk.recalibrate" = "重新校准当前工位";
+"calibration.desk.hint.new" = "在其他工位？按 {N} 将其保存为新工位";
+"calibration.desk.hint.newSelected" = "将保存为新工位。按 {N} 撤销";
+"calibration.desk.keysHint" = "{↑}{↓} 移动   {↩} 选择   {Esc} 取消";

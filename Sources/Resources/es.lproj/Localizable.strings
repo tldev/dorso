@@ -216,3 +216,25 @@
 // MARK: - Common
 
 "common.cancel" = "Cancelar";
+
+// MARK: - Desks
+
+"menu.desk" = "Puesto de trabajo";
+"menu.manageDesks" = "Gestionar puestos…";
+"desk.defaultName" = "Puesto %d";
+"desk.namePlaceholder" = "Nombre del puesto";
+"desk.renameTitle" = "Renombrar puesto";
+"desk.deleteTitle" = "Eliminar puesto";
+"desk.deleteMessage" = "¿Seguro que quieres eliminar este puesto y su calibración? Esta acción no se puede deshacer.";
+"settings.desk" = "Puesto de trabajo";
+"settings.desk.help" = "Cada puesto guarda su propia calibración para esta configuración de pantallas. Cambia de puesto aquí o desde la barra de menús.";
+"settings.profile.renameTitle" = "Renombrar perfil";
+"common.rename" = "Renombrar";
+"calibration.desk.title" = "¿En qué puesto de trabajo estás?";
+"calibration.desk.subtitle" = "Cambia a un puesto guardado o calibra uno nuevo.";
+"calibration.desk.current" = "Actual";
+"calibration.desk.new" = "Nuevo puesto";
+"calibration.desk.recalibrate" = "Recalibrar el puesto actual";
+"calibration.desk.hint.new" = "¿En otro puesto? Pulsa {N} para guardarlo como nuevo";
+"calibration.desk.hint.newSelected" = "Se guardará como un puesto nuevo. Pulsa {N} para deshacer";
+"calibration.desk.keysHint" = "{↑}{↓} para moverte   {↩} para elegir   {Esc} para cancelar";

@@ -2,6 +2,72 @@ import AppKit
 
 // MARK: - Calibration View
 
+enum CalibrationKeyAction: Equatable {
+    case cancel
+    case capture
+    case toggleNewDesk
+    case selectDesk(index: Int)
+    case calibrateNewDesk
+    case recalibrateCurrentDesk
+    case moveFocus(by: Int)
+    case activateFocused
+
+    /// kVK_ANSI_1...9, so number keys work on layouts like AZERTY
+    private static let numberRowKeyCodes: [UInt16] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
+
+    /// Keys typed into other apps only reach Space and Escape.
+    static func forKey(
+        keyCode: UInt16,
+        characters: String?,
+        modifiers: NSEvent.ModifierFlags,
+        isRepeat: Bool,
+        isFromDorso: Bool,
+        isChoosingDesk: Bool,
+        deskCount: Int
+    ) -> CalibrationKeyAction? {
+        if keyCode == 53 { return .cancel } // Escape
+        guard modifiers.intersection([.command, .option, .control]).isEmpty else { return nil }
+
+        // Arrows may repeat
+        if isChoosingDesk, isFromDorso {
+            if keyCode == 126 { return .moveFocus(by: -1) } // Up arrow
+            if keyCode == 125 { return .moveFocus(by: 1) }  // Down arrow
+        }
+        guard !isRepeat else { return nil }
+
+        // Physical N and R for non-Latin layouts
+        var key = characters?.lowercased() ?? ""
+        if !key.allSatisfy(\.isASCII) {
+            if keyCode == 45 { key = "n" }
+            if keyCode == 15 { key = "r" }
+        }
+        if isChoosingDesk {
+            guard isFromDorso else { return nil }
+            if keyCode == 36 || keyCode == 76 { return .activateFocused } // Return, keypad Enter
+            let number = Int(key) ?? numberRowKeyCodes.firstIndex(of: keyCode).map { $0 + 1 }
+            if let number, number >= 1, number <= min(deskCount, 9) {
+                return .selectDesk(index: number - 1)
+            }
+            if key == "n" { return .calibrateNewDesk }
+            if key == "r" { return .recalibrateCurrentDesk }
+            return nil
+        }
+
+        if keyCode == 49 { return .capture } // Space
+        if key == "n", deskCount > 0, isFromDorso { return .toggleNewDesk }
+        return nil
+    }
+}
+
+/// `key` is empty for desks past the ninth.
+struct DeskPickerRow: Equatable {
+    let key: String
+    let title: String
+    let action: CalibrationKeyAction
+    var isCurrent = false
+    var isSecondary = false
+}
+
 class CalibrationView: NSView {
     var targetPosition: NSPoint = .zero
     var pulsePhase: CGFloat = 0
@@ -10,6 +76,16 @@ class CalibrationView: NSView {
     var showRing: Bool = true
     var waitingForConnection: Bool = false
     var waitingSource: TrackingSource = .airpods
+    var deskPickerRows: [DeskPickerRow]?
+    var deskPickerTitle = L("calibration.desk.title")
+    var deskPickerSubtitle = L("calibration.desk.subtitle")
+    var onDeskPickerRowSelected: ((CalibrationKeyAction) -> Void)?
+    var onDeskPickerRowHovered: ((Int) -> Void)?
+    var focusedRowIndex: Int?
+    private var deskPickerRowRects: [NSRect] = []
+    private var hoveredRowIndex: Int?
+    private static let accent = NSColor(red: 0.31, green: 0.82, blue: 0.77, alpha: 1)  // brandCyan
+    var footerHint: String?
     private var keycapSegmentCache: [String: [(text: String, isKeycap: Bool)]] = [:]
 
     override func draw(_ dirtyRect: NSRect) {
@@ -18,6 +94,11 @@ class CalibrationView: NSView {
         // Dark overlay
         NSColor.black.withAlphaComponent(0.85).setFill()
         dirtyRect.fill()
+
+        if let deskPickerRows {
+            drawDeskPicker(rows: deskPickerRows)
+            return
+        }
 
         // Show waiting state until the detector delivers data
         if waitingForConnection {
@@ -102,6 +183,240 @@ class CalibrationView: NSView {
             textColor: NSColor.white.withAlphaComponent(0.5),
             fontSize: 14
         )
+
+        if let footerHint {
+            drawLocalizedHintWithKeycap(
+                text: footerHint,
+                centerY: bounds.midY - 170,
+                textColor: NSColor.white.withAlphaComponent(0.5),
+                fontSize: 14
+            )
+        }
+    }
+
+    // MARK: - Desk Picker
+
+    private func drawDeskPicker(rows: [DeskPickerRow]) {
+        NSColor.black.withAlphaComponent(0.4).setFill()
+        bounds.fill()
+
+        let cardWidth: CGFloat = 440
+        let padding: CGFloat = 28
+        let primaryRowHeight: CGFloat = 52
+        let secondaryRowHeight: CGFloat = 42
+        let rowSpacing: CGFloat = 6
+        let dividerSpacing: CGFloat = 14
+
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 24, weight: .semibold),
+            .foregroundColor: NSColor.white
+        ]
+        let subtitleAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 14, weight: .regular),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.6)
+        ]
+        let textWidth = cardWidth - padding * 2
+        let textOptions: NSString.DrawingOptions = [.usesLineFragmentOrigin, .usesFontLeading]
+        let title = deskPickerTitle as NSString
+        let subtitle = deskPickerSubtitle as NSString
+        let titleHeight = ceil(title.boundingRect(
+            with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
+            options: textOptions,
+            attributes: titleAttrs
+        ).height)
+        let subtitleHeight = ceil(subtitle.boundingRect(
+            with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
+            options: textOptions,
+            attributes: subtitleAttrs
+        ).height)
+
+        let hasDivider = rows.contains(where: \.isSecondary) && rows.contains(where: { !$0.isSecondary })
+        var rowsHeight: CGFloat = 0
+        for row in rows {
+            rowsHeight += (row.isSecondary ? secondaryRowHeight : primaryRowHeight) + rowSpacing
+        }
+        rowsHeight -= rowSpacing
+        if hasDivider { rowsHeight += dividerSpacing * 2 + 1 }
+
+        let cardHeight = padding + titleHeight + 4 + subtitleHeight + 20 + rowsHeight + padding
+        let card = NSRect(
+            x: bounds.midX - cardWidth / 2,
+            y: bounds.midY - cardHeight / 2,
+            width: cardWidth,
+            height: cardHeight
+        )
+        let cardPath = NSBezierPath(roundedRect: card, xRadius: 18, yRadius: 18)
+        NSColor(white: 0.11, alpha: 0.97).setFill()
+        cardPath.fill()
+        NSColor.white.withAlphaComponent(0.1).setStroke()
+        cardPath.lineWidth = 1
+        cardPath.stroke()
+
+        // y grows upward
+        var y = card.maxY - padding - titleHeight
+        title.draw(
+            with: NSRect(x: card.minX + padding, y: y, width: textWidth, height: titleHeight),
+            options: textOptions,
+            attributes: titleAttrs
+        )
+        y -= 4 + subtitleHeight
+        subtitle.draw(
+            with: NSRect(x: card.minX + padding, y: y, width: textWidth, height: subtitleHeight),
+            options: textOptions,
+            attributes: subtitleAttrs
+        )
+        y -= 20
+
+        deskPickerRowRects = []
+        var previousWasSecondary = false
+        for (index, row) in rows.enumerated() {
+            if row.isSecondary, !previousWasSecondary, hasDivider {
+                y -= dividerSpacing
+                NSColor.white.withAlphaComponent(0.08).setFill()
+                NSRect(x: card.minX + padding, y: y - 1, width: cardWidth - padding * 2, height: 1).fill()
+                y -= 1 + dividerSpacing
+            }
+            previousWasSecondary = row.isSecondary
+
+            let height = row.isSecondary ? secondaryRowHeight : primaryRowHeight
+            let rowRect = NSRect(x: card.minX + 16, y: y - height, width: cardWidth - 32, height: height)
+            drawDeskPickerRow(row, in: rowRect, isFocused: focusedRowIndex == index)
+            deskPickerRowRects.append(rowRect)
+            y -= height + rowSpacing
+        }
+
+        drawLocalizedHintWithKeycap(
+            text: L("calibration.desk.keysHint"),
+            centerY: card.minY - 40,
+            textColor: NSColor.white.withAlphaComponent(0.45),
+            fontSize: 13
+        )
+    }
+
+    private func drawDeskPickerRow(_ row: DeskPickerRow, in rect: NSRect, isFocused: Bool) {
+        let accent = Self.accent
+        let rowPath = NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10)
+        if row.isCurrent {
+            accent.withAlphaComponent(isFocused ? 0.2 : 0.13).setFill()
+            rowPath.fill()
+        } else if isFocused {
+            NSColor.white.withAlphaComponent(0.07).setFill()
+            rowPath.fill()
+        }
+        if isFocused {
+            let ringPath = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 9, yRadius: 9)
+            accent.withAlphaComponent(0.95).setStroke()
+            ringPath.lineWidth = 2
+            ringPath.stroke()
+        } else if row.isCurrent {
+            accent.withAlphaComponent(0.4).setStroke()
+            rowPath.lineWidth = 1
+            rowPath.stroke()
+        }
+
+        let keycapColumnWidth: CGFloat = 28
+        if !row.key.isEmpty {
+            let keycapSize: CGFloat = row.isSecondary ? 24 : keycapColumnWidth
+            let keycapRect = NSRect(
+                x: rect.minX + 14 + (keycapColumnWidth - keycapSize) / 2,
+                y: rect.midY - keycapSize / 2,
+                width: keycapSize,
+                height: keycapSize
+            )
+            let keycapPath = NSBezierPath(roundedRect: keycapRect, xRadius: 6, yRadius: 6)
+            (row.isCurrent ? accent.withAlphaComponent(0.25) : NSColor.white.withAlphaComponent(0.1)).setFill()
+            keycapPath.fill()
+            (row.isCurrent ? accent.withAlphaComponent(0.6) : NSColor.white.withAlphaComponent(0.22)).setStroke()
+            keycapPath.lineWidth = 1
+            keycapPath.stroke()
+
+            let keyAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.monospacedSystemFont(ofSize: row.isSecondary ? 12 : 14, weight: .semibold),
+                .foregroundColor: row.isCurrent ? accent : NSColor.white.withAlphaComponent(0.85)
+            ]
+            let key = row.key as NSString
+            let keySize = key.size(withAttributes: keyAttrs)
+            key.draw(
+                at: NSPoint(x: keycapRect.midX - keySize.width / 2, y: keycapRect.midY - keySize.height / 2),
+                withAttributes: keyAttrs
+            )
+        }
+
+        var titleMaxX = rect.maxX - 14
+        if row.isCurrent {
+            let badgeAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+                .foregroundColor: accent
+            ]
+            let badge = L("calibration.desk.current") as NSString
+            let badgeSize = badge.size(withAttributes: badgeAttrs)
+            let pill = NSRect(
+                x: rect.maxX - 14 - badgeSize.width - 16,
+                y: rect.midY - (badgeSize.height + 6) / 2,
+                width: badgeSize.width + 16,
+                height: badgeSize.height + 6
+            )
+            accent.withAlphaComponent(0.15).setFill()
+            NSBezierPath(roundedRect: pill, xRadius: pill.height / 2, yRadius: pill.height / 2).fill()
+            badge.draw(at: NSPoint(x: pill.minX + 8, y: pill.minY + 3), withAttributes: badgeAttrs)
+            titleMaxX = pill.minX - 10
+        }
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byTruncatingTail
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: row.isSecondary ? 14 : 17, weight: row.isSecondary ? .regular : .medium),
+            .foregroundColor: NSColor.white.withAlphaComponent(row.isSecondary ? 0.7 : 1),
+            .paragraphStyle: paragraphStyle
+        ]
+        let title = row.title as NSString
+        let titleHeight = title.size(withAttributes: titleAttrs).height
+        let titleX = rect.minX + 14 + keycapColumnWidth + 14
+        title.draw(
+            in: NSRect(x: titleX, y: rect.midY - titleHeight / 2, width: titleMaxX - titleX, height: titleHeight),
+            withAttributes: titleAttrs
+        )
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas {
+            removeTrackingArea(area)
+        }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeAlways, .inVisibleRect], owner: self))
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        guard deskPickerRows != nil else { return }
+        let index = deskPickerRowIndex(at: convert(event.locationInWindow, from: nil))
+        if index != hoveredRowIndex {
+            hoveredRowIndex = index
+            (index == nil ? NSCursor.arrow : NSCursor.pointingHand).set()
+            if let index {
+                onDeskPickerRowHovered?(index)
+            }
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let rows = deskPickerRows,
+              let index = deskPickerRowIndex(at: convert(event.locationInWindow, from: nil)),
+              index < rows.count else { return }
+        hoveredRowIndex = nil
+        NSCursor.arrow.set()
+        onDeskPickerRowSelected?(rows[index].action)
+    }
+
+    func resetDeskPickerHover() {
+        hoveredRowIndex = nil
+    }
+
+    private func deskPickerRowIndex(at point: NSPoint) -> Int? {
+        deskPickerRowRects.firstIndex(where: { $0.contains(point) })
     }
 
     private func drawLocalizedHintWithKeycap(text: String, centerY: CGFloat, textColor: NSColor, fontSize: CGFloat) {
@@ -249,8 +564,26 @@ class CalibrationWindowController: NSObject {
     var calibrationViews: [CalibrationView] = []
     var animationTimer: Timer?
     var currentStep = 0
-    var onComplete: (([CalibrationSample]) -> Void)?
+    var onComplete: (([CalibrationSample], _ saveAsNewDesk: Bool) -> Void)?
+    var onSelectDesk: ((String) -> Void)?
     var onCancel: (() -> Void)?
+
+    struct DeskChoice: Equatable {
+        let id: String
+        let name: String
+        let isActive: Bool
+    }
+
+    private(set) var desks: [DeskChoice] = []
+    private(set) var isChoosingDesk = false
+    private(set) var saveAsNewDesk = false
+    private var deskPickerRows: [DeskPickerRow] = []
+    private var focusedRowIndex = 0
+
+    static func movedFocus(from index: Int, by delta: Int, rowCount: Int) -> Int {
+        guard rowCount > 0 else { return 0 }
+        return min(max(index + delta, 0), rowCount - 1)
+    }
     var capturedValues: [CalibrationSample] = []
 
     var localEventMonitor: Any?
@@ -319,7 +652,13 @@ class CalibrationWindowController: NSObject {
         }
     }
 
-    func start(detector: PostureDetector, onComplete: @escaping ([CalibrationSample]) -> Void, onCancel: @escaping () -> Void) {
+    func start(
+        detector: PostureDetector,
+        desks: [DeskChoice] = [],
+        onComplete: @escaping ([CalibrationSample], _ saveAsNewDesk: Bool) -> Void,
+        onSelectDesk: @escaping (String) -> Void = { _ in },
+        onCancel: @escaping () -> Void
+    ) {
         // Guard against reentrant start() before cleanup() has run: re-capturing
         // `originalConnectionCallback` would snapshot a previously-wrapped
         // callback as the "original," and cleanup would then restore the
@@ -328,9 +667,12 @@ class CalibrationWindowController: NSObject {
 
         self.detector = detector
         self.onComplete = onComplete
+        self.onSelectDesk = onSelectDesk
         self.onCancel = onCancel
         self.currentStep = 0
         self.capturedValues = []
+        self.desks = desks
+        self.saveAsNewDesk = false
 
         // Force .accessory so calibration windows overlay cleanly above a
         // fullscreen app on the current Space. Onboarding and Settings both
@@ -368,22 +710,12 @@ class CalibrationWindowController: NSObject {
 
         // Setup keyboard monitoring (both local and global)
         localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 49 { // Space
-                self?.captureCurrentPosition()
-                return nil
-            } else if event.keyCode == 53 { // Escape
-                self?.cancel()
-                return nil
-            }
-            return event
+            guard let self else { return event }
+            return self.handleKey(event, isFromDorso: true) ? nil : event
         }
 
         globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 49 { // Space
-                self?.captureCurrentPosition()
-            } else if event.keyCode == 53 { // Escape
-                self?.cancel()
-            }
+            _ = self?.handleKey(event, isFromDorso: false)
         }
 
         // Activate first so subsequent ordering happens while Dorso is frontmost.
@@ -403,9 +735,120 @@ class CalibrationWindowController: NSObject {
         // Save the original callback to restore later
         originalConnectionCallback = detector.onConnectionStateChange
 
-        checkDetectorAndProceed()
+        if desks.count >= 2 {
+            showDeskPicker()
+        } else {
+            checkDetectorAndProceed()
+        }
 
         startAnimation()
+    }
+
+    // MARK: - Keyboard
+
+    private func handleKey(_ event: NSEvent, isFromDorso: Bool) -> Bool {
+        guard let action = CalibrationKeyAction.forKey(
+            keyCode: event.keyCode,
+            characters: event.charactersIgnoringModifiers,
+            modifiers: event.modifierFlags,
+            isRepeat: event.isARepeat,
+            isFromDorso: isFromDorso,
+            isChoosingDesk: isChoosingDesk,
+            deskCount: desks.count
+        ) else { return false }
+        perform(action)
+        return true
+    }
+
+    private func perform(_ action: CalibrationKeyAction) {
+        switch action {
+        case .cancel:
+            cancel()
+        case .capture:
+            captureCurrentPosition()
+        case .toggleNewDesk:
+            saveAsNewDesk.toggle()
+            updateFooterHint()
+        case .selectDesk(let index):
+            guard isChoosingDesk, desks.indices.contains(index) else { return }
+            let desk = desks[index]
+            cleanup()
+            onSelectDesk?(desk.id)
+        case .calibrateNewDesk:
+            guard isChoosingDesk else { return }
+            beginCalibration(asNewDesk: true)
+        case .recalibrateCurrentDesk:
+            guard isChoosingDesk else { return }
+            beginCalibration(asNewDesk: false)
+        case .moveFocus(let delta):
+            guard isChoosingDesk else { return }
+            calibrationViews.forEach { $0.resetDeskPickerHover() }
+            setFocusedRow(Self.movedFocus(from: focusedRowIndex, by: delta, rowCount: deskPickerRows.count))
+        case .activateFocused:
+            guard isChoosingDesk, deskPickerRows.indices.contains(focusedRowIndex) else { return }
+            perform(deskPickerRows[focusedRowIndex].action)
+        }
+    }
+
+    // MARK: - Desk Choice
+
+    private func showDeskPicker() {
+        isChoosingDesk = true
+        var rows: [DeskPickerRow] = []
+        for (index, desk) in desks.enumerated() {
+            let key = index < 9 ? "\(index + 1)" : ""
+            rows.append(DeskPickerRow(key: key, title: desk.name, action: .selectDesk(index: index), isCurrent: desk.isActive))
+        }
+        rows.append(DeskPickerRow(key: "N", title: L("calibration.desk.new"), action: .calibrateNewDesk, isSecondary: true))
+        rows.append(DeskPickerRow(key: "R", title: L("calibration.desk.recalibrate"), action: .recalibrateCurrentDesk, isSecondary: true))
+        deskPickerRows = rows
+        focusedRowIndex = rows.firstIndex(where: \.isCurrent) ?? 0
+        for view in calibrationViews {
+            view.deskPickerRows = rows
+            view.focusedRowIndex = focusedRowIndex
+            view.onDeskPickerRowSelected = { [weak self] action in
+                self?.perform(action)
+            }
+            view.onDeskPickerRowHovered = { [weak self] index in
+                self?.setFocusedRow(index)
+            }
+            view.showRing = false
+            view.needsDisplay = true
+        }
+    }
+
+    private func setFocusedRow(_ index: Int) {
+        guard index != focusedRowIndex else { return }
+        focusedRowIndex = index
+        for view in calibrationViews {
+            view.focusedRowIndex = index
+            view.needsDisplay = true
+        }
+    }
+
+    private func beginCalibration(asNewDesk: Bool) {
+        isChoosingDesk = false
+        saveAsNewDesk = asNewDesk
+        for view in calibrationViews {
+            view.deskPickerRows = nil
+        }
+        checkDetectorAndProceed()
+    }
+
+    private func updateFooterHint() {
+        // With the picker, the choice was made up front
+        let hint: String?
+        if desks.count == 1 {
+            hint = saveAsNewDesk ? L("calibration.desk.hint.newSelected") : L("calibration.desk.hint.new")
+        } else if saveAsNewDesk {
+            hint = L("calibration.desk.hint.newSelected")
+        } else {
+            hint = nil
+        }
+        for view in calibrationViews {
+            view.footerHint = hint
+            view.needsDisplay = true
+        }
     }
 
     func showWaitingForConnection() {
@@ -454,6 +897,7 @@ class CalibrationWindowController: NSObject {
         } else {
             updateStep()
         }
+        updateFooterHint()
     }
 
     func updateStep() {
@@ -499,7 +943,7 @@ class CalibrationWindowController: NSObject {
 
     func captureCurrentPosition() {
         // Don't capture while waiting for detector connection
-        guard !isWaitingForConnection else { return }
+        guard !isWaitingForConnection, !isChoosingDesk else { return }
 
         // Get current calibration value from the detector
         if let detector {
@@ -512,7 +956,7 @@ class CalibrationWindowController: NSObject {
 
     func complete() {
         cleanup()
-        onComplete?(capturedValues)
+        onComplete?(capturedValues, saveAsNewDesk)
     }
 
     func cancel() {
@@ -543,6 +987,7 @@ class CalibrationWindowController: NSObject {
         }
         windows = []
         calibrationViews = []
+        NSCursor.arrow.set()
 
         if let policy = activationPolicyToRestore {
             NSApp.setActivationPolicy(policy)

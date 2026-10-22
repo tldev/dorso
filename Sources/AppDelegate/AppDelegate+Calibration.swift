@@ -62,9 +62,15 @@ extension AppDelegate {
                 self.calibrationController = CalibrationWindowController()
                 self.calibrationController?.start(
                     detector: detector,
-                    onComplete: { [weak self] values in
+                    desks: self.deskChoices(for: source),
+                    onComplete: { [weak self] values, saveAsNewDesk in
                         Task { @MainActor in
-                            await self?.finishCalibration(values: values)
+                            await self?.finishCalibration(values: values, saveAsNewDesk: saveAsNewDesk)
+                        }
+                    },
+                    onSelectDesk: { [weak self] id in
+                        Task { @MainActor in
+                            await self?.finishCalibrationBySelectingDesk(id: id)
                         }
                     },
                     onCancel: { [weak self] in
@@ -77,7 +83,16 @@ extension AppDelegate {
         }
     }
 
-    func finishCalibration(values: [CalibrationSample]) async {
+    private func deskChoices(for source: TrackingSource) -> [CalibrationWindowController.DeskChoice] {
+        guard source == .camera else { return [] }
+        let key = DisplayMonitor.getCurrentConfigKey()
+        let activeID = deskStore.activeDesk(forKey: key)?.id
+        return deskStore.desks(forKey: key).map {
+            CalibrationWindowController.DeskChoice(id: $0.id, name: $0.name, isActive: $0.id == activeID)
+        }
+    }
+
+    func finishCalibration(values: [CalibrationSample], saveAsNewDesk: Bool = false) async {
         let source = calibratingSource ?? activeTrackingSource
 
         guard values.count >= 4 else {
@@ -94,7 +109,6 @@ extension AppDelegate {
 
         if let cameraCalibration = calibration as? CameraCalibrationData {
             self.cameraCalibration = cameraCalibration
-            // Also save as legacy profile keyed by the display configuration
             let profile = ProfileData(
                 goodPostureY: cameraCalibration.goodPostureY,
                 badPostureY: cameraCalibration.badPostureY,
@@ -102,7 +116,12 @@ extension AppDelegate {
                 postureRange: cameraCalibration.postureRange,
                 cameraID: cameraCalibration.cameraID
             )
-            saveProfile(forKey: DisplayMonitor.getCurrentConfigKey(), data: profile)
+            let key = DisplayMonitor.getCurrentConfigKey()
+            if saveAsNewDesk {
+                deskStore.addDesk(named: deskStore.nextDefaultName(forKey: key), profile: profile, forKey: key)
+            } else {
+                deskStore.replaceActiveCalibration(forKey: key, with: profile)
+            }
         } else if let airPodsCalibration = calibration as? AirPodsCalibrationData {
             self.airPodsCalibration = airPodsCalibration
         }
@@ -119,6 +138,19 @@ extension AppDelegate {
         calibratingSource = nil
         calibrationController = nil
         await sendTrackingAction(.calibrationCancelled(isCalibrated: isCalibrated))
+    }
+
+    func finishCalibrationBySelectingDesk(id: String) async {
+        let key = DisplayMonitor.getCurrentConfigKey()
+        calibratingSource = nil
+        calibrationController = nil
+
+        if deskStore.selectDesk(id: id, forKey: key) != nil {
+            lineUpActiveDesk(forKey: key)
+        }
+        await sendTrackingAction(.calibrationCancelled(isCalibrated: isCalibrated))
+        onDesksChanged?()
+        onCalibrationComplete?()
     }
 
     // MARK: - Calibration Alerts

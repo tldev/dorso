@@ -191,6 +191,26 @@ final class SettingsProfileManager {
         return profile
     }
 
+    func canRenameProfile(id: String) -> Bool {
+        guard let profile = settingsProfiles.first(where: { $0.id == id }) else { return false }
+        return profile.name != "Default"
+    }
+
+    @discardableResult
+    func renameProfile(id: String, to name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard canRenameProfile(id: id),
+              !trimmed.isEmpty,
+              trimmed != "Default",
+              !settingsProfiles.contains(where: { $0.id != id && $0.name == trimmed }),
+              let index = settingsProfiles.firstIndex(where: { $0.id == id }) else {
+            return false
+        }
+        settingsProfiles[index].name = trimmed
+        saveProfiles()
+        return true
+    }
+
     func canDeleteProfile(id: String) -> Bool {
         guard settingsProfiles.count > 1 else { return false }
         guard let profile = settingsProfiles.first(where: { $0.id == id }) else { return false }

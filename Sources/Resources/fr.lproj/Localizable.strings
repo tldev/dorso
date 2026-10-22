@@ -216,3 +216,25 @@
 // MARK: - Common
 
 "common.cancel" = "Annuler";
+
+// MARK: - Desks
+
+"menu.desk" = "Poste de travail";
+"menu.manageDesks" = "Gérer les postes…";
+"desk.defaultName" = "Poste %d";
+"desk.namePlaceholder" = "Nom du poste";
+"desk.renameTitle" = "Renommer le poste";
+"desk.deleteTitle" = "Supprimer le poste";
+"desk.deleteMessage" = "Voulez-vous vraiment supprimer ce poste et sa calibration? Cette action est irréversible.";
+"settings.desk" = "Poste de travail";
+"settings.desk.help" = "Chaque poste conserve sa propre calibration pour cette configuration d'écrans. Changez de poste ici ou depuis la barre des menus.";
+"settings.profile.renameTitle" = "Renommer le profil";
+"common.rename" = "Renommer";
+"calibration.desk.title" = "À quel poste de travail êtes-vous?";
+"calibration.desk.subtitle" = "Passez à un poste enregistré ou calibrez-en un nouveau.";
+"calibration.desk.current" = "Actuel";
+"calibration.desk.new" = "Nouveau poste";
+"calibration.desk.recalibrate" = "Recalibrer le poste actuel";
+"calibration.desk.hint.new" = "À un autre poste? Appuyez sur {N} pour l'enregistrer comme nouveau";
+"calibration.desk.hint.newSelected" = "Enregistrement comme nouveau poste. Appuyez sur {N} pour annuler";
+"calibration.desk.keysHint" = "{↑}{↓} pour naviguer   {↩} pour choisir   {Esc} pour annuler";

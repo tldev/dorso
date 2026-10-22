@@ -47,6 +47,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     // Warning overlay (alternative to blur)
     var warningOverlayManager = WarningOverlayManager()
     let settingsProfileManager = SettingsProfileManager()
+    var deskStore = DeskStore()
     var appliedWarningColorData: Data?
 
     // MARK: - Posture Detectors
@@ -88,6 +89,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     var onCalibrationComplete: (() -> Void)?
     /// Called when active source changes (for UI refresh)
     var onActiveSourceChanged: (() -> Void)?
+    /// Called when the active desk or the display setup's desks change
+    var onDesksChanged: (() -> Void)?
 
     var currentCalibration: CalibrationData? {
         activeTrackingSource == .camera ? cameraCalibration : airPodsCalibration
@@ -164,6 +167,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     var showOnboardingHandler: (() -> Void)?
     var initialSetupContextOverride: (() -> InitialSetupContext)?
     var syncDetectorToStateOverride: (() -> Void)?
+    var availableCameraIDsOverride: (() -> [String])?
 
     // Convenience accessors into the tracking store's monitoring state
     var isCurrentlySlouching: Bool {
@@ -538,6 +542,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarManager.onResume = { [weak self] in
             Task { @MainActor in
                 await self?.resumeFromTimedPause()
+            }
+        }
+        menuBarManager.desksProvider = { [weak self] in
+            self?.desksForMenu() ?? ([], nil)
+        }
+        menuBarManager.onSelectDesk = { [weak self] id in
+            Task { @MainActor in
+                await self?.selectDesk(id: id)
+            }
+        }
+        menuBarManager.onManageDesks = { [weak self] in
+            Task { @MainActor in
+                self?.openSettings()
             }
         }
         menuBarManager.onRecalibrate = { [weak self] in

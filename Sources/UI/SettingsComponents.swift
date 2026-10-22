@@ -18,6 +18,36 @@ extension Color {
 
 // MARK: - Settings Card
 
+struct CompactIconButton: View {
+    let systemName: String
+    let help: String
+    var isDestructive = false
+    var isEnabled = true
+    let action: () -> Void
+
+    private var tint: Color { isDestructive ? .red : .brandCyan }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(isEnabled ? tint.opacity(isDestructive ? 0.8 : 1) : .secondary.opacity(0.4))
+                .frame(width: 24, height: 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isEnabled ? tint.opacity(isDestructive ? 0.08 : 0.1) : Color.primary.opacity(0.04))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(isEnabled ? tint.opacity(isDestructive ? 0.25 : 0.3) : Color.primary.opacity(0.06), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .help(help)
+    }
+}
+
 /// Section container per the brand guidelines: control-background fill,
 /// subtle border, icon + semibold header with an optional trailing control.
 struct SettingsCard<Trailing: View, Content: View>: View {
