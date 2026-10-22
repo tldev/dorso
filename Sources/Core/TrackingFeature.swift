@@ -186,6 +186,9 @@ struct TrackingFeature: Reducer {
         case sourceReadinessChanged(source: TrackingSource, readiness: TrackingSourceReadiness)
         case timedPauseRequested(until: Date)
         case timedPauseEnded
+        /// Sent by the end timer with the deadline it was scheduled for, so a
+        /// callback from a replaced timer cannot end a newer pause.
+        case timedPauseDeadlineReached(Date)
     }
 
     @Dependency(\.trackingRuntime) var trackingRuntime
@@ -649,18 +652,28 @@ struct TrackingFeature: Reducer {
                 state.timedPauseEnd = until
                 return finish(perform(.scheduleTimedPauseEnd(until)))
 
+            case .timedPauseDeadlineReached(let deadline):
+                guard state.timedPauseEnd == deadline else { return finish() }
+                return finish(endTimedPause(&state))
+
             case .timedPauseEnded:
                 guard state.timedPauseEnd != nil else { return finish() }
-                state.timedPauseEnd = nil
-                // The detector was stopped for the pause; resume into whatever
-                // state the transitions underneath have settled on.
-                var intents: [EffectIntent] = [.cancelTimedPauseEnd]
-                if PostureEngine.shouldDetectorRun(for: state.appState, trackingSource: state.activeSource) {
-                    intents.append(.beginMonitoringSession)
-                }
-                return finish(perform(intents))
+                return finish(endTimedPause(&state))
             }
         }
+    }
+
+    // MARK: - Timed Pause
+
+    private func endTimedPause(_ state: inout State) -> Effect<Action> {
+        state.timedPauseEnd = nil
+        // The detector was stopped for the pause; resume into whatever
+        // state the transitions underneath have settled on.
+        var intents: [EffectIntent] = [.cancelTimedPauseEnd]
+        if PostureEngine.shouldDetectorRun(for: state.appState, trackingSource: state.activeSource) {
+            intents.append(.beginMonitoringSession)
+        }
+        return perform(intents)
     }
 
     // MARK: - Automatic Mode Source Resolution

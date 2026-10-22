@@ -226,7 +226,7 @@ extension AppDelegate {
         timer.schedule(wallDeadline: .now() + max(0, date.timeIntervalSinceNow))
         timer.setEventHandler { [weak self] in
             Task { @MainActor in
-                await self?.resumeFromTimedPause()
+                await self?.sendTrackingAction(.timedPauseDeadlineReached(date))
             }
         }
         timer.resume()

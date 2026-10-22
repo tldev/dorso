@@ -477,6 +477,38 @@ final class TrackingFeatureTests: XCTestCase {
     }
 
     @MainActor
+    func testTimedPauseDeadlineReachedEndsMatchingPause() async {
+        let recorder = EffectIntentRecorder()
+        let end = Date(timeIntervalSince1970: 1_000)
+        let store = makeStore(
+            initialState: TrackingFeature.State(appState: .monitoring, timedPauseEnd: end),
+            recorder: recorder
+        )
+
+        await store.send(.timedPauseDeadlineReached(end)) {
+            $0.timedPauseEnd = nil
+        }
+        await store.finish()
+        await assertIntents([.cancelTimedPauseEnd, .beginMonitoringSession], recorder: recorder)
+    }
+
+    @MainActor
+    func testStaleDeadlineFromReplacedTimerDoesNotEndNewerPause() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                timedPauseEnd: Date(timeIntervalSince1970: 2_000)
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.timedPauseDeadlineReached(Date(timeIntervalSince1970: 1_000)))
+        await store.finish()
+        await assertIntents([], recorder: recorder)
+    }
+
+    @MainActor
     func testTimedPauseEndLandsInBatteryPauseThatStartedUnderneath() async {
         let recorder = EffectIntentRecorder()
         let store = makeStore(
