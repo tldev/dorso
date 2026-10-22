@@ -316,24 +316,26 @@ class AnalyticsManager: ObservableObject {
 
     func injectMarketingData() {
         let now = now()
-        let dataPoints: [(daysAgo: Int, score: Double, slouchCount: Int, hours: Double)] = [
-            (6, 68, 22, 4.5),
-            (5, 74, 16, 5.2),
-            (4, 71, 19, 6.1),  // dip — natural regression
-            (3, 82, 11, 5.8),
-            (2, 79, 13, 4.9),  // slight pullback
-            (1, 88, 7, 6.3),
-            (0, 91, 5, 3.2),  // today — partial day
+        // Oldest first; the last entry is today
+        let dataPoints: [(score: Double, slouchCount: Int, hours: Double)] = [
+            (68, 22, 4.5),
+            (74, 16, 5.2),
+            (71, 19, 6.1),  // dip — natural regression
+            (82, 11, 5.8),
+            (79, 13, 4.9),  // slight pullback
+            (88, 7, 6.3),
+            (91, 5, 3.2),  // today — partial day
         ]
-        for point in dataPoints {
-            guard let date = calendar.date(byAdding: .day, value: -point.daysAgo, to: now) else { continue }
+        for (index, point) in dataPoints.enumerated() {
+            let daysAgo = dataPoints.count - 1 - index
+            guard let date = calendar.date(byAdding: .day, value: -daysAgo, to: now) else { continue }
             let totalSeconds: TimeInterval = point.hours * 3600
             let slouchSeconds = totalSeconds * (1.0 - point.score / 100.0)
             let key = DailyStats.dayKey(for: date, calendar: calendar)
             let stats = DailyStats(
                 date: date, totalSeconds: totalSeconds, slouchSeconds: slouchSeconds, slouchCount: point.slouchCount)
             history[key] = stats
-            if point.daysAgo == 0 { todayStats = stats }
+            if daysAgo == 0 { todayStats = stats }
         }
         saveHistory()
         Self.logger.info("Marketing mode: injected 7 days of demo analytics data")

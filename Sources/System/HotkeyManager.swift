@@ -60,7 +60,7 @@ final class HotkeyManager {
 
             let status = InstallEventHandler(
                 GetApplicationEventTarget(),
-                { (_, event, refcon) -> OSStatus in
+                { (_, _, refcon) -> OSStatus in
                     guard let refcon = refcon else { return noErr }
                     let manager = Unmanaged<HotkeyManager>.fromOpaque(refcon).takeUnretainedValue()
                     DispatchQueue.main.async {

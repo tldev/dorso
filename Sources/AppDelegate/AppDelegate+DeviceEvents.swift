@@ -2,6 +2,63 @@ import AVFoundation
 import AppKit
 
 extension AppDelegate {
+    // MARK: - Observers Setup
+
+    func setupObservers() {
+        // Display configuration changes
+        displayMonitor.onDisplayConfigurationChange = { [weak self] in
+            Task { @MainActor in
+                await self?.handleDisplayConfigurationChange()
+            }
+        }
+        displayMonitor.startMonitoring()
+
+        // Camera hot-plug
+        cameraObserver.onCameraConnected = { [weak self] device in
+            Task { @MainActor in
+                await self?.handleCameraConnected(device)
+            }
+        }
+        cameraObserver.onCameraDisconnected = { [weak self] device in
+            Task { @MainActor in
+                await self?.handleCameraDisconnected(device)
+            }
+        }
+        cameraObserver.startObserving()
+
+        // Screen lock/unlock
+        screenLockObserver.onScreenLocked = { [weak self] in
+            Task { @MainActor in
+                await self?.handleScreenLocked()
+            }
+        }
+        screenLockObserver.onScreenUnlocked = { [weak self] in
+            Task { @MainActor in
+                await self?.handleScreenUnlocked()
+            }
+        }
+        screenLockObserver.startObserving()
+
+        // AC/battery power source
+        powerSourceObserver.onPowerSourceChanged = { [weak self] isOnBattery in
+            Task { @MainActor in
+                await self?.handlePowerSourceChanged(isOnBattery)
+            }
+        }
+        powerSourceObserver.startObserving()
+
+        // Global hotkey
+        hotkeyManager.configure(
+            enabled: toggleShortcutEnabled,
+            shortcut: toggleShortcut,
+            onToggle: { [weak self] in
+                Task { @MainActor in
+                    await self?.toggleEnabled()
+                }
+            }
+        )
+    }
+
     // MARK: - Camera Hot-Plug
 
     func handleCameraConnected(_ device: AVCaptureDevice) async {

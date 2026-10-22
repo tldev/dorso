@@ -327,6 +327,9 @@ class CameraPostureDetector: NSObject, PostureDetector {
         self.deadZone = deadZone
     }
 
+}
+
+extension CameraPostureDetector {
     // MARK: - Camera Management
 
     func getAvailableCameras() -> [AVCaptureDevice] {
@@ -490,7 +493,7 @@ class CameraPostureDetector: NSObject, PostureDetector {
     private func processFrame(_ pixelBuffer: CVPixelBuffer) {
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
 
-        let bodyRequest = VNDetectHumanBodyPoseRequest { [weak self] request, error in
+        let bodyRequest = VNDetectHumanBodyPoseRequest { [weak self] request, _ in
             if let results = request.results as? [VNHumanBodyPoseObservation], let body = results.first {
                 self?.analyzeBodyPose(body)
             } else {
@@ -517,7 +520,7 @@ class CameraPostureDetector: NSObject, PostureDetector {
     private func tryFaceDetection(pixelBuffer: CVPixelBuffer) {
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
 
-        let faceRequest = VNDetectFaceRectanglesRequest { [weak self] request, error in
+        let faceRequest = VNDetectFaceRectanglesRequest { [weak self] request, _ in
             if let results = request.results as? [VNFaceObservation], let face = results.first {
                 self?.consecutiveNoDetectionFrames = 0
                 self?.handleDetection(noseY: face.boundingBox.midY, faceWidth: face.boundingBox.width)

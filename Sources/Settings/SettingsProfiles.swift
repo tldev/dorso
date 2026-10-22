@@ -172,25 +172,17 @@ final class SettingsProfileManager {
         return profile
     }
 
-    func createProfile(
-        named name: String,
-        warningMode: WarningMode,
-        warningColor: NSColor,
-        deadZone: Double,
-        intensity: Double,
-        warningOnsetDelay: Double,
-        detectionMode: DetectionMode
-    ) -> SettingsProfile {
-        let uniqueName = uniqueProfileName(for: name)
+    /// Creates and selects a profile with `source`'s settings.
+    func createProfile(named name: String, copying source: SettingsProfile) -> SettingsProfile {
         let profile = SettingsProfile(
             id: UUID().uuidString,
-            name: uniqueName,
-            warningMode: warningMode,
-            warningColorData: SettingsProfile.encodedColorData(from: warningColor),
-            deadZone: deadZone,
-            intensity: intensity,
-            warningOnsetDelay: warningOnsetDelay,
-            detectionMode: detectionMode
+            name: uniqueProfileName(for: name),
+            warningMode: source.warningMode,
+            warningColorData: source.warningColorData,
+            deadZone: source.deadZone,
+            intensity: source.intensity,
+            warningOnsetDelay: source.warningOnsetDelay,
+            detectionMode: source.detectionMode
         )
         settingsProfiles.append(profile)
         currentSettingsProfileID = profile.id

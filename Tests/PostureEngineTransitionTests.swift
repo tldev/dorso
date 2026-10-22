@@ -579,11 +579,13 @@ final class PostureEngineTransitionTests: XCTestCase {
         let result = PostureEngine.stateWhenDisplayConfigurationChanges(
             currentState: .disabled,
             trackingSource: .camera,
-            pauseOnTheGoEnabled: true,
-            isLaptopOnlyConfiguration: true,
-            hasAnyCamera: false,
-            hasMatchingProfileCamera: false,
-            selectedCameraMatchesProfile: false
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: true,
+                isLaptopOnlyConfiguration: true,
+                hasAnyCamera: false,
+                hasMatchingProfileCamera: false,
+                selectedCameraMatchesProfile: false
+            )
         )
 
         XCTAssertEqual(result.newState, .disabled)
@@ -595,11 +597,13 @@ final class PostureEngineTransitionTests: XCTestCase {
         let result = PostureEngine.stateWhenDisplayConfigurationChanges(
             currentState: .monitoring,
             trackingSource: .camera,
-            pauseOnTheGoEnabled: true,
-            isLaptopOnlyConfiguration: true,
-            hasAnyCamera: true,
-            hasMatchingProfileCamera: true,
-            selectedCameraMatchesProfile: true
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: true,
+                isLaptopOnlyConfiguration: true,
+                hasAnyCamera: true,
+                hasMatchingProfileCamera: true,
+                selectedCameraMatchesProfile: true
+            )
         )
 
         XCTAssertEqual(result.newState, .paused(.onTheGo))
@@ -611,11 +615,13 @@ final class PostureEngineTransitionTests: XCTestCase {
         let result = PostureEngine.stateWhenDisplayConfigurationChanges(
             currentState: .paused(.noProfile),
             trackingSource: .camera,
-            pauseOnTheGoEnabled: false,
-            isLaptopOnlyConfiguration: false,
-            hasAnyCamera: true,
-            hasMatchingProfileCamera: true,
-            selectedCameraMatchesProfile: false
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: false,
+                isLaptopOnlyConfiguration: false,
+                hasAnyCamera: true,
+                hasMatchingProfileCamera: true,
+                selectedCameraMatchesProfile: false
+            )
         )
 
         XCTAssertEqual(result.newState, .monitoring)
@@ -627,11 +633,13 @@ final class PostureEngineTransitionTests: XCTestCase {
         let result = PostureEngine.stateWhenDisplayConfigurationChanges(
             currentState: .monitoring,
             trackingSource: .camera,
-            pauseOnTheGoEnabled: false,
-            isLaptopOnlyConfiguration: false,
-            hasAnyCamera: false,
-            hasMatchingProfileCamera: false,
-            selectedCameraMatchesProfile: false
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: false,
+                isLaptopOnlyConfiguration: false,
+                hasAnyCamera: false,
+                hasMatchingProfileCamera: false,
+                selectedCameraMatchesProfile: false
+            )
         )
 
         XCTAssertEqual(result.newState, .paused(.cameraDisconnected))
@@ -901,11 +909,13 @@ final class PostureEngineTransitionTests: XCTestCase {
         let result = PostureEngine.stateWhenDisplayConfigurationChanges(
             currentState: .paused(.onBattery),
             trackingSource: .camera,
-            pauseOnTheGoEnabled: false,
-            isLaptopOnlyConfiguration: false,
-            hasAnyCamera: true,
-            hasMatchingProfileCamera: true,
-            selectedCameraMatchesProfile: true
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: false,
+                isLaptopOnlyConfiguration: false,
+                hasAnyCamera: true,
+                hasMatchingProfileCamera: true,
+                selectedCameraMatchesProfile: true
+            )
         )
 
         XCTAssertEqual(result.newState, .paused(.onBattery))

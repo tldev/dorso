@@ -14,11 +14,13 @@ final class CalibrationKeyActionTests: XCTestCase {
         deskCount: Int = 0
     ) -> CalibrationKeyAction? {
         CalibrationKeyAction.forKey(
-            keyCode: keyCode,
-            characters: characters,
-            modifiers: modifiers,
-            isRepeat: isRepeat,
-            isFromDorso: isFromDorso,
+            CalibrationKeyPress(
+                keyCode: keyCode,
+                characters: characters,
+                modifiers: modifiers,
+                isRepeat: isRepeat,
+                isFromDorso: isFromDorso
+            ),
             isChoosingDesk: isChoosingDesk,
             deskCount: deskCount
         )

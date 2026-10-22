@@ -19,10 +19,13 @@ private func localizedString(_ key: String) -> String {
     return value
 }
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
+// Short on purpose: wraps nearly every user-facing string
 public func L(_ key: String) -> String {
     localizedString(key)
 }
 
+// swift-format-ignore: AlwaysUseLowerCamelCase
 public func L(_ key: String, _ args: CVarArg...) -> String {
     let format = localizedString(key)
     return String(format: format, locale: Locale.current, arguments: args)

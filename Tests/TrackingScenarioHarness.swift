@@ -207,11 +207,13 @@ struct TrackingScenarioHarness {
             let result = PostureEngine.stateWhenDisplayConfigurationChanges(
                 currentState: state,
                 trackingSource: trackingSource,
-                pauseOnTheGoEnabled: pauseOnTheGoEnabled,
-                isLaptopOnlyConfiguration: isLaptopOnlyConfiguration,
-                hasAnyCamera: hasAnyCamera,
-                hasMatchingProfileCamera: hasMatchingProfileCamera,
-                selectedCameraMatchesProfile: selectedCameraMatchesProfile
+                context: DisplayConfigurationContext(
+                    pauseOnTheGoEnabled: pauseOnTheGoEnabled,
+                    isLaptopOnlyConfiguration: isLaptopOnlyConfiguration,
+                    hasAnyCamera: hasAnyCamera,
+                    hasMatchingProfileCamera: hasMatchingProfileCamera,
+                    selectedCameraMatchesProfile: selectedCameraMatchesProfile
+                )
             )
             state = result.newState
             selectedCameraSwitchRequested = result.shouldSwitchToProfileCamera
