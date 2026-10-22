@@ -24,7 +24,19 @@ extension MenuBarIconType {
 
 @MainActor
 public class AppDelegate: NSObject, NSApplicationDelegate {
-    public override init() {
+    /// Where settings, profiles, and desks persist; tests pass an isolated suite
+    let userDefaults: UserDefaults
+    let settingsProfileManager: SettingsProfileManager
+    let deskStore: DeskStore
+
+    public convenience override init() {
+        self.init(userDefaults: .standard)
+    }
+
+    init(userDefaults: UserDefaults) {
+        self.userDefaults = userDefaults
+        settingsProfileManager = SettingsProfileManager(userDefaults: userDefaults)
+        deskStore = DeskStore(userDefaults: userDefaults)
         super.init()
     }
 
@@ -46,8 +58,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Warning overlay (alternative to blur)
     var warningOverlayManager = WarningOverlayManager()
-    let settingsProfileManager = SettingsProfileManager()
-    var deskStore = DeskStore()
     var appliedWarningColorData: Data?
 
     // MARK: - Posture Detectors

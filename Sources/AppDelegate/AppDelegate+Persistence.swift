@@ -13,7 +13,7 @@ extension AppDelegate {
     // MARK: - Persistence
 
     func saveSettings() {
-        let defaults = UserDefaults.standard
+        let defaults = userDefaults
         defaults.set(useCompatibilityMode, forKey: SettingsKeys.useCompatibilityMode)
         defaults.set(appAppearance.rawValue, forKey: SettingsKeys.appAppearance)
         defaults.set(blurWhenAway, forKey: SettingsKeys.blurWhenAway)
@@ -39,7 +39,7 @@ extension AppDelegate {
     }
 
     func loadSettings() {
-        let defaults = UserDefaults.standard
+        let defaults = userDefaults
         SettingsMigrations.migrateLegacyKeysIfNeeded(userDefaults: defaults)
         settingsProfileManager.loadProfiles()
         applyActiveSettingsProfile()

@@ -29,8 +29,7 @@ final class AppDelegateDeskTests: XCTestCase {
 
     /// Desks in a throwaway defaults suite; detectors never start
     private func makeAppDelegate(cameraIDs: [String]) -> AppDelegate {
-        let appDelegate = AppDelegate()
-        appDelegate.deskStore = DeskStore(userDefaults: defaults)
+        let appDelegate = AppDelegate(userDefaults: defaults)
         appDelegate.syncDetectorToStateOverride = {}
         appDelegate.beginMonitoringSessionHandler = {}
         appDelegate.marketingModeOverride = false
@@ -160,5 +159,45 @@ final class AppDelegateDeskTests: XCTestCase {
         XCTAssertEqual(appDelegate.deskStore.desks(forKey: key).map(\.id), [office.id])
         XCTAssertEqual(appDelegate.selectedCameraID, "external")
         XCTAssertEqual(appDelegate.cameraCalibration?.goodPostureY, 0.8)
+    }
+
+    private func cameraSamples(topY: CGFloat) -> [CalibrationSample] {
+        [topY, topY, topY - 0.1, topY - 0.1].map { .camera(CameraCalibrationSample(noseY: $0, faceWidth: nil)) }
+    }
+
+    func testCalibratingAsNewDeskAddsAndActivatesIt() async {
+        let appDelegate = makeAppDelegate(cameraIDs: ["builtin"])
+        let home = appDelegate.deskStore.addDesk(
+            named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
+        appDelegate.selectedCameraID = "builtin"
+
+        await appDelegate.finishCalibration(values: cameraSamples(topY: 0.8), saveAsNewDesk: true)
+
+        let desks = appDelegate.deskStore.desks(forKey: key)
+        XCTAssertEqual(desks.count, 2)
+        XCTAssertEqual(desks.first(where: { $0.id == home.id })?.profile.goodPostureY, 0.6)
+        XCTAssertNotEqual(appDelegate.deskStore.activeDesk(forKey: key)?.id, home.id)
+        XCTAssertEqual(appDelegate.deskStore.activeProfile(forKey: key)?.goodPostureY ?? 0, 0.8, accuracy: 0.0001)
+    }
+
+    func testRecalibratingWithoutNewDeskReplacesActiveDesk() async {
+        let appDelegate = makeAppDelegate(cameraIDs: ["builtin"])
+        let home = appDelegate.deskStore.addDesk(
+            named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
+        appDelegate.selectedCameraID = "builtin"
+
+        await appDelegate.finishCalibration(values: cameraSamples(topY: 0.8), saveAsNewDesk: false)
+
+        XCTAssertEqual(appDelegate.deskStore.desks(forKey: key).map(\.id), [home.id])
+        XCTAssertEqual(appDelegate.deskStore.activeProfile(forKey: key)?.goodPostureY ?? 0, 0.8, accuracy: 0.0001)
+    }
+
+    func testSavingSettingsWritesToInjectedDefaults() {
+        let appDelegate = makeAppDelegate(cameraIDs: [])
+        appDelegate.pauseOnTheGo = true
+
+        appDelegate.saveSettings()
+
+        XCTAssertTrue(defaults.bool(forKey: SettingsKeys.pauseOnTheGo))
     }
 }

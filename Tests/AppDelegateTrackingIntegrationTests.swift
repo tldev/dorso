@@ -24,7 +24,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testInitialSetupFlowInMarketingModeRequestsMonitoringAndSkipsOnboarding() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
         appDelegate.marketingModeOverride = true
 
@@ -48,7 +48,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testInitialSetupFlowForCameraWithAvailableProfileAppliesProfileAndStartsMonitoring() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
         appDelegate.beginMonitoringSessionHandler = {}
         appDelegate.marketingModeOverride = false
@@ -91,7 +91,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testInitialSetupFlowForAirPodsWithCalibrationStartsMonitoringWithoutOnboarding() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
         appDelegate.beginMonitoringSessionHandler = {}
         appDelegate.marketingModeOverride = false
@@ -126,7 +126,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testInitialSetupFlowWithoutValidPathShowsOnboarding() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
         appDelegate.marketingModeOverride = false
         appDelegate.trackingSource = .camera
@@ -157,7 +157,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testSetPauseOnTheGoEnabledFalseFromOnTheGoPauseResumesMonitoringThroughReducer() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
         appDelegate.state = .paused(.onTheGo)
 
@@ -169,7 +169,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testSetPauseOnTheGoEnabledTrueKeepsOnTheGoPauseState() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
         appDelegate.state = .paused(.onTheGo)
 
@@ -181,7 +181,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCameraConnectedTransitionExecutesSwitchBeforeStartAndPreservesRuntimeFallbackState() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .paused(.cameraDisconnected)
@@ -216,7 +216,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCameraConnectWithoutMatchingProfileFromDisconnectedPausesNoProfileWithoutRecoveryIntents() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .paused(.cameraDisconnected)
@@ -237,7 +237,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testDisplayConfigurationTransitionExecutesSwitchBeforeStartAndPreservesRuntimeFallbackState() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .paused(.cameraDisconnected)
@@ -276,7 +276,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCameraDisconnectWithFallbackProfileExecutesSwitchBeforeStartAndPreservesRuntimeFallbackState() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
@@ -305,7 +305,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCameraDisconnectWithFallbackNoProfileCommitsReducerPauseWithoutRestartIntent() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
@@ -333,7 +333,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCameraDisconnectWithoutFallbackPausesDisconnectedWithoutEffects() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
@@ -357,7 +357,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCameraDisconnectForNonSelectedCameraRequestsUISyncOnlyAndKeepsState() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
@@ -381,7 +381,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testDisplayPauseOnTheGoPrecedenceSuppressesSwitchAndRestartIntents() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
@@ -406,7 +406,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testDisplayChangeWithoutAnyCameraPausesDisconnectedWithoutRecoveryIntents() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
@@ -431,7 +431,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testDisplayChangeWithoutMatchingProfilePausesNoProfileWithoutRecoveryIntents() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
@@ -456,7 +456,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testScreenLockUnlockFromMonitoringEmitsRestartIntentAndExitsScreenLockedState() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
@@ -480,7 +480,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCameraSelectionTransitionEmitsSelectedCameraSwitchAndPausesNoProfile() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
@@ -500,7 +500,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testManualSourceSwitchToUncalibratedSourceStopsSetsAndPersistsWithoutRestartIntent() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .disabled
@@ -526,7 +526,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testManualSourceSwitchToCalibratedSourceEmitsRestartAfterStopSetPersist() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .disabled
@@ -553,7 +553,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCancelCalibrationWhenCalibratedEmitsRestartIntentAndReturnsMonitoring() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .calibrating
@@ -573,7 +573,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCancelCalibrationWhenUncalibratedPausesNoProfileWithoutRestartIntent() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .calibrating
@@ -593,7 +593,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testFinishCalibrationEmitsRestartAndTransitionsToMonitoring() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .calibrating
@@ -622,7 +622,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCalibrationAuthorizationDeniedWithOpenSettingsDecisionExecutesOpenSettingsIntent() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .calibrating
@@ -652,7 +652,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCalibrationAuthorizationDeniedWithCancelDecisionSkipsOpenSettingsIntent() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .calibrating
@@ -679,7 +679,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testShowSupportCreatesSupportWindow() {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
 
         appDelegate.showSupport()
 
@@ -689,7 +689,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testOpenSupportPageOpensSupportURL() {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
 
         var openedURL: URL?
         appDelegate.openSupportURLHandler = { url in
@@ -703,7 +703,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCalibrationStartFailedForCameraWithRetryDecisionExecutesRetryIntent() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .calibrating
@@ -738,7 +738,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCalibrationStartFailedForCameraWithCancelDecisionSkipsRetryIntent() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .calibrating
@@ -767,7 +767,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
     @MainActor
     func testCalibrationStartFailedForAirPodsDoesNotEmitRetryAlertIntent() async {
-        let appDelegate = AppDelegate()
+        let appDelegate = AppDelegate(userDefaults: .makeTestSuite())
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .paused(.airPodsRemoved)
