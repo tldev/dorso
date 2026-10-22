@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 // MARK: - Desk
@@ -25,6 +26,8 @@ private struct DeskSet: Codable, Equatable {
 @MainActor
 final class DeskStore {
     private let userDefaults: UserDefaults
+    /// Fires after any save, so observers can refresh
+    let changes = PassthroughSubject<Void, Never>()
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -100,9 +103,10 @@ final class DeskStore {
         var sets = loadSets()
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
-              var set = sets[key],
-              let index = set.desks.firstIndex(where: { $0.id == id }),
-              !set.desks.contains(where: { $0.id != id && $0.name == trimmed }) else {
+            var set = sets[key],
+            let index = set.desks.firstIndex(where: { $0.id == id }),
+            !set.desks.contains(where: { $0.id != id && $0.name == trimmed })
+        else {
             return false
         }
         set.desks[index].name = trimmed
@@ -115,7 +119,8 @@ final class DeskStore {
     func deleteDesk(id: String, forKey key: String) -> Bool {
         var sets = loadSets()
         guard var set = sets[key], set.desks.count > 1,
-              let index = set.desks.firstIndex(where: { $0.id == id }) else {
+            let index = set.desks.firstIndex(where: { $0.id == id })
+        else {
             return false
         }
         set.desks.remove(at: index)
@@ -155,7 +160,8 @@ final class DeskStore {
             guard let profile = try? JSONDecoder().decode(ProfileData.self, from: data) else { continue }
             if var set = sets[key] {
                 guard let index = set.desks.firstIndex(where: { $0.id == set.activeDesk?.id }),
-                      set.desks[index].profile != profile else { continue }
+                    set.desks[index].profile != profile
+                else { continue }
                 set.desks[index].profile = profile
                 sets[key] = set
                 changedKeys.insert(key)
@@ -179,7 +185,8 @@ final class DeskStore {
         write(sets, changedKeys: [key])
 
         guard let profile = sets[key]?.activeDesk?.profile,
-              let encoded = try? JSONEncoder().encode(profile) else { return }
+            let encoded = try? JSONEncoder().encode(profile)
+        else { return }
         var legacy = userDefaults.dictionary(forKey: SettingsKeys.profiles) as? [String: Data] ?? [:]
         legacy[key] = encoded
         userDefaults.set(legacy, forKey: SettingsKeys.profiles)
@@ -192,6 +199,7 @@ final class DeskStore {
             unreadableKeys.remove(key)
         }
         userDefaults.set(storedSets, forKey: SettingsKeys.desks)
+        changes.send()
     }
 
     private func uniqueName(for name: String, in desks: [Desk]) -> String {

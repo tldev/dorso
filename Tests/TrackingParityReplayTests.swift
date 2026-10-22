@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import DorsoCore
 
 final class TrackingParityReplayTests: XCTestCase {
@@ -325,7 +326,7 @@ final class TrackingParityReplayTests: XCTestCase {
                         fallbackHasMatchingProfile: true
                     )
                 ]
-            )
+            ),
         ]
 
         for scenario in scenarios {

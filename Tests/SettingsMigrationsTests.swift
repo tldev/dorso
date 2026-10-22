@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import DorsoCore
 
 final class SettingsMigrationsTests: XCTestCase {
@@ -51,4 +52,3 @@ final class SettingsMigrationsTests: XCTestCase {
         XCTAssertEqual(persistedData, newData)
     }
 }
-

@@ -62,7 +62,10 @@ final class DisplayMonitor {
         var uuids: [String] = []
 
         for screen in NSScreen.screens {
-            guard let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            guard
+                let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")]
+                    as? CGDirectDisplayID
+            else {
                 continue
             }
 
@@ -87,7 +90,8 @@ final class DisplayMonitor {
         if screens.count != 1 { return false }
 
         guard let screen = screens.first,
-              let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+        else {
             return false
         }
 

@@ -1,8 +1,9 @@
-import AppKit
 import AVFoundation
+import AppKit
+import Combine
+import ComposableArchitecture
 import Vision
 import os.log
-import ComposableArchitecture
 
 private let log = OSLog(subsystem: "com.thelazydeveloper.dorso", category: "AppDelegate")
 
@@ -24,18 +25,31 @@ extension MenuBarIconType {
 
 @MainActor
 public class AppDelegate: NSObject, NSApplicationDelegate {
-    public override init() {
+    /// Where settings, profiles, and desks persist; tests pass an isolated suite
+    let userDefaults: UserDefaults
+    let settingsProfileManager: SettingsProfileManager
+    let deskStore: DeskStore
+
+    public convenience override init() {
+        self.init(userDefaults: .standard)
+    }
+
+    init(userDefaults: UserDefaults) {
+        self.userDefaults = userDefaults
+        settingsProfileManager = SettingsProfileManager(userDefaults: userDefaults)
+        deskStore = DeskStore(userDefaults: userDefaults)
         super.init()
+        syncMarketingMode()
     }
 
     // UI Components
     let menuBarManager = MenuBarManager()
 
     #if !APP_STORE
-    /// Sparkle auto-updater. Created in applicationDidFinishLaunching (not
-    /// init) so headless tests constructing AppDelegate never start the
-    /// update machinery.
-    var updaterManager: UpdaterManager?
+        /// Sparkle auto-updater. Created in applicationDidFinishLaunching (not
+        /// init) so headless tests constructing AppDelegate never start the
+        /// update machinery.
+        var updaterManager: UpdaterManager?
     #endif
 
     // Overlay windows and blur
@@ -46,8 +60,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Warning overlay (alternative to blur)
     var warningOverlayManager = WarningOverlayManager()
-    let settingsProfileManager = SettingsProfileManager()
-    var deskStore = DeskStore()
     var appliedWarningColorData: Data?
 
     // MARK: - Posture Detectors
@@ -80,32 +92,34 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         set { applyTrackingAction(.setTrackingMode(newValue)) }
     }
 
-    // Calibration data storage
-    var cameraCalibration: CameraCalibrationData?
-    var airPodsCalibration: AirPodsCalibrationData?
-    /// Which source is currently being calibrated (nil when not calibrating)
-    var calibratingSource: TrackingSource?
-    /// Called when calibration completes successfully (for UI refresh)
-    var onCalibrationComplete: (() -> Void)?
-    /// Called when active source changes (for UI refresh)
-    var onActiveSourceChanged: (() -> Void)?
-    /// Called when the active desk or the display setup's desks change
-    var onDesksChanged: (() -> Void)?
-
-    var currentCalibration: CalibrationData? {
-        activeTrackingSource == .camera ? cameraCalibration : airPodsCalibration
+    var cameraCalibration: CameraCalibrationData? {
+        get { trackingStore.withState { $0.cameraCalibration } }
+        set { applyTrackingAction(.cameraCalibrationChanged(newValue)) }
     }
 
-    // Legacy camera ID accessor for settings
+    var airPodsCalibration: AirPodsCalibrationData? {
+        get { trackingStore.withState { $0.airPodsCalibration } }
+        set { applyTrackingAction(.airPodsCalibrationChanged(newValue)) }
+    }
+
+    /// Which source is currently being calibrated (nil when not calibrating)
+    var calibratingSource: TrackingSource?
+    /// Fires when the display setup changes, which changes the current desks
+    let displayChanges = PassthroughSubject<Void, Never>()
+
+    var currentCalibration: CalibrationData? {
+        trackingStore.withState { $0.calibration(for: $0.activeSource) }
+    }
+
     var selectedCameraID: String? {
-        get { cameraDetector.selectedCameraID }
-        set { cameraDetector.selectedCameraID = newValue }
+        get { trackingStore.withState { $0.selectedCameraID } }
+        set { applyTrackingAction(.setSelectedCamera(newValue)) }
     }
 
     // Calibration
     var calibrationController: CalibrationWindowController?
     var isCalibrated: Bool {
-        isMarketingMode || (currentCalibration?.isValid ?? false)
+        trackingStore.withState { $0.isCalibrated($0.activeSource) }
     }
 
     // Settings
@@ -122,7 +136,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
     var showInDock = false
     var appAppearance = AppAppearance.auto
-    var pauseOnTheGo = false
+    var pauseOnTheGo: Bool {
+        trackingStore.withState { $0.pauseOnTheGoEnabled }
+    }
     var pauseOnBattery: Bool {
         trackingStore.withState { $0.pauseOnBatteryEnabled }
     }
@@ -218,14 +234,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     var setupComplete = false
-    var marketingModeOverride: Bool?
+    var marketingModeOverride: Bool? {
+        didSet { syncMarketingMode() }
+    }
 
     var isMarketingMode: Bool {
-        if let marketingModeOverride {
-            return marketingModeOverride
-        }
-        return UserDefaults.standard.bool(forKey: "MarketingMode")
-            || CommandLine.arguments.contains("--marketing-mode")
+        trackingStore.withState { $0.isMarketingMode }
+    }
+
+    func syncMarketingMode() {
+        let isMarketingMode =
+            marketingModeOverride
+            ?? (userDefaults.bool(forKey: "MarketingMode") || CommandLine.arguments.contains("--marketing-mode"))
+        applyTrackingAction(.setMarketingMode(isMarketingMode))
     }
 
     // MARK: - State Machine
@@ -278,111 +299,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         return (oldState, newState)
     }
 
-    // MARK: - Reducer Effect Execution
-
-    /// The single funnel through which every reducer-requested side effect
-    /// runs. Fires the test observer, then executes the effect.
-    func performTrackingEffect(_ intent: TrackingFeature.EffectIntent) async {
-        trackingEffectIntentObserver?(intent)
-
-        switch intent {
-        case .startMonitoring:
-            await startMonitoring()
-
-        case .beginMonitoringSession:
-            if let beginMonitoringSessionHandler {
-                beginMonitoringSessionHandler()
-                return
-            }
-            guard let calibration = currentCalibration else { return }
-            activeDetector.beginMonitoring(
-                with: calibration,
-                intensity: activeIntensity,
-                deadZone: activeDeadZone
-            )
-
-        case .applyStartupCameraProfile(let profile):
-            guard let profile else { return }
-            cameraDetector.selectedCameraID = profile.cameraID
-            applyCameraCalibration(from: profile)
-
-        case .showOnboarding:
-            if let showOnboardingHandler {
-                showOnboardingHandler()
-            } else {
-                showOnboarding()
-            }
-
-        case .switchCamera(.matchingProfile(let profile)):
-            guard let profile else { return }
-            cameraDetector.selectedCameraID = profile.cameraID
-            applyCameraCalibration(from: profile)
-            cameraDetector.switchCamera(to: profile.cameraID)
-
-        case .switchCamera(.fallback(let cameraID, let profile)):
-            guard let cameraID else { return }
-            cameraDetector.selectedCameraID = cameraID
-            if let profile, profile.cameraID == cameraID {
-                applyCameraCalibration(from: profile)
-            }
-            cameraDetector.switchCamera(to: cameraID)
-
-        case .switchCamera(.selectedCamera):
-            guard let selectedCameraID else { return }
-            cameraDetector.switchCamera(to: selectedCameraID)
-
-        case .syncUI:
-            syncUIToState()
-
-        case .updateBlur:
-            updateBlur()
-
-        case .trackAnalytics(let interval, let isSlouching):
-            AnalyticsManager.shared.trackTime(interval: interval, isSlouching: isSlouching)
-
-        case .recordSlouchEvent:
-            AnalyticsManager.shared.recordSlouchEvent()
-
-        case .stopDetector(let source):
-            detector(for: source).stop()
-
-        case .persistTrackingSource:
-            saveSettings()
-
-        case .showCalibrationPermissionDeniedAlert:
-            await showCalibrationPermissionDeniedAlert()
-
-        case .openPrivacySettings:
-            openPrivacySettings()
-
-        case .showCameraCalibrationRetryAlert(let message):
-            await showCameraCalibrationRetryAlert(message: message)
-
-        case .retryCalibration:
-            if let retryCalibrationHandler {
-                retryCalibrationHandler()
-            } else {
-                startCalibration()
-            }
-
-        case .scheduleTimedPauseEnd(let date):
-            scheduleTimedPauseEnd(at: date)
-
-        case .cancelTimedPauseEnd:
-            cancelTimedPauseEnd()
-        }
-    }
-
-    func applyCameraCalibration(from profile: ProfileData) {
-        cameraCalibration = CameraCalibrationData(
-            goodPostureY: profile.goodPostureY,
-            badPostureY: profile.badPostureY,
-            neutralY: profile.neutralY,
-            postureRange: profile.postureRange,
-            cameraID: profile.cameraID
-        )
-    }
-
     // MARK: - Appearance
 
     func applyAppearance() {
@@ -407,17 +323,18 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
-           let icon = NSImage(contentsOfFile: iconPath) {
+            let icon = NSImage(contentsOfFile: iconPath)
+        {
             NSApp.applicationIconImage = applyMacOSIconMask(to: icon)
         }
 
         #if !APP_STORE
-        // UI preview launches must not start the updater: with silent
-        // updates enabled it can stage and install a store build over the
-        // dev build mid-iteration
-        if !CommandLine.arguments.contains("--open-settings") {
-            updaterManager = UpdaterManager()
-        }
+            // UI preview launches must not start the updater: with silent
+            // updates enabled it can stage and install a store build over the
+            // dev build mid-iteration
+            if !CommandLine.arguments.contains("--open-settings") {
+                updaterManager = UpdaterManager()
+            }
         #endif
 
         setupDetectors()
@@ -464,168 +381,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         menuBarManager.statusItem.button?.performClick(nil)
         return false
-    }
-
-    // MARK: - Observers Setup
-
-    private func setupObservers() {
-        // Display configuration changes
-        displayMonitor.onDisplayConfigurationChange = { [weak self] in
-            Task { @MainActor in
-                await self?.handleDisplayConfigurationChange()
-            }
-        }
-        displayMonitor.startMonitoring()
-
-        // Camera hot-plug
-        cameraObserver.onCameraConnected = { [weak self] device in
-            Task { @MainActor in
-                await self?.handleCameraConnected(device)
-            }
-        }
-        cameraObserver.onCameraDisconnected = { [weak self] device in
-            Task { @MainActor in
-                await self?.handleCameraDisconnected(device)
-            }
-        }
-        cameraObserver.startObserving()
-
-        // Screen lock/unlock
-        screenLockObserver.onScreenLocked = { [weak self] in
-            Task { @MainActor in
-                await self?.handleScreenLocked()
-            }
-        }
-        screenLockObserver.onScreenUnlocked = { [weak self] in
-            Task { @MainActor in
-                await self?.handleScreenUnlocked()
-            }
-        }
-        screenLockObserver.startObserving()
-
-        // AC/battery power source
-        powerSourceObserver.onPowerSourceChanged = { [weak self] isOnBattery in
-            Task { @MainActor in
-                await self?.handlePowerSourceChanged(isOnBattery)
-            }
-        }
-        powerSourceObserver.startObserving()
-
-        // Global hotkey
-        hotkeyManager.configure(
-            enabled: toggleShortcutEnabled,
-            shortcut: toggleShortcut,
-            onToggle: { [weak self] in
-                Task { @MainActor in
-                    await self?.toggleEnabled()
-                }
-            }
-        )
-    }
-
-    // MARK: - Menu Bar
-
-    private func setupMenuBar() {
-        menuBarManager.setup()
-        menuBarManager.updateShortcut(enabled: toggleShortcutEnabled, shortcut: toggleShortcut)
-
-        menuBarManager.onToggleEnabled = { [weak self] in
-            Task { @MainActor in
-                await self?.toggleEnabled()
-            }
-        }
-        menuBarManager.onPause = { [weak self] duration in
-            Task { @MainActor in
-                await self?.pause(for: duration)
-            }
-        }
-        menuBarManager.onResume = { [weak self] in
-            Task { @MainActor in
-                await self?.resumeFromTimedPause()
-            }
-        }
-        menuBarManager.desksProvider = { [weak self] in
-            self?.desksForMenu() ?? ([], nil)
-        }
-        menuBarManager.onSelectDesk = { [weak self] id in
-            Task { @MainActor in
-                await self?.selectDesk(id: id)
-            }
-        }
-        menuBarManager.onManageDesks = { [weak self] in
-            Task { @MainActor in
-                self?.openSettings()
-            }
-        }
-        menuBarManager.onRecalibrate = { [weak self] in
-            Task { @MainActor in
-                self?.startCalibration()
-            }
-        }
-        menuBarManager.onShowAnalytics = { [weak self] in
-            Task { @MainActor in
-                self?.showAnalytics()
-            }
-        }
-        menuBarManager.onOpenSettings = { [weak self] in
-            Task { @MainActor in
-                self?.openSettings()
-            }
-        }
-        menuBarManager.onOpenSupport = { [weak self] in
-            Task { @MainActor in
-                self?.showSupport()
-            }
-        }
-        menuBarManager.onQuit = { [weak self] in
-            Task { @MainActor in
-                self?.quit()
-            }
-        }
-        #if !APP_STORE
-        menuBarManager.onCheckForUpdates = { [weak self] in
-            Task { @MainActor in
-                self?.updaterManager?.checkForUpdates()
-            }
-        }
-        #endif
-    }
-
-    // MARK: - Menu Actions
-
-    private func showAnalytics() {
-        if analyticsWindowController == nil {
-            analyticsWindowController = AnalyticsWindowController()
-        }
-        analyticsWindowController?.appDelegate = self
-        analyticsWindowController?.showWindow(nil)
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func openSettings() {
-        settingsWindowController.showSettings(appDelegate: self, fromStatusItem: menuBarManager.statusItem)
-    }
-
-    func showSupport() {
-        supportWindowController.showSupport(appDelegate: self, fromStatusItem: menuBarManager.statusItem)
-    }
-
-    private func quit() {
-        cameraDetector.stop()
-        airPodsDetector.stop()
-        NSApplication.shared.terminate(nil)
-    }
-
-    func openSupportPage() {
-        guard let url = URL(string: "https://buymeacoffee.com/tjohnell") else { return }
-
-        if let openSupportURLHandler {
-            openSupportURLHandler(url)
-            return
-        }
-
-        NSWorkspace.shared.open(url)
     }
 
     // MARK: - Activation Policy
@@ -675,14 +430,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     func getAvailableCameras() -> [AVCaptureDevice] {
         return cameraDetector.getAvailableCameras()
-    }
-
-    func restartCamera() {
-        guard activeTrackingSource == .camera, selectedCameraID != nil else { return }
-
-        Task { @MainActor in
-            await self.applyCameraSelectionTransition()
-        }
     }
 
     func applyDetectionMode() {

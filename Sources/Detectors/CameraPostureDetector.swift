@@ -1,5 +1,5 @@
-import Foundation
 import AVFoundation
+import Foundation
 import Vision
 import os.log
 
@@ -288,7 +288,9 @@ class CameraPostureDetector: NSObject, PostureDetector {
         // natural resting position is closer to screen than average calibration position
         let neutralWidth = widthValues.max() ?? 0.0
 
-        os_log(.info, log: log, "Created calibration: goodY=%.3f, badY=%.3f, range=%.3f, neutralWidth=%.3f (max)", maxY, minY, range, neutralWidth)
+        os_log(
+            .info, log: log, "Created calibration: goodY=%.3f, badY=%.3f, range=%.3f, neutralWidth=%.3f (max)", maxY,
+            minY, range, neutralWidth)
 
         return CameraCalibrationData(
             goodPostureY: maxY,
@@ -325,6 +327,9 @@ class CameraPostureDetector: NSObject, PostureDetector {
         self.deadZone = deadZone
     }
 
+}
+
+extension CameraPostureDetector {
     // MARK: - Camera Management
 
     func getAvailableCameras() -> [AVCaptureDevice] {
@@ -372,7 +377,8 @@ class CameraPostureDetector: NSObject, PostureDetector {
         }
 
         guard let selectedCamera = camera,
-              let input = try? AVCaptureDeviceInput(device: selectedCamera) else {
+            let input = try? AVCaptureDeviceInput(device: selectedCamera)
+        else {
             session.commitConfiguration()
             os_log(.error, log: log, "Failed to create camera input")
             return
@@ -462,7 +468,8 @@ class CameraPostureDetector: NSObject, PostureDetector {
 
             let cameras = self.getAvailableCameras()
             guard let camera = cameras.first(where: { $0.uniqueID == cameraID }),
-                  let input = try? AVCaptureDeviceInput(device: camera) else {
+                let input = try? AVCaptureDeviceInput(device: camera)
+            else {
                 session.commitConfiguration()
                 os_log(.error, log: log, "Failed to switch to camera: %{public}@", cameraID)
                 return
@@ -486,7 +493,7 @@ class CameraPostureDetector: NSObject, PostureDetector {
     private func processFrame(_ pixelBuffer: CVPixelBuffer) {
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
 
-        let bodyRequest = VNDetectHumanBodyPoseRequest { [weak self] request, error in
+        let bodyRequest = VNDetectHumanBodyPoseRequest { [weak self] request, _ in
             if let results = request.results as? [VNHumanBodyPoseObservation], let body = results.first {
                 self?.analyzeBodyPose(body)
             } else {
@@ -513,7 +520,7 @@ class CameraPostureDetector: NSObject, PostureDetector {
     private func tryFaceDetection(pixelBuffer: CVPixelBuffer) {
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
 
-        let faceRequest = VNDetectFaceRectanglesRequest { [weak self] request, error in
+        let faceRequest = VNDetectFaceRectanglesRequest { [weak self] request, _ in
             if let results = request.results as? [VNFaceObservation], let face = results.first {
                 self?.consecutiveNoDetectionFrames = 0
                 self?.handleDetection(noseY: face.boundingBox.midY, faceWidth: face.boundingBox.width)
@@ -589,7 +596,8 @@ class CameraPostureDetector: NSObject, PostureDetector {
             if ratio > forwardHeadThreshold {
                 isBadPosture = true
                 let sizeExcess = ratio - forwardHeadThreshold
-                forwardHeadSeverity = min(1.0, max(0.0, Double(sizeExcess / CameraCalibrationData.forwardHeadSeverityRange)))
+                forwardHeadSeverity = min(
+                    1.0, max(0.0, Double(sizeExcess / CameraCalibrationData.forwardHeadSeverityRange)))
             }
         }
 
@@ -632,7 +640,9 @@ class CameraPostureDetector: NSObject, PostureDetector {
 // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 
 extension CameraPostureDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+    func captureOutput(
+        _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection
+    ) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
         let now = Date()

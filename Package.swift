@@ -12,7 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture", from: "1.10.0"),
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
     ],
     targets: [
         // Core logic library - testable, no main entry point
@@ -20,7 +20,7 @@ let package = Package(
             name: "DorsoCore",
             dependencies: [
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
-                .product(name: "Sparkle", package: "Sparkle")
+                .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources",
             exclude: ["App", "Icons"],
@@ -33,7 +33,7 @@ let package = Package(
                 .linkedFramework("Vision"),
                 .linkedFramework("CoreImage"),
                 .linkedFramework("CoreMotion"),
-                .linkedFramework("IOBluetooth")
+                .linkedFramework("IOBluetooth"),
             ]
         ),
         // Executable target
@@ -47,9 +47,9 @@ let package = Package(
             name: "DorsoTests",
             dependencies: [
                 "DorsoCore",
-                .product(name: "ComposableArchitecture", package: "swift-composable-architecture")
+                .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
             ],
             path: "Tests"
-        )
+        ),
     ]
 )

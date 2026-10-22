@@ -1,5 +1,6 @@
-import XCTest
 import AVFoundation
+import XCTest
+
 @testable import DorsoCore
 
 final class CameraPostureDetectorTests: XCTestCase {
@@ -24,10 +25,12 @@ final class CameraPostureDetectorTests: XCTestCase {
         // neutralY = average = (0.60 + 0.55 + 0.50 + 0.45) / 4 = 0.525
         XCTAssertEqual(Double(calibration!.neutralY), 0.525, accuracy: 0.0001, "neutralY should be average of all Y")
         // postureRange = abs(0.60 - 0.45) = 0.15
-        XCTAssertEqual(Double(calibration!.postureRange), 0.15, accuracy: 0.0001, "postureRange should be abs(max - min)")
+        XCTAssertEqual(
+            Double(calibration!.postureRange), 0.15, accuracy: 0.0001, "postureRange should be abs(max - min)")
         XCTAssertEqual(calibration!.cameraID, "cam-1")
         // neutralFaceWidth = max of all face widths = 0.25
-        XCTAssertEqual(Double(calibration!.neutralFaceWidth), 0.25, accuracy: 0.0001, "neutralFaceWidth should be max face width")
+        XCTAssertEqual(
+            Double(calibration!.neutralFaceWidth), 0.25, accuracy: 0.0001, "neutralFaceWidth should be max face width")
     }
 
     // MARK: - createCalibrationData: Fewer Than 4 Samples
@@ -54,7 +57,7 @@ final class CameraPostureDetectorTests: XCTestCase {
     func testCreateCalibrationDataWithOneSampleReturnsNil() {
         let detector = CameraPostureDetector()
         let samples: [CalibrationSample] = [
-            .camera(CameraCalibrationSample(noseY: 0.50, faceWidth: 0.20)),
+            .camera(CameraCalibrationSample(noseY: 0.50, faceWidth: 0.20))
         ]
         let calibration = detector.createCalibrationData(from: samples)
         XCTAssertNil(calibration)
@@ -75,8 +78,9 @@ final class CameraPostureDetectorTests: XCTestCase {
 
         let calibration = detector.createCalibrationData(from: samples) as? CameraCalibrationData
         XCTAssertNotNil(calibration)
-        XCTAssertEqual(Double(calibration!.neutralFaceWidth), 0.0, accuracy: 0.0001,
-                       "neutralFaceWidth should be 0 when no face widths provided")
+        XCTAssertEqual(
+            Double(calibration!.neutralFaceWidth), 0.0, accuracy: 0.0001,
+            "neutralFaceWidth should be 0 when no face widths provided")
     }
 
     func testCreateCalibrationDataMixedFaceWidthsUsesMax() {
@@ -92,8 +96,9 @@ final class CameraPostureDetectorTests: XCTestCase {
 
         let calibration = detector.createCalibrationData(from: samples) as? CameraCalibrationData
         XCTAssertNotNil(calibration)
-        XCTAssertEqual(Double(calibration!.neutralFaceWidth), 0.30, accuracy: 0.0001,
-                       "neutralFaceWidth should be max of present face widths")
+        XCTAssertEqual(
+            Double(calibration!.neutralFaceWidth), 0.30, accuracy: 0.0001,
+            "neutralFaceWidth should be max of present face widths")
     }
 
     // MARK: - createCalibrationData: Y Value Calculations
@@ -316,7 +321,8 @@ final class CameraPostureDetectorTests: XCTestCase {
         wait(for: [delayedStartCompletion], timeout: 1.0)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            XCTAssertFalse(detector.isActive, "Detector should remain inactive after stop even if delayed start callback arrives")
+            XCTAssertFalse(
+                detector.isActive, "Detector should remain inactive after stop even if delayed start callback arrives")
             stopLock.lock()
             let count = stopCallCount
             stopLock.unlock()
@@ -336,7 +342,7 @@ final class AirPodsPostureDetectorCalibrationTests: XCTestCase {
         let detector = AirPodsPostureDetector()
 
         let samples: [CalibrationSample] = [
-            .airPods(AirPodsCalibrationSample(pitch: 0.15, roll: 0.25, yaw: 0.35)),
+            .airPods(AirPodsCalibrationSample(pitch: 0.15, roll: 0.25, yaw: 0.35))
         ]
 
         let calibration = detector.createCalibrationData(from: samples) as? AirPodsCalibrationData

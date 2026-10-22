@@ -1,0 +1,49 @@
+included:
+  - Sources
+  - Tests
+excluded:
+  - .build
+
+only_rules:
+  # Complexity and size
+  - cyclomatic_complexity
+  - function_body_length
+  - function_parameter_count
+  - type_body_length
+  - file_length
+  - nesting
+  - large_tuple
+  # Correctness
+  - force_cast
+  - force_try
+  - force_unwrapping
+  - unused_closure_parameter
+  - unused_enumerated
+  - unused_optional_binding
+  - unused_setter_value
+  - unused_control_flow_label
+  - duplicate_imports
+  - discarded_notification_center_observer
+  - weak_delegate
+
+cyclomatic_complexity:
+  # TCA reducers are one switch over every action
+  ignores_case_statements: true
+  warning: 12
+  error: 20
+function_body_length:
+  warning: 60
+  error: 100
+function_parameter_count:
+  warning: 6
+  error: 8
+type_body_length:
+  warning: 300
+  error: 500
+file_length:
+  warning: 500
+  error: 800
+  ignore_comment_only_lines: true
+large_tuple:
+  warning: 3
+  error: 4

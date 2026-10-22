@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import DorsoCore
 
 final class PostureEngineTransitionTests: XCTestCase {
@@ -578,11 +579,13 @@ final class PostureEngineTransitionTests: XCTestCase {
         let result = PostureEngine.stateWhenDisplayConfigurationChanges(
             currentState: .disabled,
             trackingSource: .camera,
-            pauseOnTheGoEnabled: true,
-            isLaptopOnlyConfiguration: true,
-            hasAnyCamera: false,
-            hasMatchingProfileCamera: false,
-            selectedCameraMatchesProfile: false
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: true,
+                isLaptopOnlyConfiguration: true,
+                hasAnyCamera: false,
+                hasMatchingProfileCamera: false,
+                selectedCameraMatchesProfile: false
+            )
         )
 
         XCTAssertEqual(result.newState, .disabled)
@@ -594,11 +597,13 @@ final class PostureEngineTransitionTests: XCTestCase {
         let result = PostureEngine.stateWhenDisplayConfigurationChanges(
             currentState: .monitoring,
             trackingSource: .camera,
-            pauseOnTheGoEnabled: true,
-            isLaptopOnlyConfiguration: true,
-            hasAnyCamera: true,
-            hasMatchingProfileCamera: true,
-            selectedCameraMatchesProfile: true
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: true,
+                isLaptopOnlyConfiguration: true,
+                hasAnyCamera: true,
+                hasMatchingProfileCamera: true,
+                selectedCameraMatchesProfile: true
+            )
         )
 
         XCTAssertEqual(result.newState, .paused(.onTheGo))
@@ -610,11 +615,13 @@ final class PostureEngineTransitionTests: XCTestCase {
         let result = PostureEngine.stateWhenDisplayConfigurationChanges(
             currentState: .paused(.noProfile),
             trackingSource: .camera,
-            pauseOnTheGoEnabled: false,
-            isLaptopOnlyConfiguration: false,
-            hasAnyCamera: true,
-            hasMatchingProfileCamera: true,
-            selectedCameraMatchesProfile: false
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: false,
+                isLaptopOnlyConfiguration: false,
+                hasAnyCamera: true,
+                hasMatchingProfileCamera: true,
+                selectedCameraMatchesProfile: false
+            )
         )
 
         XCTAssertEqual(result.newState, .monitoring)
@@ -626,11 +633,13 @@ final class PostureEngineTransitionTests: XCTestCase {
         let result = PostureEngine.stateWhenDisplayConfigurationChanges(
             currentState: .monitoring,
             trackingSource: .camera,
-            pauseOnTheGoEnabled: false,
-            isLaptopOnlyConfiguration: false,
-            hasAnyCamera: false,
-            hasMatchingProfileCamera: false,
-            selectedCameraMatchesProfile: false
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: false,
+                isLaptopOnlyConfiguration: false,
+                hasAnyCamera: false,
+                hasMatchingProfileCamera: false,
+                selectedCameraMatchesProfile: false
+            )
         )
 
         XCTAssertEqual(result.newState, .paused(.cameraDisconnected))
@@ -900,11 +909,13 @@ final class PostureEngineTransitionTests: XCTestCase {
         let result = PostureEngine.stateWhenDisplayConfigurationChanges(
             currentState: .paused(.onBattery),
             trackingSource: .camera,
-            pauseOnTheGoEnabled: false,
-            isLaptopOnlyConfiguration: false,
-            hasAnyCamera: true,
-            hasMatchingProfileCamera: true,
-            selectedCameraMatchesProfile: true
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: false,
+                isLaptopOnlyConfiguration: false,
+                hasAnyCamera: true,
+                hasMatchingProfileCamera: true,
+                selectedCameraMatchesProfile: true
+            )
         )
 
         XCTAssertEqual(result.newState, .paused(.onBattery))
@@ -915,5 +926,56 @@ final class PostureEngineTransitionTests: XCTestCase {
     func testDetectorDoesNotRunWhilePausedOnBattery() {
         XCTAssertFalse(PostureEngine.shouldDetectorRun(for: .paused(.onBattery), trackingSource: .camera))
         XCTAssertFalse(PostureEngine.shouldDetectorRun(for: .paused(.onBattery), trackingSource: .airpods))
+    }
+
+    // MARK: - Sticky Pauses
+
+    func testOnlyTheBatteryPauseIsSticky() {
+        let reasons: [PauseReason] = [
+            .noProfile, .onTheGo, .cameraDisconnected, .screenLocked, .airPodsRemoved, .onBattery,
+            .timed(until: Date(timeIntervalSince1970: 0)),
+        ]
+        for reason in reasons {
+            // Exhaustive on purpose: a new pause reason must decide whether it is sticky
+            switch reason {
+            case .onBattery:
+                XCTAssertTrue(reason.isSticky)
+            case .noProfile, .onTheGo, .cameraDisconnected, .screenLocked, .airPodsRemoved, .timed:
+                XCTAssertFalse(reason.isSticky, "\(reason)")
+            }
+        }
+        XCTAssertTrue(AppState.paused(.onBattery).isStickyPause)
+        XCTAssertFalse(AppState.monitoring.isStickyPause)
+    }
+
+    func testStickyPauseIgnoresDeviceChanges() {
+        let connect = PostureEngine.stateWhenCameraConnects(
+            currentState: .paused(.onBattery),
+            trackingSource: .camera,
+            hasMatchingProfileForConnectedCamera: true
+        )
+        XCTAssertEqual(connect.newState, .paused(.onBattery))
+
+        let disconnect = PostureEngine.stateWhenCameraDisconnects(
+            currentState: .paused(.onBattery),
+            trackingSource: .camera,
+            disconnectedCameraIsSelected: true,
+            hasFallbackCamera: false,
+            fallbackMatchesProfile: false
+        )
+        XCTAssertEqual(disconnect.newState, .paused(.onBattery))
+
+        let display = PostureEngine.stateWhenDisplayConfigurationChanges(
+            currentState: .paused(.onBattery),
+            trackingSource: .camera,
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: true,
+                isLaptopOnlyConfiguration: true,
+                hasAnyCamera: false,
+                hasMatchingProfileCamera: false,
+                selectedCameraMatchesProfile: false
+            )
+        )
+        XCTAssertEqual(display.newState, .paused(.onBattery))
     }
 }

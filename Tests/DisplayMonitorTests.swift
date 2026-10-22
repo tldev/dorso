@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import DorsoCore
 
 final class DisplayMonitorTests: XCTestCase {
@@ -89,4 +90,3 @@ final class DisplayMonitorTests: XCTestCase {
         XCTAssertEqual(removeCount, 1)
     }
 }
-

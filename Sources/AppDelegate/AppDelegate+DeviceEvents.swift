@@ -1,71 +1,95 @@
-import AppKit
 import AVFoundation
+import AppKit
 
 extension AppDelegate {
+    // MARK: - Observers Setup
+
+    func setupObservers() {
+        // Display configuration changes
+        displayMonitor.onDisplayConfigurationChange = { [weak self] in
+            Task { @MainActor in
+                await self?.handleDisplayConfigurationChange()
+            }
+        }
+        displayMonitor.startMonitoring()
+
+        // Camera hot-plug
+        cameraObserver.onCameraConnected = { [weak self] device in
+            Task { @MainActor in
+                await self?.handleCameraConnected(device)
+            }
+        }
+        cameraObserver.onCameraDisconnected = { [weak self] device in
+            Task { @MainActor in
+                await self?.handleCameraDisconnected(device)
+            }
+        }
+        cameraObserver.startObserving()
+
+        // Screen lock/unlock
+        screenLockObserver.onScreenLocked = { [weak self] in
+            Task { @MainActor in
+                await self?.handleScreenLocked()
+            }
+        }
+        screenLockObserver.onScreenUnlocked = { [weak self] in
+            Task { @MainActor in
+                await self?.handleScreenUnlocked()
+            }
+        }
+        screenLockObserver.startObserving()
+
+        // AC/battery power source
+        powerSourceObserver.onPowerSourceChanged = { [weak self] isOnBattery in
+            Task { @MainActor in
+                await self?.handlePowerSourceChanged(isOnBattery)
+            }
+        }
+        powerSourceObserver.startObserving()
+
+        // Global hotkey
+        hotkeyManager.configure(
+            enabled: toggleShortcutEnabled,
+            shortcut: toggleShortcut,
+            onToggle: { [weak self] in
+                Task { @MainActor in
+                    await self?.toggleEnabled()
+                }
+            }
+        )
+    }
+
     // MARK: - Camera Hot-Plug
 
     func handleCameraConnected(_ device: AVCaptureDevice) async {
         guard activeTrackingSource == .camera || trackingMode == .automatic else { return }
 
-        let configKey = DisplayMonitor.getCurrentConfigKey()
-        let profile = loadProfile(forKey: configKey)
-
-        await applyCameraConnectedTransition(
-            hasMatchingProfile: profile?.cameraID == device.uniqueID,
-            matchingProfile: profile
-        )
+        let profile = loadProfile(forKey: DisplayMonitor.getCurrentConfigKey())
+        await sendTrackingAction(
+            .cameraConnected(matchingProfile: profile?.cameraID == device.uniqueID ? profile : nil))
     }
 
     func handleCameraDisconnected(_ device: AVCaptureDevice) async {
         guard activeTrackingSource == .camera || trackingMode == .automatic else { return }
 
-        let disconnectedCameraIsSelected = device.uniqueID == selectedCameraID
-        let fallbackCamera = cameraDetector.getAvailableCameras().first
-        let configKey = DisplayMonitor.getCurrentConfigKey()
-        let profile = loadProfile(forKey: configKey)
-        let fallbackHasMatchingProfile = fallbackCamera != nil && profile?.cameraID == fallbackCamera?.uniqueID
-
-        await applyCameraDisconnectedTransition(
-            disconnectedCameraIsSelected: disconnectedCameraIsSelected,
-            hasFallbackCamera: fallbackCamera != nil,
-            fallbackHasMatchingProfile: fallbackHasMatchingProfile,
-            fallbackCamera: fallbackCamera,
-            fallbackProfile: profile
-        )
-    }
-
-    func applyCameraConnectedTransition(
-        hasMatchingProfile: Bool,
-        matchingProfile: ProfileData?
-    ) async {
-        await sendTrackingAction(
-            .cameraConnected(
-                hasMatchingProfile: hasMatchingProfile,
-                matchingProfile: matchingProfile
-            )
-        )
-    }
-
-    func applyCameraDisconnectedTransition(
-        disconnectedCameraIsSelected: Bool,
-        hasFallbackCamera: Bool,
-        fallbackHasMatchingProfile: Bool,
-        fallbackCamera: AVCaptureDevice?,
-        fallbackProfile: ProfileData?
-    ) async {
         await sendTrackingAction(
             .cameraDisconnected(
-                disconnectedCameraIsSelected: disconnectedCameraIsSelected,
-                hasFallbackCamera: hasFallbackCamera,
-                fallbackHasMatchingProfile: fallbackHasMatchingProfile,
-                fallbackCameraID: fallbackCamera?.uniqueID,
-                fallbackProfile: fallbackProfile
+                cameraID: device.uniqueID,
+                fallbackCameraID: availableCameraIDs().first,
+                profile: loadProfile(forKey: DisplayMonitor.getCurrentConfigKey())
             )
         )
     }
 
-    func applyCameraSelectionTransition() async {
-        await sendTrackingAction(.cameraSelectionChanged)
+    /// Selects a camera from Settings. A camera change needs recalibration
+    /// only while it is the active source.
+    func selectCamera(_ cameraID: String) async {
+        if activeTrackingSource == .camera {
+            await sendTrackingAction(.cameraSelectionChanged(cameraID))
+        } else {
+            selectedCameraID = cameraID
+        }
+        saveSettings()
     }
 
     // MARK: - Screen Lock
@@ -92,32 +116,20 @@ extension AppDelegate {
     func handleDisplayConfigurationChange(rebuildOverlays: Bool = true) async {
         if rebuildOverlays {
             rebuildOverlayWindows()
-            onDesksChanged?()
+            displayChanges.send()
         }
 
         guard state != .disabled else { return }
 
         let cameraIDs = availableCameraIDs()
-        let configKey = DisplayMonitor.getCurrentConfigKey()
-        let profile = loadProfile(forKey: configKey)
-        let hasMatchingProfileCamera = profile.map { cameraIDs.contains($0.cameraID) } ?? false
-        let selectedCameraMatchesProfile = profile.map { profile in
-            selectedCameraID == profile.cameraID
-        } ?? false
-
-        // Switching cameras is what normally applies a profile's calibration,
-        // but one camera can serve several display setups
-        if let profile, hasMatchingProfileCamera, selectedCameraMatchesProfile {
-            applyCameraCalibration(from: profile)
-        }
-
-        await applyDisplayConfigurationTransition(
-            pauseOnTheGoEnabled: pauseOnTheGo,
-            isLaptopOnlyConfiguration: DisplayMonitor.isLaptopOnlyConfiguration(),
-            hasAnyCamera: !cameraIDs.isEmpty,
-            hasMatchingProfileCamera: hasMatchingProfileCamera,
-            selectedCameraMatchesProfile: selectedCameraMatchesProfile,
-            matchingProfile: profile
+        let profile = loadProfile(forKey: DisplayMonitor.getCurrentConfigKey())
+        await sendTrackingAction(
+            .displayConfigurationChanged(
+                isLaptopOnlyConfiguration: DisplayMonitor.isLaptopOnlyConfiguration(),
+                hasAnyCamera: !cameraIDs.isEmpty,
+                hasMatchingProfileCamera: profile.map { cameraIDs.contains($0.cameraID) } ?? false,
+                matchingProfile: profile
+            )
         )
     }
 
@@ -134,12 +146,10 @@ extension AppDelegate {
     func selectDesk(id: String) async {
         let key = DisplayMonitor.getCurrentConfigKey()
         // Samples being taken belong to the desk active when calibration started
-        guard state != .calibrating else {
-            onDesksChanged?()
-            return
-        }
+        guard state != .calibrating else { return }
         guard deskStore.activeDesk(forKey: key)?.id != id,
-              deskStore.selectDesk(id: id, forKey: key) != nil else { return }
+            deskStore.selectDesk(id: id, forKey: key) != nil
+        else { return }
         await applyActiveDesk(forKey: key)
     }
 
@@ -151,53 +161,18 @@ extension AppDelegate {
         await applyActiveDesk(forKey: key)
     }
 
-    private func applyActiveDesk(forKey key: String) async {
-        defer { onDesksChanged?() }
-        lineUpActiveDesk(forKey: key)
-        guard state != .disabled else { return }
-        await handleDisplayConfigurationChange(rebuildOverlays: false)
-    }
-
-    /// The display transition leaves the camera alone in several states
-    /// (disabled, battery and on-the-go pauses, AirPods active), so point it
-    /// at the active desk directly.
-    func lineUpActiveDesk(forKey key: String) {
-        if let profile = loadProfile(forKey: key), availableCameraIDs().contains(profile.cameraID) {
-            if selectedCameraID != profile.cameraID {
-                cameraDetector.selectedCameraID = profile.cameraID
-                // No-op unless the session is running
-                cameraDetector.switchCamera(to: profile.cameraID)
-            }
-            applyCameraCalibration(from: profile)
-        } else {
-            cameraCalibration = nil
-        }
+    /// Loads the active desk's calibration; the reducer decides whether
+    /// tracking restarts with it.
+    func applyActiveDesk(forKey key: String) async {
+        let profile = loadProfile(forKey: key)
+        let isCameraAvailable = profile.map { availableCameraIDs().contains($0.cameraID) } ?? false
         if trackingMode == .automatic {
             updateSourceReadiness()
         }
+        await sendTrackingAction(.deskProfileApplied(profile, isCameraAvailable: isCameraAvailable))
     }
 
     func availableCameraIDs() -> [String] {
         availableCameraIDsOverride?() ?? cameraDetector.getAvailableCameras().map(\.uniqueID)
-    }
-
-    func applyDisplayConfigurationTransition(
-        pauseOnTheGoEnabled: Bool,
-        isLaptopOnlyConfiguration: Bool,
-        hasAnyCamera: Bool,
-        hasMatchingProfileCamera: Bool,
-        selectedCameraMatchesProfile: Bool,
-        matchingProfile: ProfileData?
-    ) async {
-        await sendTrackingAction(
-            .displayConfigurationChanged(
-                pauseOnTheGoEnabled: pauseOnTheGoEnabled,
-                isLaptopOnlyConfiguration: isLaptopOnlyConfiguration,
-                hasAnyCamera: hasAnyCamera,
-                hasMatchingProfileCamera: hasMatchingProfileCamera,
-                selectedCameraMatchesProfile: selectedCameraMatchesProfile,
-                matchingProfile: matchingProfile
-            )
-        )
     }
 }

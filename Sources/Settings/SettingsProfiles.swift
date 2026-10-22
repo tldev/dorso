@@ -60,8 +60,9 @@ final class SettingsProfileManager {
         guard settingsProfiles.isEmpty else { return }
         let defaults = userDefaults
         if let data = defaults.data(forKey: SettingsKeys.settingsProfiles),
-           let profiles = try? JSONDecoder().decode([SettingsProfile].self, from: data),
-           !profiles.isEmpty {
+            let profiles = try? JSONDecoder().decode([SettingsProfile].self, from: data),
+            !profiles.isEmpty
+        {
             settingsProfiles = profiles
             let savedID = defaults.string(forKey: SettingsKeys.currentSettingsProfileID)
             let selectedProfile = profiles.first(where: { $0.id == savedID }) ?? profiles.first
@@ -77,16 +78,20 @@ final class SettingsProfileManager {
         var legacyDetectionMode = DetectionMode.balanced
 
         if let modeString = defaults.string(forKey: SettingsKeys.warningMode),
-           let mode = WarningMode(rawValue: modeString) {
+            let mode = WarningMode(rawValue: modeString)
+        {
             legacyWarningMode = mode
         }
         if let colorData = defaults.data(forKey: SettingsKeys.warningColor),
-           let color = try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSColor.self, from: colorData) {
+            let color = try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSColor.self, from: colorData)
+        {
             legacyWarningColor = color
         }
-        legacyWarningOnsetDelay = doubleOrDefault(forKey: SettingsKeys.warningOnsetDelay, defaultValue: defaultWarningOnsetDelay)
+        legacyWarningOnsetDelay = doubleOrDefault(
+            forKey: SettingsKeys.warningOnsetDelay, defaultValue: defaultWarningOnsetDelay)
         if let modeString = defaults.string(forKey: SettingsKeys.detectionMode),
-           let mode = DetectionMode(rawValue: modeString) {
+            let mode = DetectionMode(rawValue: modeString)
+        {
             legacyDetectionMode = mode
         }
 
@@ -108,7 +113,8 @@ final class SettingsProfileManager {
             || defaults.object(forKey: SettingsKeys.warningMode) != nil
             || defaults.object(forKey: SettingsKeys.warningColor) != nil
             || defaults.object(forKey: SettingsKeys.warningOnsetDelay) != nil
-            || defaults.object(forKey: SettingsKeys.detectionMode) != nil {
+            || defaults.object(forKey: SettingsKeys.detectionMode) != nil
+        {
             clearLegacyProfileKeys()
         }
     }
@@ -132,7 +138,8 @@ final class SettingsProfileManager {
         detectionMode: DetectionMode? = nil
     ) {
         guard let profileID = currentSettingsProfileID,
-              let index = settingsProfiles.firstIndex(where: { $0.id == profileID }) else {
+            let index = settingsProfiles.firstIndex(where: { $0.id == profileID })
+        else {
             return
         }
         var profile = settingsProfiles[index]
@@ -165,25 +172,17 @@ final class SettingsProfileManager {
         return profile
     }
 
-    func createProfile(
-        named name: String,
-        warningMode: WarningMode,
-        warningColor: NSColor,
-        deadZone: Double,
-        intensity: Double,
-        warningOnsetDelay: Double,
-        detectionMode: DetectionMode
-    ) -> SettingsProfile {
-        let uniqueName = uniqueProfileName(for: name)
+    /// Creates and selects a profile with `source`'s settings.
+    func createProfile(named name: String, copying source: SettingsProfile) -> SettingsProfile {
         let profile = SettingsProfile(
             id: UUID().uuidString,
-            name: uniqueName,
-            warningMode: warningMode,
-            warningColorData: SettingsProfile.encodedColorData(from: warningColor),
-            deadZone: deadZone,
-            intensity: intensity,
-            warningOnsetDelay: warningOnsetDelay,
-            detectionMode: detectionMode
+            name: uniqueProfileName(for: name),
+            warningMode: source.warningMode,
+            warningColorData: source.warningColorData,
+            deadZone: source.deadZone,
+            intensity: source.intensity,
+            warningOnsetDelay: source.warningOnsetDelay,
+            detectionMode: source.detectionMode
         )
         settingsProfiles.append(profile)
         currentSettingsProfileID = profile.id
@@ -200,10 +199,11 @@ final class SettingsProfileManager {
     func renameProfile(id: String, to name: String) -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canRenameProfile(id: id),
-              !trimmed.isEmpty,
-              trimmed != "Default",
-              !settingsProfiles.contains(where: { $0.id != id && $0.name == trimmed }),
-              let index = settingsProfiles.firstIndex(where: { $0.id == id }) else {
+            !trimmed.isEmpty,
+            trimmed != "Default",
+            !settingsProfiles.contains(where: { $0.id != id && $0.name == trimmed }),
+            let index = settingsProfiles.firstIndex(where: { $0.id == id })
+        else {
             return false
         }
         settingsProfiles[index].name = trimmed

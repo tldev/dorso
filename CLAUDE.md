@@ -176,6 +176,8 @@ pkill -x Dorso; ./build.sh --dev && rm -rf /Applications/Dorso.app && cp -r buil
 
 ## Code Quality Rules
 
+**Formatting and lint:** run `scripts/lint.sh` before committing (CI runs the same check). `scripts/lint.sh --fix` applies swift-format first. Rules live in `.swift-format` and `.swiftlint.yml` (`Tests/.swiftlint.yml` relaxes force unwraps and length limits in tests). Fix violations rather than adding `swiftlint:disable` comments; the codebase has none.
+
 **NEVER use delays/timeouts to solve timing problems.** They are hacks that hide the real issue. Instead:
 - Fix the actual sequencing/state management
 - Use proper callbacks or completion handlers
@@ -214,7 +216,11 @@ Update both `VERSION` and `BUILD_NUMBER` in `build.sh` before releasing. Sparkle
 - `UI/` - Menu bar, overlays (blur, warning), and windows (Settings, Calibration, Onboarding, Analytics, Support)
 
 ### Architecture Rules
-- All tracking state lives in the TCA store; `AppDelegate` exposes computed accessors over it, never duplicate stored state.
+- All tracking state lives in the TCA store, including both calibrations, the selected camera, pause-on-the-go, and marketing mode; `AppDelegate` exposes computed accessors over it, never duplicate stored state.
+- The reducer derives facts it owns (is a source calibrated, does the selected camera match a profile) instead of receiving them as action parameters. Only OS observations (connected cameras, laptop-only display) arrive as payloads.
+- `AppDelegate` takes its `UserDefaults` in `init(userDefaults:)`; tests use `UserDefaults.makeTestSuite()` so they never touch real preferences.
+- Settings reads live app state through `SettingsModel` (it observes the store and `DeskStore.changes`) and sends edits to `AppDelegate` through bindings. Don't add UI refresh callbacks on `AppDelegate`.
+- A pause that device changes must not lift is declared with `PauseReason.isSticky`, not checked ad hoc.
 - Every store dispatch goes through `applyTrackingAction`/`sendTrackingAction` so transition side effects (detector/UI sync) are never skipped.
 - New reducer side effects: add an `EffectIntent` case and handle it in `performTrackingEffect`. Do not add ad-hoc callbacks.
 - Tests must stay headless: nothing test-reachable in `DorsoCore` may require a window server (`swift test` must pass without one).

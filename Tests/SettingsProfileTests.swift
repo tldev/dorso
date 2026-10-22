@@ -1,5 +1,6 @@
-import XCTest
 import AppKit
+import XCTest
+
 @testable import DorsoCore
 
 final class SettingsProfileTests: XCTestCase {

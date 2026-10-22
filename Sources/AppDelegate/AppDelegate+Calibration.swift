@@ -28,7 +28,7 @@ extension AppDelegate {
                 if !authorized {
                     os_log(.error, log: log, "Authorization denied for %{public}@", source.displayName)
                     await self.sendTrackingAction(
-                        .calibrationAuthorizationDenied(isCalibrated: self.isCalibrated)
+                        .calibrationAuthorizationDenied
                     )
                     self.calibratingSource = nil
                     return
@@ -107,8 +107,9 @@ extension AppDelegate {
             return
         }
 
+        let completed: TrackingFeature.CompletedCalibration
         if let cameraCalibration = calibration as? CameraCalibrationData {
-            self.cameraCalibration = cameraCalibration
+            completed = .camera(cameraCalibration)
             let profile = ProfileData(
                 goodPostureY: cameraCalibration.goodPostureY,
                 badPostureY: cameraCalibration.badPostureY,
@@ -123,21 +124,23 @@ extension AppDelegate {
                 deskStore.replaceActiveCalibration(forKey: key, with: profile)
             }
         } else if let airPodsCalibration = calibration as? AirPodsCalibrationData {
-            self.airPodsCalibration = airPodsCalibration
+            completed = .airPods(airPodsCalibration)
+        } else {
+            await cancelCalibration()
+            return
         }
 
         calibratingSource = nil
-        saveSettings()
         calibrationController = nil
 
-        await sendTrackingAction(.calibrationCompleted(source: source))
-        onCalibrationComplete?()
+        await sendTrackingAction(.calibrationCompleted(completed))
+        saveSettings()
     }
 
     func cancelCalibration() async {
         calibratingSource = nil
         calibrationController = nil
-        await sendTrackingAction(.calibrationCancelled(isCalibrated: isCalibrated))
+        await sendTrackingAction(.calibrationCancelled)
     }
 
     func finishCalibrationBySelectingDesk(id: String) async {
@@ -146,11 +149,9 @@ extension AppDelegate {
         calibrationController = nil
 
         if deskStore.selectDesk(id: id, forKey: key) != nil {
-            lineUpActiveDesk(forKey: key)
+            await applyActiveDesk(forKey: key)
         }
-        await sendTrackingAction(.calibrationCancelled(isCalibrated: isCalibrated))
-        onDesksChanged?()
-        onCalibrationComplete?()
+        await sendTrackingAction(.calibrationCancelled)
     }
 
     // MARK: - Calibration Alerts
@@ -167,7 +168,8 @@ extension AppDelegate {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = L("alert.permissionRequired")
-        alert.informativeText = source == .airpods
+        alert.informativeText =
+            source == .airpods
             ? L("alert.permissionRequired.airpods")
             : L("alert.permissionRequired.camera")
         alert.addButton(withTitle: L("alert.openSettings"))
@@ -186,7 +188,8 @@ extension AppDelegate {
 
         let source = calibratingSource ?? activeTrackingSource
         let pane = source == .airpods ? "Privacy_Motion" : "Privacy_Camera"
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(pane)") else { return }
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(pane)")
+        else { return }
         NSWorkspace.shared.open(url)
     }
 

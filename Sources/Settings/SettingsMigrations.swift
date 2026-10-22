@@ -16,7 +16,8 @@ enum SettingsMigrations {
         guard let legacyData = userDefaults.data(forKey: legacyKey) else { return }
 
         userDefaults.set(legacyData, forKey: newKey)
-        logger.info("Migrated AirPods calibration from legacy key '\(legacyKey, privacy: .public)' to '\(newKey, privacy: .public)'.")
+        logger.info(
+            "Migrated AirPods calibration from legacy key '\(legacyKey, privacy: .public)' to '\(newKey, privacy: .public)'."
+        )
     }
 }
-

@@ -8,32 +8,32 @@ private let log = OSLog(subsystem: "com.thelazydeveloper.dorso", category: "AirP
 // MARK: - AirPods Product ID Detection
 
 #if !APP_STORE
-/// Private IOBluetooth API to access Bluetooth product/vendor IDs
-@objc private protocol IOBluetoothDeviceIdentifiers {
-    @objc optional var productID: UInt32 { get }
-    @objc optional var vendorID: UInt32 { get }
-}
+    /// Private IOBluetooth API to access Bluetooth product/vendor IDs
+    @objc private protocol IOBluetoothDeviceIdentifiers {
+        @objc optional var productID: UInt32 { get }
+        @objc optional var vendorID: UInt32 { get }
+    }
 
-private let appleVendorID: UInt32 = 0x004C
+    private let appleVendorID: UInt32 = 0x004C
 
-/// Apple AirPods product IDs that have motion sensors (head tracking capable)
-private let compatibleProductIDs: Set<UInt32> = [
-    0x200E,  // AirPods Pro (1st gen)
-    0x2014,  // AirPods Pro (2nd gen) Lightning
-    0x2030,  // AirPods Pro (2nd gen) USB-C
-    0x2013,  // AirPods (3rd gen) Lightning
-    0x2024,  // AirPods (3rd gen) MagSafe
-    0x200A,  // AirPods Max (1st gen)
-    0x2028,  // AirPods Max (2nd gen / USB-C)
-    0x2036,  // AirPods 4 with ANC
-]
+    /// Apple AirPods product IDs that have motion sensors (head tracking capable)
+    private let compatibleProductIDs: Set<UInt32> = [
+        0x200E,  // AirPods Pro (1st gen)
+        0x2014,  // AirPods Pro (2nd gen) Lightning
+        0x2030,  // AirPods Pro (2nd gen) USB-C
+        0x2013,  // AirPods (3rd gen) Lightning
+        0x2024,  // AirPods (3rd gen) MagSafe
+        0x200A,  // AirPods Max (1st gen)
+        0x2028,  // AirPods Max (2nd gen / USB-C)
+        0x2036,  // AirPods 4 with ANC
+    ]
 
-/// Apple AirPods product IDs without motion sensors
-private let incompatibleProductIDs: Set<UInt32> = [
-    0x2002,  // AirPods (1st gen)
-    0x200F,  // AirPods (2nd gen)
-    0x2033,  // AirPods 4 (standard)
-]
+    /// Apple AirPods product IDs without motion sensors
+    private let incompatibleProductIDs: Set<UInt32> = [
+        0x2002,  // AirPods (1st gen)
+        0x200F,  // AirPods (2nd gen)
+        0x2033,  // AirPods 4 (standard)
+    ]
 #endif
 
 /// Represents a paired AirPods device
@@ -103,8 +103,9 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
         }
 
         let status = currentAuthorizationStatus()
-        os_log(.info, log: log, "requestAuthorization: current status = %{public}@",
-               String(describing: status))
+        os_log(
+            .info, log: log, "requestAuthorization: current status = %{public}@",
+            String(describing: status))
 
         switch status {
         case .authorized:
@@ -115,70 +116,71 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
             completion(false)
         case .notDetermined:
             os_log(.info, log: log, "Status notDetermined - starting motion updates to trigger dialog")
-            var hasCompleted = false
-            let complete: (Bool) -> Void = { [weak self] authorized in
-                guard !hasCompleted else { return }
-                hasCompleted = true
-                if let observer = self?.activationObserver {
-                    NotificationCenter.default.removeObserver(observer)
-                    self?.activationObserver = nil
-                }
-                self?.motionManager?.stopDeviceMotionUpdates()
-                self?.motionManager = nil  // Force start() to create a fresh manager
-                DispatchQueue.main.async {
-                    completion(authorized)
-                }
-            }
-
-            // Start motion updates to trigger the system permission dialog.
-            // The motion data callback also checks status, but only fires when
-            // AirPods are in ears — the activation observer below covers the other case.
-            if !skipMotionUpdates {
-                if motionManager == nil {
-                    motionManager = CMHeadphoneMotionManager()
-                }
-                guard motionManager != nil else {
-                    completion(false)
-                    return
-                }
-
-                motionManager!.startDeviceMotionUpdates(to: .main) { [weak self] _, _ in
-                    guard !hasCompleted else { return }
-                    guard let self else { return }
-                    let newStatus = self.currentAuthorizationStatus()
-                    if newStatus == .authorized {
-                        os_log(.info, log: log, "Permission granted via motion callback")
-                        complete(true)
-                    } else if newStatus == .denied || newStatus == .restricted {
-                        os_log(.info, log: log, "Permission denied via motion callback")
-                        complete(false)
-                    }
-                }
-            }
-
-            // When the system permission dialog is dismissed, the app regains focus.
-            // Check authorization status at that point to catch approval even when
-            // AirPods aren't in ears (motion data callback won't fire without them).
-            activationObserver = NotificationCenter.default.addObserver(
-                forName: activationNotificationName,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                guard !hasCompleted else { return }
-                guard let self else { return }
-                let newStatus = self.currentAuthorizationStatus()
-                os_log(.info, log: log, "App activated - checking auth status: %{public}@",
-                       String(describing: newStatus))
-                if newStatus == .authorized {
-                    os_log(.info, log: log, "Permission granted via activation observer")
-                    complete(true)
-                } else if newStatus == .denied || newStatus == .restricted {
-                    os_log(.info, log: log, "Permission denied via activation observer")
-                    complete(false)
-                }
-            }
+            promptForAuthorization(completion: completion)
         @unknown default:
             completion(false)
+        }
+    }
+
+    @available(macOS 14.0, *)
+    private func promptForAuthorization(completion: @escaping (Bool) -> Void) {
+        var hasCompleted = false
+        let complete: (Bool) -> Void = { [weak self] authorized in
+            guard !hasCompleted else { return }
+            hasCompleted = true
+            if let observer = self?.activationObserver {
+                NotificationCenter.default.removeObserver(observer)
+                self?.activationObserver = nil
+            }
+            self?.motionManager?.stopDeviceMotionUpdates()
+            self?.motionManager = nil  // Force start() to create a fresh manager
+            DispatchQueue.main.async {
+                completion(authorized)
+            }
+        }
+        let completeIfDecided: (String) -> Void = { [weak self] trigger in
+            guard !hasCompleted, let self,
+                let authorized = Self.authorizationDecision(for: self.currentAuthorizationStatus())
+            else { return }
+            os_log(.info, log: log, "Permission %{public}@ via %{public}@", authorized ? "granted" : "denied", trigger)
+            complete(authorized)
+        }
+
+        // Start motion updates to trigger the system permission dialog.
+        // The motion data callback also checks status, but only fires when
+        // AirPods are in ears — the activation observer below covers the other case.
+        if !skipMotionUpdates {
+            if motionManager == nil {
+                motionManager = CMHeadphoneMotionManager()
+            }
+            guard let manager = motionManager else {
+                completion(false)
+                return
+            }
+            manager.startDeviceMotionUpdates(to: .main) { _, _ in
+                completeIfDecided("motion callback")
+            }
+        }
+
+        // When the system permission dialog is dismissed, the app regains focus.
+        // Check authorization status at that point to catch approval even when
+        // AirPods aren't in ears (motion data callback won't fire without them).
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: activationNotificationName,
+            object: nil,
+            queue: .main
+        ) { _ in
+            completeIfDecided("activation observer")
+        }
+    }
+
+    /// nil while the user hasn't answered the permission dialog
+    @available(macOS 14.0, *)
+    private static func authorizationDecision(for status: CMAuthorizationStatus) -> Bool? {
+        switch status {
+        case .authorized: return true
+        case .denied, .restricted: return false
+        default: return nil
         }
     }
 
@@ -211,23 +213,23 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
     /// falls back to name-based detection for App Store builds.
     private func checkCompatibility(device: IOBluetoothDevice, lowercaseName: String) -> Bool {
         #if !APP_STORE
-        let identifiable = unsafeBitCast(device, to: IOBluetoothDeviceIdentifiers.self)
-        if let vendorID = identifiable.vendorID, let productID = identifiable.productID,
-           vendorID == appleVendorID {
-            os_log(.debug, log: log, "AirPods '%{public}@' productID=0x%04X", device.name ?? "", productID)
-            if compatibleProductIDs.contains(productID) { return true }
-            if incompatibleProductIDs.contains(productID) { return false }
-            // Unknown product ID — log it so we can add support later
-            os_log(.info, log: log, "Unknown AirPods productID 0x%04X for '%{public}@', falling back to name check",
-                   productID, device.name ?? "")
-        }
+            let identifiable = unsafeBitCast(device, to: IOBluetoothDeviceIdentifiers.self)
+            if let vendorID = identifiable.vendorID, let productID = identifiable.productID,
+                vendorID == appleVendorID
+            {
+                os_log(.debug, log: log, "AirPods '%{public}@' productID=0x%04X", device.name ?? "", productID)
+                if compatibleProductIDs.contains(productID) { return true }
+                if incompatibleProductIDs.contains(productID) { return false }
+                // Unknown product ID — log it so we can add support later
+                os_log(
+                    .info, log: log, "Unknown AirPods productID 0x%04X for '%{public}@', falling back to name check",
+                    productID, device.name ?? "")
+            }
         #endif
 
         // Fallback: name-based detection
-        return lowercaseName.contains("pro") ||
-               lowercaseName.contains("max") ||
-               lowercaseName.contains("3") ||
-               lowercaseName.contains("4")
+        return lowercaseName.contains("pro") || lowercaseName.contains("max") || lowercaseName.contains("3")
+            || lowercaseName.contains("4")
     }
 
     /// Check if any paired AirPods are currently Bluetooth-connected.
@@ -266,7 +268,6 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
     private(set) var currentPitch: Double = 0.0
     private(set) var currentRoll: Double = 0.0
     private(set) var currentYaw: Double = 0.0
-
 
     // MARK: - Thresholds
 
@@ -362,11 +363,13 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
             self.currentYaw = motion.attitude.yaw
 
             // Send calibration update if handler is set
-            self.onCalibrationUpdate?(.airPods(AirPodsCalibrationSample(
-                pitch: self.currentPitch,
-                roll: self.currentRoll,
-                yaw: self.currentYaw
-            )))
+            self.onCalibrationUpdate?(
+                .airPods(
+                    AirPodsCalibrationSample(
+                        pitch: self.currentPitch,
+                        roll: self.currentRoll,
+                        yaw: self.currentYaw
+                    )))
 
             // Evaluate posture if monitoring
             if self.isMonitoring, let calibration = self.calibrationData {
@@ -413,12 +416,15 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
     /// Stop connection-only monitoring.
     func stopConnectionMonitoring() {
         guard #available(macOS 14.0, *) else { return }
-        guard !isActive else { return } // Don't stop if full detector is running
+        guard !isActive else { return }  // Don't stop if full detector is running
         motionManager?.stopConnectionStatusUpdates()
         motionManager?.delegate = nil
         os_log(.info, log: log, "Stopped AirPods connection monitoring")
     }
 
+}
+
+extension AirPodsPostureDetector {
     // MARK: - Calibration
 
     func getCurrentCalibrationValue() -> CalibrationSample {

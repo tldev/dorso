@@ -1,5 +1,6 @@
 import AppKit
 import XCTest
+
 @testable import DorsoCore
 
 @MainActor
@@ -34,7 +35,8 @@ final class SettingsProfileManagerTests: XCTestCase {
         defaults.set(legacyWarningOnsetDelay, forKey: SettingsKeys.warningOnsetDelay)
         defaults.set(legacyWarningMode.rawValue, forKey: SettingsKeys.warningMode)
         defaults.set(legacyDetectionMode.rawValue, forKey: SettingsKeys.detectionMode)
-        let legacyColorData = try NSKeyedArchiver.archivedData(withRootObject: legacyWarningColor, requiringSecureCoding: false)
+        let legacyColorData = try NSKeyedArchiver.archivedData(
+            withRootObject: legacyWarningColor, requiringSecureCoding: false)
         defaults.set(legacyColorData, forKey: SettingsKeys.warningColor)
 
         let manager = SettingsProfileManager(userDefaults: defaults)
@@ -105,21 +107,29 @@ final class SettingsProfileManagerTests: XCTestCase {
 
         let a = manager.createProfile(
             named: "Work",
-            warningMode: .blur,
-            warningColor: .systemRed,
-            deadZone: 0.03,
-            intensity: 0.35,
-            warningOnsetDelay: 0.0,
-            detectionMode: .balanced
+            copying: SettingsProfile(
+                id: "",
+                name: "",
+                warningMode: .blur,
+                warningColorData: SettingsProfile.encodedColorData(from: .systemRed),
+                deadZone: 0.03,
+                intensity: 0.35,
+                warningOnsetDelay: 0.0,
+                detectionMode: .balanced
+            )
         )
         let b = manager.createProfile(
             named: "Work",
-            warningMode: .blur,
-            warningColor: .systemRed,
-            deadZone: 0.03,
-            intensity: 0.35,
-            warningOnsetDelay: 0.0,
-            detectionMode: .balanced
+            copying: SettingsProfile(
+                id: "",
+                name: "",
+                warningMode: .blur,
+                warningColorData: SettingsProfile.encodedColorData(from: .systemRed),
+                deadZone: 0.03,
+                intensity: 0.35,
+                warningOnsetDelay: 0.0,
+                detectionMode: .balanced
+            )
         )
 
         XCTAssertEqual(a.name, "Work")
@@ -132,12 +142,16 @@ final class SettingsProfileManagerTests: XCTestCase {
 
         let created = manager.createProfile(
             named: "Work",
-            warningMode: .blur,
-            warningColor: .systemRed,
-            deadZone: 0.03,
-            intensity: 0.35,
-            warningOnsetDelay: 0.0,
-            detectionMode: .balanced
+            copying: SettingsProfile(
+                id: "",
+                name: "",
+                warningMode: .blur,
+                warningColorData: SettingsProfile.encodedColorData(from: .systemRed),
+                deadZone: 0.03,
+                intensity: 0.35,
+                warningOnsetDelay: 0.0,
+                detectionMode: .balanced
+            )
         )
 
         XCTAssertEqual(manager.activeProfile?.id, created.id)
@@ -157,12 +171,16 @@ final class SettingsProfileManagerTests: XCTestCase {
         manager.loadProfiles()
         let profile = manager.createProfile(
             named: "Work",
-            warningMode: .blur,
-            warningColor: .red,
-            deadZone: 0.03,
-            intensity: 1.0,
-            warningOnsetDelay: 0,
-            detectionMode: .balanced
+            copying: SettingsProfile(
+                id: "",
+                name: "",
+                warningMode: .blur,
+                warningColorData: SettingsProfile.encodedColorData(from: .red),
+                deadZone: 0.03,
+                intensity: 1.0,
+                warningOnsetDelay: 0,
+                detectionMode: .balanced
+            )
         )
         return (manager, profile)
     }
@@ -189,12 +207,16 @@ final class SettingsProfileManagerTests: XCTestCase {
         let (manager, profile) = makeManagerWithCustomProfile()
         _ = manager.createProfile(
             named: "Gaming",
-            warningMode: .blur,
-            warningColor: .red,
-            deadZone: 0.03,
-            intensity: 1.0,
-            warningOnsetDelay: 0,
-            detectionMode: .balanced
+            copying: SettingsProfile(
+                id: "",
+                name: "",
+                warningMode: .blur,
+                warningColorData: SettingsProfile.encodedColorData(from: .red),
+                deadZone: 0.03,
+                intensity: 1.0,
+                warningOnsetDelay: 0,
+                detectionMode: .balanced
+            )
         )
 
         XCTAssertFalse(manager.renameProfile(id: profile.id, to: "   "))

@@ -30,7 +30,7 @@ final class MenuBarManager: NSObject, NSMenuDelegate {
     var onOpenSupport: (() -> Void)?
     var onQuit: (() -> Void)?
     #if !APP_STORE
-    var onCheckForUpdates: (() -> Void)?
+        var onCheckForUpdates: (() -> Void)?
     #endif
 
     func setup() {
@@ -84,7 +84,8 @@ final class MenuBarManager: NSObject, NSMenuDelegate {
         menu.addItem(deskMenuItem)
 
         // Recalibrate
-        recalibrateMenuItem = NSMenuItem(title: L("menu.recalibrate"), action: #selector(handleRecalibrate), keyEquivalent: "r")
+        recalibrateMenuItem = NSMenuItem(
+            title: L("menu.recalibrate"), action: #selector(handleRecalibrate), keyEquivalent: "r")
         recalibrateMenuItem.target = self
         menu.addItem(recalibrateMenuItem)
 
@@ -97,24 +98,28 @@ final class MenuBarManager: NSObject, NSMenuDelegate {
         menu.addItem(supportItem)
 
         // Analytics
-        let statsItem = NSMenuItem(title: L("menu.analytics"), action: #selector(handleShowAnalytics), keyEquivalent: "a")
+        let statsItem = NSMenuItem(
+            title: L("menu.analytics"), action: #selector(handleShowAnalytics), keyEquivalent: "a")
         statsItem.target = self
         statsItem.image = NSImage(systemSymbolName: "chart.bar.xaxis", accessibilityDescription: L("menu.analytics"))
         menu.addItem(statsItem)
 
         // Settings
-        let settingsItem = NSMenuItem(title: L("menu.settings"), action: #selector(handleOpenSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(
+            title: L("menu.settings"), action: #selector(handleOpenSettings), keyEquivalent: ",")
         settingsItem.target = self
         settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: L("menu.settings"))
         menu.addItem(settingsItem)
 
         #if !APP_STORE
-        // Check for Updates (direct-distribution builds only; the App Store
-        // delivers updates for Mac App Store installs)
-        let updatesItem = NSMenuItem(title: L("menu.checkForUpdates"), action: #selector(handleCheckForUpdates), keyEquivalent: "")
-        updatesItem.target = self
-        updatesItem.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: L("menu.checkForUpdates"))
-        menu.addItem(updatesItem)
+            // Check for Updates (direct-distribution builds only; the App Store
+            // delivers updates for Mac App Store installs)
+            let updatesItem = NSMenuItem(
+                title: L("menu.checkForUpdates"), action: #selector(handleCheckForUpdates), keyEquivalent: "")
+            updatesItem.target = self
+            updatesItem.image = NSImage(
+                systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: L("menu.checkForUpdates"))
+            menu.addItem(updatesItem)
         #endif
 
         menu.addItem(NSMenuItem.separator())
@@ -166,7 +171,8 @@ final class MenuBarManager: NSObject, NSMenuDelegate {
             submenu.addItem(item)
         }
         submenu.addItem(NSMenuItem.separator())
-        let manageItem = NSMenuItem(title: L("menu.manageDesks"), action: #selector(handleManageDesks), keyEquivalent: "")
+        let manageItem = NSMenuItem(
+            title: L("menu.manageDesks"), action: #selector(handleManageDesks), keyEquivalent: "")
         manageItem.target = self
         submenu.addItem(manageItem)
         deskMenuItem.submenu = submenu
@@ -257,8 +263,8 @@ final class MenuBarManager: NSObject, NSMenuDelegate {
     }
 
     #if !APP_STORE
-    @objc private func handleCheckForUpdates() {
-        onCheckForUpdates?()
-    }
+        @objc private func handleCheckForUpdates() {
+            onCheckForUpdates?()
+        }
     #endif
 }

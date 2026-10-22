@@ -21,7 +21,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         let hostingController = NSHostingController(rootView: settingsView)
 
         // Calculate actual content size from SwiftUI view
-        let fittingSize = hostingController.sizeThatFits(in: CGSize(width: 480, height: CGFloat.greatestFiniteMagnitude))
+        let fittingSize = hostingController.sizeThatFits(
+            in: CGSize(width: 480, height: CGFloat.greatestFiniteMagnitude))
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: fittingSize.width, height: fittingSize.height),
@@ -57,9 +58,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         if let window = notification.object as? NSWindow {
             appDelegate?.restoreAccessoryActivationPolicyIfNeeded(excluding: window)
         }
-        appDelegate?.onCalibrationComplete = nil
-        appDelegate?.onActiveSourceChanged = nil
-        appDelegate?.onDesksChanged = nil
     }
 
     func windowDidResize(_ notification: Notification) {

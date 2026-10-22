@@ -1,6 +1,7 @@
-import XCTest
-import CoreMotion
 import ComposableArchitecture
+import CoreMotion
+import XCTest
+
 @testable import DorsoCore
 
 /// Custom notification used to simulate app activation in tests.

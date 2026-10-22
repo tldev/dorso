@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import DorsoCore
 
 final class PostureUIStateTests: XCTestCase {

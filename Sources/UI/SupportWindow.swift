@@ -18,7 +18,8 @@ final class SupportWindowController: NSObject, NSWindowDelegate {
 
         let supportView = SupportView(appDelegate: appDelegate)
         let hostingController = NSHostingController(rootView: supportView)
-        let fittingSize = hostingController.sizeThatFits(in: CGSize(width: 360, height: CGFloat.greatestFiniteMagnitude))
+        let fittingSize = hostingController.sizeThatFits(
+            in: CGSize(width: 360, height: CGFloat.greatestFiniteMagnitude))
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: fittingSize.width, height: fittingSize.height),

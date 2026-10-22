@@ -25,6 +25,20 @@ jobs:
       - name: Run tests
         run: swift test
 
+  lint:
+    name: Lint
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: .build/swiftlint
+          key: swiftlint-${{ hashFiles('scripts/lint.sh') }}
+
+      - name: Check formatting and lint rules
+        run: scripts/lint.sh
+
   app-store-build:
     # The App Store build compiles out Sparkle and private APIs via the
     # APP_STORE flag, so it needs its own compile check

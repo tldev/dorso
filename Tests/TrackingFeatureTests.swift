@@ -1,5 +1,6 @@
-import XCTest
 import ComposableArchitecture
+import XCTest
+
 @testable import DorsoCore
 
 private actor EffectIntentRecorder {
@@ -15,8 +16,8 @@ private actor EffectIntentRecorder {
     }
 }
 
-private extension TrackingRuntimeClient {
-    static func recording(_ recorder: EffectIntentRecorder) -> Self {
+extension TrackingRuntimeClient {
+    fileprivate static func recording(_ recorder: EffectIntentRecorder) -> Self {
         Self(perform: { intent in await recorder.record(intent) })
     }
 }
@@ -60,16 +61,13 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .airpods,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
+                airPodsCalibration: .valid,
                 stateBeforeLock: nil
             )
         )
 
         await store.send(
-            .toggleEnabled(
-                trackingSource: .airpods,
-                isCalibrated: true,
-                detectorAvailable: false
-            )
+            .toggleEnabled(detectorAvailable: false)
         ) {
             $0.appState = .paused(.airPodsRemoved)
         }
@@ -85,17 +83,14 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .camera,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
+                cameraCalibration: .valid(),
                 stateBeforeLock: nil
             ),
             recorder: recorder
         )
 
         await store.send(
-            .toggleEnabled(
-                trackingSource: .camera,
-                isCalibrated: true,
-                detectorAvailable: true
-            )
+            .toggleEnabled(detectorAvailable: true)
         ) {
             $0.appState = .monitoring
         }
@@ -106,22 +101,17 @@ final class TrackingFeatureTests: XCTestCase {
     @MainActor
     func testInitialSetupEvaluatedInMarketingModeEmitsStartMonitoringOnly() async {
         let recorder = EffectIntentRecorder()
-        let store = makeStore(initialState: TrackingFeature.State(), recorder: recorder)
+        let store = makeStore(initialState: TrackingFeature.State(isMarketingMode: true), recorder: recorder)
 
         await store.send(
-            .initialSetupEvaluated(
-                isMarketingMode: true,
-                hasCameraProfile: false,
-                profileCameraAvailable: false,
-                hasValidAirPodsCalibration: false
-            )
+            .initialSetupEvaluated(cameraProfile: nil, profileCameraAvailable: false)
         )
         await store.finish()
         await assertIntents([.startMonitoring], recorder: recorder)
     }
 
     @MainActor
-    func testInitialSetupEvaluatedForCameraWithAvailableProfileEmitsApplyProfileAndStartMonitoring() async {
+    func testInitialSetupEvaluatedForCameraWithAvailableProfileAppliesProfileAndStartsMonitoring() async {
         let recorder = EffectIntentRecorder()
         let store = makeStore(
             initialState: TrackingFeature.State(
@@ -130,16 +120,15 @@ final class TrackingFeatureTests: XCTestCase {
             recorder: recorder
         )
 
-        await store.send(
-            .initialSetupEvaluated(
-                isMarketingMode: false,
-                hasCameraProfile: true,
-                profileCameraAvailable: true,
-                hasValidAirPodsCalibration: false
-            )
-        )
+        let profile = ProfileData(
+            goodPostureY: 0.6, badPostureY: 0.4, neutralY: 0.5, postureRange: 0.2, cameraID: "cam")
+        await store.send(.initialSetupEvaluated(cameraProfile: profile, profileCameraAvailable: true)) {
+            $0.selectedCameraID = "cam"
+            $0.cameraCalibration = CameraCalibrationData(profile: profile)
+            $0.cameraReadiness.calibrated = true
+        }
         await store.finish()
-        await assertIntents([.applyStartupCameraProfile(), .startMonitoring], recorder: recorder)
+        await assertIntents([.startMonitoring], recorder: recorder)
     }
 
     @MainActor
@@ -153,12 +142,7 @@ final class TrackingFeatureTests: XCTestCase {
         )
 
         await store.send(
-            .initialSetupEvaluated(
-                isMarketingMode: false,
-                hasCameraProfile: false,
-                profileCameraAvailable: false,
-                hasValidAirPodsCalibration: false
-            )
+            .initialSetupEvaluated(cameraProfile: nil, profileCameraAvailable: false)
         )
         await store.finish()
         await assertIntents([.showOnboarding], recorder: recorder)
@@ -187,7 +171,9 @@ final class TrackingFeatureTests: XCTestCase {
             )
         )
 
-        await store.send(.pauseOnTheGoSettingChanged(isEnabled: true))
+        await store.send(.pauseOnTheGoSettingChanged(isEnabled: true)) {
+            $0.pauseOnTheGoEnabled = true
+        }
     }
 
     @MainActor
@@ -207,7 +193,7 @@ final class TrackingFeatureTests: XCTestCase {
             severity: 0.7
         )
 
-        await store.send(.postureReadingReceived(reading, isMarketingMode: false)) {
+        await store.send(.postureReadingReceived(reading)) {
             $0.monitoringState.isCurrentlySlouching = true
             $0.monitoringState.consecutiveBadFrames = 1
             $0.monitoringState.postureWarningIntensity = 0.7
@@ -234,7 +220,7 @@ final class TrackingFeatureTests: XCTestCase {
             severity: 0
         )
 
-        await store.send(.postureReadingReceived(reading, isMarketingMode: false)) {
+        await store.send(.postureReadingReceived(reading)) {
             $0.monitoringState.consecutiveGoodFrames = 1
             $0.lastPostureReadingTime = reading.timestamp
         }
@@ -242,7 +228,7 @@ final class TrackingFeatureTests: XCTestCase {
         await assertIntents(
             [
                 .trackAnalytics(interval: 1.5, isSlouching: false),
-                .updateBlur
+                .updateBlur,
             ],
             recorder: recorder
         )
@@ -259,7 +245,7 @@ final class TrackingFeatureTests: XCTestCase {
             recorder: recorder
         )
 
-        await store.send(.awayStateChanged(true, isMarketingMode: false)) {
+        await store.send(.awayStateChanged(true)) {
             $0.monitoringState.isCurrentlyAway = true
         }
         await store.finish()
@@ -272,12 +258,13 @@ final class TrackingFeatureTests: XCTestCase {
         let store = makeStore(
             initialState: TrackingFeature.State(
                 appState: .monitoring,
-                manualSource: .camera
+                manualSource: .camera,
+                isMarketingMode: true
             ),
             recorder: recorder
         )
 
-        await store.send(.awayStateChanged(true, isMarketingMode: true))
+        await store.send(.awayStateChanged(true))
         await store.finish()
         await assertIntents([], recorder: recorder)
     }
@@ -291,17 +278,13 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .camera,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
+                isMarketingMode: true,
                 stateBeforeLock: nil
             )
         )
 
         await store.send(
-            .startMonitoringRequested(
-                isMarketingMode: true,
-                trackingSource: .camera,
-                isCalibrated: false,
-                isConnected: true
-            )
+            .startMonitoringRequested(isConnected: true)
         ) {
             $0.appState = .monitoring
         }
@@ -321,12 +304,7 @@ final class TrackingFeatureTests: XCTestCase {
         )
 
         await store.send(
-            .startMonitoringRequested(
-                isMarketingMode: false,
-                trackingSource: .camera,
-                isCalibrated: false,
-                isConnected: true
-            )
+            .startMonitoringRequested(isConnected: true)
         ) {
             $0.appState = .paused(.noProfile)
         }
@@ -342,18 +320,14 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .airpods,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
+                airPodsCalibration: .valid,
                 stateBeforeLock: nil
             ),
             recorder: recorder
         )
 
         await store.send(
-            .startMonitoringRequested(
-                isMarketingMode: false,
-                trackingSource: .airpods,
-                isCalibrated: true,
-                isConnected: false
-            )
+            .startMonitoringRequested(isConnected: false)
         ) {
             $0.appState = .paused(.airPodsRemoved)
         }
@@ -371,18 +345,14 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .camera,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
+                cameraCalibration: .valid(),
                 stateBeforeLock: nil
             ),
             recorder: recorder
         )
 
         await store.send(
-            .startMonitoringRequested(
-                isMarketingMode: false,
-                trackingSource: .camera,
-                isCalibrated: true,
-                isConnected: true
-            )
+            .startMonitoringRequested(isConnected: true)
         ) {
             $0.appState = .monitoring
         }
@@ -416,6 +386,219 @@ final class TrackingFeatureTests: XCTestCase {
         }
         await store.finish()
         await assertIntents([.startMonitoring], recorder: recorder)
+    }
+
+    // MARK: - Calibration and Camera Ownership
+
+    private func profile(cameraID: String, goodY: CGFloat = 0.6) -> ProfileData {
+        ProfileData(
+            goodPostureY: goodY, badPostureY: goodY - 0.2, neutralY: goodY - 0.1, postureRange: 0.2, cameraID: cameraID)
+    }
+
+    @MainActor
+    func testCalibrationChangesKeepReadinessInStep() async {
+        let store = makeStore(initialState: TrackingFeature.State())
+
+        await store.send(.cameraCalibrationChanged(.valid())) {
+            $0.cameraCalibration = .valid()
+            $0.cameraReadiness.calibrated = true
+        }
+        await store.send(.cameraCalibrationChanged(nil)) {
+            $0.cameraCalibration = nil
+            $0.cameraReadiness.calibrated = false
+        }
+    }
+
+    @MainActor
+    func testMarketingModeCountsEverySourceAsCalibrated() async {
+        let recorder = EffectIntentRecorder()
+        let store = makeStore(initialState: TrackingFeature.State(isMarketingMode: true), recorder: recorder)
+
+        await store.send(.toggleEnabled(detectorAvailable: true)) {
+            $0.appState = .monitoring
+        }
+        await store.finish()
+        await assertIntents([.startMonitoring], recorder: recorder)
+    }
+
+    @MainActor
+    func testDisplayChangeLoadsCalibrationWhenSelectedCameraAlreadyMatches() async {
+        let recorder = EffectIntentRecorder()
+        let desk = profile(cameraID: "builtin", goodY: 0.7)
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                cameraCalibration: .valid(cameraID: "builtin"),
+                selectedCameraID: "builtin"
+            ),
+            recorder: recorder
+        )
+
+        await store.send(
+            .displayConfigurationChanged(
+                isLaptopOnlyConfiguration: false,
+                hasAnyCamera: true,
+                hasMatchingProfileCamera: true,
+                matchingProfile: desk
+            )
+        ) {
+            $0.cameraCalibration = CameraCalibrationData(profile: desk)
+            $0.cameraReadiness.calibrated = true
+        }
+        await store.finish()
+        await assertIntents([.startMonitoring], recorder: recorder)
+    }
+
+    @MainActor
+    func testDeskProfileWithConnectedCameraSelectsItAndSwitches() async {
+        let recorder = EffectIntentRecorder()
+        let desk = profile(cameraID: "external")
+        let store = makeStore(
+            initialState: TrackingFeature.State(selectedCameraID: "builtin"),
+            recorder: recorder
+        )
+
+        await store.send(.deskProfileApplied(desk, isCameraAvailable: true)) {
+            $0.selectedCameraID = "external"
+            $0.cameraCalibration = CameraCalibrationData(profile: desk)
+            $0.cameraReadiness.calibrated = true
+        }
+        await store.finish()
+        await assertIntents([.switchCamera(to: "external")], recorder: recorder)
+    }
+
+    @MainActor
+    func testDeskProfileWithSameCameraLoadsCalibrationWithoutSwitching() async {
+        let recorder = EffectIntentRecorder()
+        let desk = profile(cameraID: "builtin", goodY: 0.8)
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                cameraCalibration: .valid(cameraID: "builtin"), selectedCameraID: "builtin"),
+            recorder: recorder
+        )
+
+        await store.send(.deskProfileApplied(desk, isCameraAvailable: true)) {
+            $0.cameraCalibration = CameraCalibrationData(profile: desk)
+            $0.cameraReadiness.calibrated = true
+        }
+        await store.finish()
+        await assertIntents([], recorder: recorder)
+    }
+
+    @MainActor
+    func testDeskProfileWithMissingCameraClearsCalibration() async {
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                cameraReadiness: TrackingSourceReadiness(calibrated: true),
+                cameraCalibration: .valid(cameraID: "builtin"),
+                selectedCameraID: "builtin"
+            )
+        )
+
+        await store.send(.deskProfileApplied(profile(cameraID: "external"), isCameraAvailable: false)) {
+            $0.cameraCalibration = nil
+            $0.cameraReadiness.calibrated = false
+        }
+    }
+
+    @MainActor
+    func testDeskSwitchWhileMonitoringRestartsSessionWithoutDisplayRules() async {
+        // Laptop-only with pause-on-the-go on: a desk switch must not pause
+        let recorder = EffectIntentRecorder()
+        let desk = profile(cameraID: "builtin", goodY: 0.8)
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                cameraCalibration: .valid(cameraID: "builtin"),
+                selectedCameraID: "builtin",
+                pauseOnTheGoEnabled: true
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.deskProfileApplied(desk, isCameraAvailable: true)) {
+            $0.cameraCalibration = CameraCalibrationData(profile: desk)
+            $0.cameraReadiness.calibrated = true
+        }
+        await store.finish()
+        await assertIntents([.beginMonitoringSession], recorder: recorder)
+    }
+
+    @MainActor
+    func testDeskSwitchResumesTrackingPausedForMissingCalibration() async {
+        let recorder = EffectIntentRecorder()
+        let desk = profile(cameraID: "builtin")
+        let store = makeStore(
+            initialState: TrackingFeature.State(appState: .paused(.noProfile), selectedCameraID: "builtin"),
+            recorder: recorder
+        )
+
+        await store.send(.deskProfileApplied(desk, isCameraAvailable: true)) {
+            $0.cameraCalibration = CameraCalibrationData(profile: desk)
+            $0.cameraReadiness.calibrated = true
+            $0.appState = .monitoring
+        }
+        await store.finish()
+        await assertIntents([.startMonitoring], recorder: recorder)
+    }
+
+    @MainActor
+    func testDeskSwitchLeavesOtherPausesAlone() async {
+        let desk = profile(cameraID: "builtin")
+        for pause in [PauseReason.onTheGo, .onBattery, .screenLocked] {
+            let store = makeStore(
+                initialState: TrackingFeature.State(appState: .paused(pause), selectedCameraID: "builtin")
+            )
+            await store.send(.deskProfileApplied(desk, isCameraAvailable: true)) {
+                $0.cameraCalibration = CameraCalibrationData(profile: desk)
+                $0.cameraReadiness.calibrated = true
+            }
+        }
+    }
+
+    @MainActor
+    func testDeskSwitchToMissingCameraWhileMonitoringPausesForCalibration() async {
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                cameraReadiness: TrackingSourceReadiness(calibrated: true),
+                cameraCalibration: .valid(cameraID: "builtin"),
+                selectedCameraID: "builtin"
+            )
+        )
+
+        await store.send(.deskProfileApplied(profile(cameraID: "external"), isCameraAvailable: false)) {
+            $0.cameraCalibration = nil
+            $0.cameraReadiness.calibrated = false
+            $0.appState = .paused(.noProfile)
+        }
+    }
+
+    @MainActor
+    func testCameraConnectInAutomaticModeAppliesMatchingProfile() async {
+        let recorder = EffectIntentRecorder()
+        let desk = profile(cameraID: "external")
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .paused(.cameraDisconnected),
+                trackingMode: .automatic,
+                preferredSource: .camera,
+                selectedCameraID: "builtin"
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.cameraConnected(matchingProfile: desk)) {
+            $0.cameraReadiness.connected = true
+            $0.cameraReadiness.calibrated = true
+            $0.selectedCameraID = "external"
+            $0.cameraCalibration = CameraCalibrationData(profile: desk)
+            $0.appState = .monitoring
+        }
+        await store.finish()
+        await assertIntents(
+            [.switchCamera(to: "external"), .beginMonitoringSession, .persistTrackingSource, .syncUI],
+            recorder: recorder)
     }
 
     // MARK: - Timed Pause
@@ -454,7 +637,7 @@ final class TrackingFeatureTests: XCTestCase {
             initialState: TrackingFeature.State(appState: .monitoring, timedPauseEnd: end)
         )
         let reading = PostureReading(timestamp: Date(), isBadPosture: true, severity: 1)
-        await store.send(.postureReadingReceived(reading, isMarketingMode: false))
+        await store.send(.postureReadingReceived(reading))
     }
 
     @MainActor
@@ -543,7 +726,7 @@ final class TrackingFeatureTests: XCTestCase {
             recorder: recorder
         )
 
-        await store.send(.toggleEnabled(trackingSource: .camera, isCalibrated: true, detectorAvailable: true)) {
+        await store.send(.toggleEnabled(detectorAvailable: true)) {
             $0.appState = .disabled
             $0.timedPauseEnd = nil
         }
@@ -733,23 +916,21 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .camera,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
+                selectedCameraID: "builtin",
                 stateBeforeLock: nil
             ),
             recorder: recorder
         )
 
         await store.send(
-            .cameraDisconnected(
-                disconnectedCameraIsSelected: true,
-                hasFallbackCamera: true,
-                fallbackHasMatchingProfile: false
-            )
+            .cameraDisconnected(cameraID: "builtin", fallbackCameraID: "external", profile: nil)
         ) {
             $0.appState = .paused(.noProfile)
             $0.cameraReadiness.connected = true
+            $0.selectedCameraID = "external"
         }
         await store.finish()
-        await assertIntents([.switchCamera(.fallback())], recorder: recorder)
+        await assertIntents([.switchCamera(to: "external")], recorder: recorder)
     }
 
     @MainActor
@@ -785,12 +966,13 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .camera,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
+                cameraCalibration: .valid(),
                 stateBeforeLock: nil
             ),
             recorder: recorder
         )
 
-        await store.send(.calibrationAuthorizationDenied(isCalibrated: true)) {
+        await store.send(.calibrationAuthorizationDenied) {
             $0.appState = .monitoring
         }
         await store.finish()
@@ -812,7 +994,7 @@ final class TrackingFeatureTests: XCTestCase {
             recorder: recorder
         )
 
-        await store.send(.calibrationAuthorizationDenied(isCalibrated: false)) {
+        await store.send(.calibrationAuthorizationDenied) {
             $0.appState = .paused(.noProfile)
         }
         await store.finish()
@@ -916,7 +1098,7 @@ final class TrackingFeatureTests: XCTestCase {
             TrackingFeature()
         }
 
-        await store.send(.runtimeDetectorStartFailed(trackingSource: .camera)) {
+        await store.send(.runtimeDetectorStartFailed) {
             $0.appState = .paused(.cameraDisconnected)
         }
     }
@@ -936,7 +1118,7 @@ final class TrackingFeatureTests: XCTestCase {
             TrackingFeature()
         }
 
-        await store.send(.runtimeDetectorStartFailed(trackingSource: .airpods)) {
+        await store.send(.runtimeDetectorStartFailed) {
             $0.appState = .paused(.airPodsRemoved)
         }
     }
@@ -993,12 +1175,13 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .camera,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
+                cameraCalibration: .valid(),
                 stateBeforeLock: nil
             ),
             recorder: recorder
         )
 
-        await store.send(.calibrationCancelled(isCalibrated: true)) {
+        await store.send(.calibrationCancelled) {
             $0.appState = .monitoring
         }
         await store.finish()
@@ -1020,7 +1203,7 @@ final class TrackingFeatureTests: XCTestCase {
             TrackingFeature()
         }
 
-        await store.send(.calibrationCancelled(isCalibrated: false)) {
+        await store.send(.calibrationCancelled) {
             $0.appState = .paused(.noProfile)
         }
     }
@@ -1040,7 +1223,8 @@ final class TrackingFeatureTests: XCTestCase {
             recorder: recorder
         )
 
-        await store.send(.calibrationCompleted(source: .airpods)) {
+        await store.send(.calibrationCompleted(.airPods(.valid))) {
+            $0.airPodsCalibration = .valid
             $0.airPodsReadiness.calibrated = true
             $0.appState = .monitoring
         }
@@ -1063,13 +1247,17 @@ final class TrackingFeatureTests: XCTestCase {
             recorder: recorder
         )
 
-        await store.send(.cameraConnected(hasMatchingProfile: true)) {
+        let profile = ProfileData(
+            goodPostureY: 0.6, badPostureY: 0.4, neutralY: 0.5, postureRange: 0.2, cameraID: "external")
+        await store.send(.cameraConnected(matchingProfile: profile)) {
             $0.cameraReadiness.connected = true
             $0.cameraReadiness.calibrated = true
+            $0.selectedCameraID = "external"
+            $0.cameraCalibration = CameraCalibrationData(profile: profile)
             $0.appState = .monitoring
         }
         await store.finish()
-        await assertIntents([.switchCamera(.matchingProfile()), .startMonitoring], recorder: recorder)
+        await assertIntents([.switchCamera(to: "external"), .startMonitoring], recorder: recorder)
     }
 
     @MainActor
@@ -1082,17 +1270,14 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .camera,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
+                selectedCameraID: "builtin",
                 stateBeforeLock: nil
             ),
             recorder: recorder
         )
 
         await store.send(
-            .cameraDisconnected(
-                disconnectedCameraIsSelected: false,
-                hasFallbackCamera: true,
-                fallbackHasMatchingProfile: true
-            )
+            .cameraDisconnected(cameraID: "external", fallbackCameraID: "builtin", profile: nil)
         )
         await store.finish()
         await assertIntents([.syncUI], recorder: recorder)
@@ -1107,7 +1292,8 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .camera,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
-                stateBeforeLock: nil
+                stateBeforeLock: nil,
+                pauseOnTheGoEnabled: true
             )
         ) {
             TrackingFeature()
@@ -1115,11 +1301,10 @@ final class TrackingFeatureTests: XCTestCase {
 
         await store.send(
             .displayConfigurationChanged(
-                pauseOnTheGoEnabled: true,
                 isLaptopOnlyConfiguration: true,
                 hasAnyCamera: true,
                 hasMatchingProfileCamera: true,
-                selectedCameraMatchesProfile: true
+                matchingProfile: nil
             )
         ) {
             $0.appState = .paused(.onTheGo)
@@ -1136,24 +1321,29 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .camera,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
+                selectedCameraID: "builtin",
                 stateBeforeLock: nil
             ),
             recorder: recorder
         )
 
+        let profile = ProfileData(
+            goodPostureY: 0.6, badPostureY: 0.4, neutralY: 0.5, postureRange: 0.2, cameraID: "external")
         await store.send(
             .displayConfigurationChanged(
-                pauseOnTheGoEnabled: false,
                 isLaptopOnlyConfiguration: false,
                 hasAnyCamera: true,
                 hasMatchingProfileCamera: true,
-                selectedCameraMatchesProfile: false
+                matchingProfile: profile
             )
         ) {
             $0.appState = .monitoring
+            $0.selectedCameraID = "external"
+            $0.cameraCalibration = CameraCalibrationData(profile: profile)
+            $0.cameraReadiness.calibrated = true
         }
         await store.finish()
-        await assertIntents([.switchCamera(.matchingProfile()), .startMonitoring], recorder: recorder)
+        await assertIntents([.switchCamera(to: "external"), .startMonitoring], recorder: recorder)
     }
 
     @MainActor
@@ -1173,11 +1363,10 @@ final class TrackingFeatureTests: XCTestCase {
 
         await store.send(
             .displayConfigurationChanged(
-                pauseOnTheGoEnabled: false,
                 isLaptopOnlyConfiguration: false,
                 hasAnyCamera: false,
                 hasMatchingProfileCamera: false,
-                selectedCameraMatchesProfile: false
+                matchingProfile: nil
             )
         ) {
             $0.appState = .paused(.cameraDisconnected)
@@ -1199,11 +1388,12 @@ final class TrackingFeatureTests: XCTestCase {
             recorder: recorder
         )
 
-        await store.send(.cameraSelectionChanged) {
+        await store.send(.cameraSelectionChanged("external")) {
+            $0.selectedCameraID = "external"
             $0.appState = .paused(.noProfile)
         }
         await store.finish()
-        await assertIntents([.switchCamera(.selectedCamera)], recorder: recorder)
+        await assertIntents([.switchCamera(to: "external")], recorder: recorder)
     }
 
     @MainActor
@@ -1221,7 +1411,7 @@ final class TrackingFeatureTests: XCTestCase {
             recorder: recorder
         )
 
-        await store.send(.switchTrackingSource(.airpods, isNewSourceCalibrated: false)) {
+        await store.send(.switchTrackingSource(.airpods)) {
             $0.appState = .paused(.noProfile)
             $0.manualSource = .airpods
             $0.activeSource = .airpods
@@ -1230,7 +1420,7 @@ final class TrackingFeatureTests: XCTestCase {
         await assertIntents(
             [
                 .stopDetector(.camera),
-                .persistTrackingSource
+                .persistTrackingSource,
             ],
             recorder: recorder
         )
@@ -1246,12 +1436,13 @@ final class TrackingFeatureTests: XCTestCase {
                 manualSource: .camera,
                 preferredSource: .camera,
                 autoReturnEnabled: false,
+                airPodsCalibration: .valid,
                 stateBeforeLock: nil
             ),
             recorder: recorder
         )
 
-        await store.send(.switchTrackingSource(.airpods, isNewSourceCalibrated: true)) {
+        await store.send(.switchTrackingSource(.airpods)) {
             $0.appState = .monitoring
             $0.manualSource = .airpods
             $0.activeSource = .airpods
@@ -1261,7 +1452,7 @@ final class TrackingFeatureTests: XCTestCase {
             [
                 .stopDetector(.camera),
                 .persistTrackingSource,
-                .startMonitoring
+                .startMonitoring,
             ],
             recorder: recorder
         )
@@ -1282,7 +1473,7 @@ final class TrackingFeatureTests: XCTestCase {
             TrackingFeature()
         }
 
-        await store.send(.switchTrackingSource(.camera, isNewSourceCalibrated: true))
+        await store.send(.switchTrackingSource(.camera))
     }
 
     // MARK: - Automatic Mode Tests
@@ -1537,7 +1728,8 @@ final class TrackingFeatureTests: XCTestCase {
             recorder: recorder
         )
 
-        await store.send(.calibrationCompleted(source: .camera)) {
+        await store.send(.calibrationCompleted(.camera(.valid()))) {
+            $0.cameraCalibration = .valid()
             $0.cameraReadiness.calibrated = true
             $0.activeSource = .camera
             $0.appState = .monitoring
@@ -1565,7 +1757,8 @@ final class TrackingFeatureTests: XCTestCase {
             recorder: recorder
         )
 
-        await store.send(.calibrationCompleted(source: .airpods)) {
+        await store.send(.calibrationCompleted(.airPods(.valid))) {
+            $0.airPodsCalibration = .valid
             $0.airPodsReadiness.calibrated = true
             $0.activeSource = .airpods
             $0.appState = .monitoring
