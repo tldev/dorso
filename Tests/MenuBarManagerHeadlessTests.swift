@@ -11,7 +11,8 @@ final class MenuBarManagerHeadlessTests: XCTestCase {
         static let enabled = 2
         static let resume = 3
         static let pause = 4
-        static let recalibrate = 5
+        static let desk = 5
+        static let recalibrate = 6
     }
 
     func testUpdatesBeforeMenuExistsAreSafeNoOps() {
@@ -20,6 +21,7 @@ final class MenuBarManagerHeadlessTests: XCTestCase {
         manager.updateEnabledState(false)
         manager.updateRecalibrateEnabled(false)
         manager.updatePauseState(canPause: false, isTimedPause: true)
+        manager.updateDeskEnabled(false)
         manager.updateShortcut(enabled: true, shortcut: .defaultShortcut)
     }
 
@@ -86,6 +88,64 @@ final class MenuBarManagerHeadlessTests: XCTestCase {
         manager.updatePauseState(canPause: false, isTimedPause: false)
         XCTAssertFalse(menu.items[ItemIndex.pause].isEnabled)
         XCTAssertTrue(menu.items[ItemIndex.resume].isHidden)
+    }
+
+    func testDeskMenuHiddenWithFewerThanTwoDesks() {
+        let manager = MenuBarManager()
+        let menu = manager.makeMenu()
+        manager.desksProvider = { ([(id: "a", name: "Home")], "a") }
+
+        manager.refreshDesks()
+
+        XCTAssertTrue(menu.items[ItemIndex.desk].isHidden)
+    }
+
+    func testDeskMenuListsDesksWithActiveChecked() {
+        let manager = MenuBarManager()
+        let menu = manager.makeMenu()
+        manager.desksProvider = { ([(id: "a", name: "Home"), (id: "b", name: "Uni")], "b") }
+
+        manager.refreshDesks()
+
+        XCTAssertFalse(menu.items[ItemIndex.desk].isHidden)
+        let items = menu.items[ItemIndex.desk].submenu!.items
+        XCTAssertEqual(items.prefix(2).map(\.title), ["Home", "Uni"])
+        XCTAssertEqual(items.prefix(2).map(\.state), [.off, .on])
+        XCTAssertEqual(items.last?.title, L("menu.manageDesks"))
+    }
+
+    func testOpeningMenuRefreshesDesks() {
+        let manager = MenuBarManager()
+        let menu = manager.makeMenu()
+        manager.desksProvider = { ([(id: "a", name: "Home"), (id: "b", name: "Uni")], "a") }
+
+        manager.menuNeedsUpdate(menu)
+
+        XCTAssertFalse(menu.items[ItemIndex.desk].isHidden)
+    }
+
+    func testSelectingDeskInvokesCallbackWithID() {
+        let manager = MenuBarManager()
+        let menu = manager.makeMenu()
+        manager.desksProvider = { ([(id: "a", name: "Home"), (id: "b", name: "Uni")], "a") }
+        manager.refreshDesks()
+        var selected: String?
+        manager.onSelectDesk = { selected = $0 }
+
+        menu.items[ItemIndex.desk].submenu!.performActionForItem(at: 1)
+
+        XCTAssertEqual(selected, "b")
+    }
+
+    func testDeskMenuDisabledWhileCalibrating() {
+        let manager = MenuBarManager()
+        let menu = manager.makeMenu()
+
+        manager.updateDeskEnabled(false)
+        XCTAssertFalse(menu.items[ItemIndex.desk].isEnabled)
+
+        manager.updateDeskEnabled(true)
+        XCTAssertTrue(menu.items[ItemIndex.desk].isEnabled)
     }
 
     func testUpdateShortcutAppliesAndClearsKeyEquivalent() {

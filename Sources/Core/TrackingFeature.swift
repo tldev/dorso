@@ -488,6 +488,9 @@ struct TrackingFeature: Reducer {
 
             case .calibrationAuthorizationGranted:
                 state.appState = PostureEngine.stateWhenCalibrationAuthorizationGranted()
+                // .calibrating counts as active, so finish() won't clear the warning
+                state.monitoringState.reset()
+                state.lastPostureReadingTime = nil
                 return finish()
 
             case .calibrationStartFailed(let errorMessage):

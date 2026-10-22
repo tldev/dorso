@@ -880,6 +880,28 @@ final class TrackingFeatureTests: XCTestCase {
     }
 
     @MainActor
+    func testCalibrationStartClearsSlouchWarning() async {
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                monitoringState: PostureMonitoringState(
+                    consecutiveBadFrames: 12,
+                    isCurrentlySlouching: true,
+                    badPostureStartTime: Date(timeIntervalSince1970: 1_000),
+                    postureWarningIntensity: 0.8
+                ),
+                lastPostureReadingTime: Date(timeIntervalSince1970: 1_000)
+            )
+        )
+
+        await store.send(.calibrationAuthorizationGranted) {
+            $0.appState = .calibrating
+            $0.monitoringState = PostureMonitoringState()
+            $0.lastPostureReadingTime = nil
+        }
+    }
+
+    @MainActor
     func testRuntimeDetectorStartFailureForCameraPausesCameraDisconnected() async {
         let store = TestStore(
             initialState: TrackingFeature.State(

@@ -149,5 +149,57 @@ final class SettingsProfileManagerTests: XCTestCase {
         XCTAssertFalse(manager.canDeleteProfile(id: defaultID))
         XCTAssertFalse(manager.deleteProfile(id: defaultID))
     }
-}
 
+    // MARK: - Renaming
+
+    private func makeManagerWithCustomProfile() -> (SettingsProfileManager, SettingsProfile) {
+        let manager = SettingsProfileManager(userDefaults: defaults)
+        manager.loadProfiles()
+        let profile = manager.createProfile(
+            named: "Work",
+            warningMode: .blur,
+            warningColor: .red,
+            deadZone: 0.03,
+            intensity: 1.0,
+            warningOnsetDelay: 0,
+            detectionMode: .balanced
+        )
+        return (manager, profile)
+    }
+
+    func testRenameProfilePersists() {
+        let (manager, profile) = makeManagerWithCustomProfile()
+
+        XCTAssertTrue(manager.renameProfile(id: profile.id, to: "  Office  "))
+
+        let reloaded = SettingsProfileManager(userDefaults: defaults)
+        reloaded.loadProfiles()
+        XCTAssertEqual(reloaded.settingsProfiles.first(where: { $0.id == profile.id })?.name, "Office")
+    }
+
+    func testDefaultProfileCannotBeRenamed() {
+        let (manager, _) = makeManagerWithCustomProfile()
+        let defaultProfile = manager.settingsProfiles.first(where: { $0.name == "Default" })!
+
+        XCTAssertFalse(manager.canRenameProfile(id: defaultProfile.id))
+        XCTAssertFalse(manager.renameProfile(id: defaultProfile.id, to: "Home"))
+    }
+
+    func testRenameRejectsEmptyDefaultAndDuplicateNames() {
+        let (manager, profile) = makeManagerWithCustomProfile()
+        _ = manager.createProfile(
+            named: "Gaming",
+            warningMode: .blur,
+            warningColor: .red,
+            deadZone: 0.03,
+            intensity: 1.0,
+            warningOnsetDelay: 0,
+            detectionMode: .balanced
+        )
+
+        XCTAssertFalse(manager.renameProfile(id: profile.id, to: "   "))
+        XCTAssertFalse(manager.renameProfile(id: profile.id, to: "Default"))
+        XCTAssertFalse(manager.renameProfile(id: profile.id, to: "Gaming"))
+        XCTAssertEqual(manager.settingsProfiles.first(where: { $0.id == profile.id })?.name, "Work")
+    }
+}

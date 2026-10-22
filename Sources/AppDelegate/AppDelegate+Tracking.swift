@@ -114,6 +114,7 @@ extension AppDelegate {
         menuBarManager.updateStatus(text: uiState.statusText, icon: uiState.icon.menuBarIcon)
         menuBarManager.updateEnabledState(uiState.isEnabled)
         menuBarManager.updateRecalibrateEnabled(uiState.canRecalibrate)
+        menuBarManager.updateDeskEnabled(uiState.canRecalibrate)
         menuBarManager.updatePauseState(canPause: uiState.canPause, isTimedPause: uiState.isTimedPause)
     }
 

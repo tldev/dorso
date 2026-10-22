@@ -48,9 +48,20 @@ struct SettingsView: View {
     @State private var showingNewProfilePrompt = false
     @State private var showingDeleteConfirmation = false
     @State private var newProfileName = ""
+    @State private var showingRenameProfilePrompt = false
+    @State private var renameProfileName = ""
+    @State private var desks: [Desk]
+    @State private var activeDeskID: String
+    @State private var showingRenameDeskPrompt = false
+    @State private var renameDeskName = ""
+    @State private var showingDeleteDeskConfirmation = false
 
     var canDeleteCurrentProfile: Bool {
         settingsProfileManager.canDeleteProfile(id: selectedSettingsProfileID)
+    }
+
+    var canRenameCurrentProfile: Bool {
+        settingsProfileManager.canRenameProfile(id: selectedSettingsProfileID)
     }
 
     let detectionModes: [DetectionMode] = [.responsive, .balanced, .performance]
@@ -120,6 +131,9 @@ struct SettingsView: View {
         _settingsProfiles = State(initialValue: profiles)
         _selectedSettingsProfileID = State(initialValue: initialProfileID)
         _lastSelectedSettingsProfileID = State(initialValue: initialProfileID)
+        let deskKey = DisplayMonitor.getCurrentConfigKey()
+        _desks = State(initialValue: appDelegate.deskStore.desks(forKey: deskKey))
+        _activeDeskID = State(initialValue: appDelegate.deskStore.activeDesk(forKey: deskKey)?.id ?? "")
     }
 
     var body: some View {
@@ -238,6 +252,10 @@ struct SettingsView: View {
                             appDelegate.startCalibration()
                         }
                     )
+
+                    if trackingSource == .camera {
+                        deskRow
+                    }
                 } else {
                     // Automatic mode layout
                     VStack(spacing: 6) {
@@ -289,6 +307,8 @@ struct SettingsView: View {
                                 appDelegate.startCalibration(for: .camera)
                             }
                         )
+
+                        deskRow
 
                         DeviceStatusRow(
                             source: .airpods,
@@ -360,6 +380,16 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                         .help(L("settings.profile.new"))
+
+                        // Rename button - the Default profile keeps its name
+                        CompactIconButton(
+                            systemName: "pencil",
+                            help: L("settings.profile.renameTitle"),
+                            isEnabled: canRenameCurrentProfile
+                        ) {
+                            renameProfileName = settingsProfiles.first(where: { $0.id == selectedSettingsProfileID })?.name ?? ""
+                            showingRenameProfilePrompt = true
+                        }
 
                         // Delete button - only enabled for non-Default profiles when more than one exists
                         Button(action: {
@@ -679,8 +709,40 @@ struct SettingsView: View {
         } message: {
             Text(L("settings.profile.deleteMessage"))
         }
+        .alert(L("settings.profile.renameTitle"), isPresented: $showingRenameProfilePrompt) {
+            TextField(L("settings.profile.namePlaceholder"), text: $renameProfileName)
+            Button(L("common.cancel"), role: .cancel) {}
+            Button(L("common.rename")) {
+                if settingsProfileManager.renameProfile(id: selectedSettingsProfileID, to: renameProfileName) {
+                    settingsProfiles = settingsProfileManager.settingsProfiles
+                }
+            }
+        }
+        .alert(L("desk.renameTitle"), isPresented: $showingRenameDeskPrompt) {
+            TextField(L("desk.namePlaceholder"), text: $renameDeskName)
+            Button(L("common.cancel"), role: .cancel) {}
+            Button(L("common.rename")) {
+                appDelegate.deskStore.renameDesk(id: activeDeskID, to: renameDeskName, forKey: DisplayMonitor.getCurrentConfigKey())
+                reloadDesks()
+            }
+        }
+        .alert(L("desk.deleteTitle"), isPresented: $showingDeleteDeskConfirmation) {
+            Button(L("common.cancel"), role: .cancel) {}
+            Button(L("settings.profile.delete"), role: .destructive) {
+                let deskID = activeDeskID
+                Task { @MainActor in
+                    await appDelegate.deleteDesk(id: deskID)
+                    reloadDesks()
+                }
+            }
+        } message: {
+            Text(L("desk.deleteMessage"))
+        }
         .onAppear {
+            // The window is reused
+            reloadDesks()
             appDelegate.onCalibrationComplete = {
+                reloadDesks()
                 cameraCalibrated = appDelegate.cameraCalibration?.isValid ?? false
                 airPodsCalibrated = appDelegate.airPodsCalibration?.isValid ?? false
                 airPodsConnected = appDelegate.airPodsDetector.isBluetoothConnected
@@ -688,6 +750,10 @@ struct SettingsView: View {
             }
             appDelegate.onActiveSourceChanged = {
                 activeSource = appDelegate.activeTrackingSource
+            }
+            appDelegate.onDesksChanged = {
+                reloadDesks()
+                cameraCalibrated = appDelegate.cameraCalibration?.isValid ?? false
             }
         }
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
@@ -697,6 +763,50 @@ struct SettingsView: View {
         }
         // Cleanup happens in SettingsWindowController.windowWillClose
         // (not onDisappear, which fires when calibration window covers this view)
+    }
+
+    @ViewBuilder
+    private var deskRow: some View {
+        if desks.count >= 2 {
+            HStack(spacing: 8) {
+                HStack(spacing: 3) {
+                    Text(L("settings.desk"))
+                        .font(.system(size: 11))
+                    HelpButton(text: L("settings.desk.help"))
+                }
+
+                Spacer()
+
+                Picker("", selection: $activeDeskID) {
+                    ForEach(desks) { desk in
+                        Text(desk.name).tag(desk.id)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 130)
+                .onChange(of: activeDeskID) { newValue in
+                    Task { @MainActor in
+                        await appDelegate.selectDesk(id: newValue)
+                    }
+                }
+
+                CompactIconButton(systemName: "pencil", help: L("desk.renameTitle")) {
+                    renameDeskName = desks.first(where: { $0.id == activeDeskID })?.name ?? ""
+                    showingRenameDeskPrompt = true
+                }
+
+                CompactIconButton(systemName: "trash", help: L("desk.deleteTitle"), isDestructive: true) {
+                    showingDeleteDeskConfirmation = true
+                }
+            }
+            .frame(height: 26)
+        }
+    }
+
+    private func reloadDesks() {
+        let key = DisplayMonitor.getCurrentConfigKey()
+        desks = appDelegate.deskStore.desks(forKey: key)
+        activeDeskID = appDelegate.deskStore.activeDesk(forKey: key)?.id ?? ""
     }
 
     private func syncProfileSettings() {

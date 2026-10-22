@@ -216,3 +216,25 @@
 // MARK: - Common
 
 "common.cancel" = "キャンセル";
+
+// MARK: - Desks
+
+"menu.desk" = "デスク";
+"menu.manageDesks" = "デスクを管理…";
+"desk.defaultName" = "デスク %d";
+"desk.namePlaceholder" = "デスク名";
+"desk.renameTitle" = "デスク名を変更";
+"desk.deleteTitle" = "デスクを削除";
+"desk.deleteMessage" = "このデスクとそのキャリブレーションを削除しますか？この操作は取り消せません。";
+"settings.desk" = "デスク";
+"settings.desk.help" = "デスクごとに、このディスプレイ構成のキャリブレーションが保存されます。ここまたはメニューバーから切り替えられます。";
+"settings.profile.renameTitle" = "プロファイル名を変更";
+"common.rename" = "名前を変更";
+"calibration.desk.title" = "どのデスクにいますか？";
+"calibration.desk.subtitle" = "保存済みのデスクに切り替えるか、新しいデスクをキャリブレーションします。";
+"calibration.desk.current" = "現在";
+"calibration.desk.new" = "新しいデスク";
+"calibration.desk.recalibrate" = "現在のデスクを再キャリブレーション";
+"calibration.desk.hint.new" = "別のデスクですか？{N} を押すと新しいデスクとして保存します";
+"calibration.desk.hint.newSelected" = "新しいデスクとして保存します。{N} を押すと元に戻します";
+"calibration.desk.keysHint" = "{↑}{↓} で移動   {↩} で選択   {Esc} でキャンセル";

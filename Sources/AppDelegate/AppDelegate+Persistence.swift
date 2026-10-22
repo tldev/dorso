@@ -85,23 +85,7 @@ extension AppDelegate {
         }
     }
 
-    func saveProfile(forKey key: String, data: ProfileData) {
-        let defaults = UserDefaults.standard
-        var profiles = defaults.dictionary(forKey: SettingsKeys.profiles) as? [String: Data] ?? [:]
-
-        if let encoded = try? JSONEncoder().encode(data) {
-            profiles[key] = encoded
-            defaults.set(profiles, forKey: SettingsKeys.profiles)
-        }
-    }
-
     func loadProfile(forKey key: String) -> ProfileData? {
-        let defaults = UserDefaults.standard
-        guard let profiles = defaults.dictionary(forKey: SettingsKeys.profiles) as? [String: Data],
-              let data = profiles[key] else {
-            return nil
-        }
-
-        return try? JSONDecoder().decode(ProfileData.self, from: data)
+        deskStore.activeProfile(forKey: key)
     }
 }

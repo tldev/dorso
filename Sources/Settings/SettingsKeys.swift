@@ -14,6 +14,7 @@ enum SettingsKeys {
     static let useFullScreenOverlay = "useFullScreenOverlay"
     static let lastCameraID = "lastCameraID"
     static let profiles = "profiles"
+    static let desks = "desks"
     static let settingsProfiles = "settingsProfiles"
     static let currentSettingsProfileID = "currentSettingsProfileID"
     static let warningMode = "warningMode"
