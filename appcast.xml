@@ -7,6 +7,19 @@
         <language>en</language>
         <!-- release.sh inserts new release items below this line -->
         <item>
+            <title>Version 1.16.0</title>
+            <link>https://github.com/tldev/dorso/releases/tag/v1.16.0</link>
+            <sparkle:version>18</sparkle:version>
+            <sparkle:shortVersionString>1.16.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <sparkle:releaseNotesLink>https://github.com/tldev/dorso/releases/tag/v1.16.0</sparkle:releaseNotesLink>
+            <pubDate>Thu, 22 Oct 2026 16:00:31 -0500</pubDate>
+            <enclosure
+                url="https://github.com/tldev/dorso/releases/download/v1.16.0/Dorso-v1.16.0.zip"
+                sparkle:edSignature="nMRU8D9H/YvjCUTH5szHWkcvoGoBAuisUvR0eZwF1E0wx9EMxaGWcYDLGYwcA8TYn3uN3Vb9wVvLH0JRqUkcAw==" length="9607163"
+                type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Version 1.15.1</title>
             <link>https://github.com/tldev/dorso/releases/tag/v1.15.1</link>
             <sparkle:version>17</sparkle:version>
