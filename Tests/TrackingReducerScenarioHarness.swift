@@ -1,5 +1,6 @@
-import Foundation
 import ComposableArchitecture
+import Foundation
+
 @testable import DorsoCore
 
 private actor IntentRecorder {
@@ -14,8 +15,8 @@ private actor IntentRecorder {
     }
 }
 
-private extension TrackingRuntimeClient {
-    static func recording(_ recorder: IntentRecorder) -> Self {
+extension TrackingRuntimeClient {
+    fileprivate static func recording(_ recorder: IntentRecorder) -> Self {
         Self(perform: { intent in await recorder.append(intent) })
     }
 }

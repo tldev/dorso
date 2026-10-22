@@ -9,7 +9,7 @@ struct DailyStats: Codable, Identifiable {
     var totalSeconds: TimeInterval
     var slouchSeconds: TimeInterval
     var slouchCount: Int
-    
+
     var dayKey: String {
         Self.dayKey(for: date)
     }
@@ -21,7 +21,7 @@ struct DailyStats: Codable, Identifiable {
         let day = components.day ?? 0
         return String(format: "%04d-%02d-%02d", year, month, day)
     }
-    
+
     var postureScore: Double {
         guard totalSeconds > 0 else { return 0.0 }
         let ratio = max(0, min(1, 1.0 - (slouchSeconds / totalSeconds)))
@@ -36,7 +36,7 @@ class AnalyticsManager: ObservableObject {
 
     private static let logger = Logger(subsystem: "com.thelazydeveloper.dorso", category: "Analytics")
     private static let legacyMigrationFlagKey = "analyticsMigratedPosturrToDorso.v1"
-    
+
     @Published var todayStats: DailyStats
     private var history: [String: DailyStats] = [:]
     private let fileURL: URL
@@ -47,7 +47,7 @@ class AnalyticsManager: ObservableObject {
     private let persistenceQueue: DispatchQueue
     private let calendar: Calendar
     private let now: () -> Date
-    
+
     init(
         fileURL: URL? = nil,
         calendar: Calendar = .current,
@@ -83,18 +83,18 @@ class AnalyticsManager: ObservableObject {
         }
 
         Self.logger.info("Initializing analytics. Storage: \(resolvedURL.path, privacy: .public)")
-        
+
         // Initialize with default
         let today = now()
         self.todayStats = DailyStats(date: today, totalSeconds: 0, slouchSeconds: 0, slouchCount: 0)
-        
+
         loadHistory()
         checkDayRollover()
-        
+
         // Auto-save timer (every 60 seconds)
         startSaveTimer()
     }
-    
+
     deinit {
         saveTimer?.invalidate()
         flushHistoryToDisk()
@@ -145,7 +145,9 @@ class AnalyticsManager: ObservableObject {
         try mergedData.write(to: currentURL, options: [.atomic])
 
         userDefaults.set(true, forKey: migrationKey)
-        logger.info("Migrated legacy analytics from \(legacyURL.path, privacy: .public) to \(currentURL.path, privacy: .public); legacy file retained")
+        logger.info(
+            "Migrated legacy analytics from \(legacyURL.path, privacy: .public) to \(currentURL.path, privacy: .public); legacy file retained"
+        )
         return true
     }
 
@@ -154,7 +156,8 @@ class AnalyticsManager: ObservableObject {
         return try JSONDecoder().decode([String: DailyStats].self, from: data)
     }
 
-    private static func merge(current: [String: DailyStats], with legacy: [String: DailyStats]) -> [String: DailyStats] {
+    private static func merge(current: [String: DailyStats], with legacy: [String: DailyStats]) -> [String: DailyStats]
+    {
         var merged = current
         for (dayKey, legacyStats) in legacy {
             guard let currentStats = merged[dayKey] else {
@@ -191,29 +194,29 @@ class AnalyticsManager: ObservableObject {
             && lhs.slouchCount == rhs.slouchCount
             && lhs.dayKey == rhs.dayKey
     }
-    
+
     private func startSaveTimer() {
         saveTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             self?.saveHistoryIfNeeded()
         }
     }
-    
+
     // MARK: - Tracking Methods
-    
+
     func trackTime(interval: TimeInterval, isSlouching: Bool) {
         checkDayRollover()
-        
+
         todayStats.totalSeconds += interval
         if isSlouching {
             todayStats.slouchSeconds += interval
         }
-        
+
         // Update history cache
         let key = DailyStats.dayKey(for: todayStats.date, calendar: calendar)
         history[key] = todayStats
         markDirty()
     }
-    
+
     func recordSlouchEvent() {
         checkDayRollover()
         todayStats.slouchCount += 1
@@ -223,16 +226,16 @@ class AnalyticsManager: ObservableObject {
         // Slouch events are significant - schedule a save promptly.
         saveHistory()
     }
-    
+
     // MARK: - Data Retrieval
-    
+
     func getLast7Days() -> [DailyStats] {
         var result: [DailyStats] = []
         let now = now()
-        
+
         // Generate last 7 days including today
         for i in (0..<7).reversed() {
-             if let date = calendar.date(byAdding: .day, value: -i, to: now) {
+            if let date = calendar.date(byAdding: .day, value: -i, to: now) {
                 let dayKey = DailyStats.dayKey(for: date, calendar: calendar)
                 if let stats = history[dayKey] {
                     result.append(stats)
@@ -242,12 +245,12 @@ class AnalyticsManager: ObservableObject {
                 }
             }
         }
-        
+
         return result
     }
-    
+
     // MARK: - Internal Logic
-    
+
     private func checkDayRollover() {
         let now = now()
         let todayKey = DailyStats.dayKey(for: now, calendar: calendar)
@@ -258,7 +261,7 @@ class AnalyticsManager: ObservableObject {
                 history[currentKey] = todayStats
                 saveHistory()
             }
-            
+
             todayStats = DailyStats(date: now, totalSeconds: 0, slouchSeconds: 0, slouchCount: 0)
             history[todayKey] = todayStats
         }
@@ -276,7 +279,7 @@ class AnalyticsManager: ObservableObject {
         guard hasUnsavedChanges else { return }
         saveHistory()
     }
-    
+
     private func saveHistory() {
         let snapshot = history
         let generation = saveGeneration
@@ -296,7 +299,7 @@ class AnalyticsManager: ObservableObject {
             }
         }
     }
-    
+
     private func flushHistoryToDisk() {
         let snapshot = history
         let generation = saveGeneration
@@ -319,15 +322,16 @@ class AnalyticsManager: ObservableObject {
             (4, 71, 19, 6.1),  // dip — natural regression
             (3, 82, 11, 5.8),
             (2, 79, 13, 4.9),  // slight pullback
-            (1, 88,  7, 6.3),
-            (0, 91,  5, 3.2),  // today — partial day
+            (1, 88, 7, 6.3),
+            (0, 91, 5, 3.2),  // today — partial day
         ]
         for point in dataPoints {
             guard let date = calendar.date(byAdding: .day, value: -point.daysAgo, to: now) else { continue }
             let totalSeconds: TimeInterval = point.hours * 3600
             let slouchSeconds = totalSeconds * (1.0 - point.score / 100.0)
             let key = DailyStats.dayKey(for: date, calendar: calendar)
-            let stats = DailyStats(date: date, totalSeconds: totalSeconds, slouchSeconds: slouchSeconds, slouchCount: point.slouchCount)
+            let stats = DailyStats(
+                date: date, totalSeconds: totalSeconds, slouchSeconds: slouchSeconds, slouchCount: point.slouchCount)
             history[key] = stats
             if point.daysAgo == 0 { todayStats = stats }
         }
@@ -340,7 +344,7 @@ class AnalyticsManager: ObservableObject {
             guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
             let data = try Data(contentsOf: fileURL)
             history = try JSONDecoder().decode([String: DailyStats].self, from: data)
-            
+
             // Restore today's stats if they exist in history
             let todayKey = DailyStats.dayKey(for: now(), calendar: calendar)
             if let existingToday = history[todayKey] {

@@ -1,5 +1,5 @@
-import Foundation
 import ComposableArchitecture
+import Foundation
 
 enum TrackingMode: String, Equatable, Codable {
     case manual
@@ -233,7 +233,7 @@ struct TrackingFeature: Reducer {
                 state.appState = appState
                 return finish()
 
-            case let .toggleEnabled(trackingSource, isCalibrated, detectorAvailable):
+            case .toggleEnabled(let trackingSource, let isCalibrated, let detectorAvailable):
                 state.manualSource = trackingSource
                 state.activeSource = trackingSource
                 if state.appState == .disabled {
@@ -284,7 +284,7 @@ struct TrackingFeature: Reducer {
                 state.autoReturnEnabled = enabled
                 return finish()
 
-            case let .setPostureConfiguration(intensity, warningOnsetDelay):
+            case .setPostureConfiguration(let intensity, let warningOnsetDelay):
                 state.postureConfig.intensity = CGFloat(intensity)
                 state.postureConfig.warningOnsetDelay = warningOnsetDelay
                 return finish()
@@ -296,7 +296,7 @@ struct TrackingFeature: Reducer {
                 )
                 return finish()
 
-            case let .postureReadingReceived(reading, isMarketingMode):
+            case .postureReadingReceived(let reading, let isMarketingMode):
                 guard state.effectiveAppState == .monitoring else { return finish() }
 
                 if isMarketingMode {
@@ -341,7 +341,7 @@ struct TrackingFeature: Reducer {
                 }
                 return finish(perform(intents))
 
-            case let .awayStateChanged(isAway, isMarketingMode):
+            case .awayStateChanged(let isAway, let isMarketingMode):
                 guard state.effectiveAppState == .monitoring, !isMarketingMode else { return finish() }
 
                 let result = PostureEngine.processAwayChange(
@@ -353,12 +353,17 @@ struct TrackingFeature: Reducer {
                 guard result.shouldUpdateUI else { return finish() }
                 return finish(perform(.syncUI, .updateBlur))
 
-            case let .initialSetupEvaluated(
-                isMarketingMode,
-                hasCameraProfile,
-                profileCameraAvailable,
-                hasValidAirPodsCalibration,
-                cameraProfile
+            case .initialSetupEvaluated(
+                let
+                    isMarketingMode,
+                let
+                    hasCameraProfile,
+                let
+                    profileCameraAvailable,
+                let
+                    hasValidAirPodsCalibration,
+                let
+                    cameraProfile
             ):
                 let result = PostureEngine.stateWhenInitialSetupRuns(
                     isMarketingMode: isMarketingMode,
@@ -380,7 +385,7 @@ struct TrackingFeature: Reducer {
                 }
                 return finish(perform(intents))
 
-            case let .startMonitoringRequested(isMarketingMode, trackingSource, isCalibrated, isConnected):
+            case .startMonitoringRequested(let isMarketingMode, let trackingSource, let isCalibrated, let isConnected):
                 state.manualSource = trackingSource
                 state.activeSource = trackingSource
                 state.lastPostureReadingTime = nil
@@ -579,13 +584,19 @@ struct TrackingFeature: Reducer {
                 }
                 return finish()
 
-            case let .displayConfigurationChanged(
-                pauseOnTheGoEnabled,
-                isLaptopOnlyConfiguration,
-                hasAnyCamera,
-                hasMatchingProfileCamera,
-                selectedCameraMatchesProfile,
-                matchingProfile
+            case .displayConfigurationChanged(
+                let
+                    pauseOnTheGoEnabled,
+                let
+                    isLaptopOnlyConfiguration,
+                let
+                    hasAnyCamera,
+                let
+                    hasMatchingProfileCamera,
+                let
+                    selectedCameraMatchesProfile,
+                let
+                    matchingProfile
             ):
                 let result = PostureEngine.stateWhenDisplayConfigurationChanges(
                     currentState: state.appState,
@@ -703,7 +714,8 @@ struct TrackingFeature: Reducer {
         state.appState = result.newState
 
         let sourceChanged = state.activeSource != previousSource
-        let needsBeginMonitoring = result.newState == .monitoring
+        let needsBeginMonitoring =
+            result.newState == .monitoring
             && (sourceChanged || previousAppState != .monitoring)
         let needsStopOld = sourceChanged && previousAppState.isActive
 

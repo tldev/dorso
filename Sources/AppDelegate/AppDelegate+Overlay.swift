@@ -66,13 +66,14 @@ extension AppDelegate {
         }
 
         #if !APP_STORE
-        if let getConnectionID = cgsMainConnectionID,
-           let setBlurRadius = cgsSetWindowBackgroundBlurRadius {
-            let cid = getConnectionID()
-            for window in windows {
-                _ = setBlurRadius(cid, UInt32(window.windowNumber), 0)
+            if let getConnectionID = cgsMainConnectionID,
+                let setBlurRadius = cgsSetWindowBackgroundBlurRadius
+            {
+                let cid = getConnectionID()
+                for window in windows {
+                    _ = setBlurRadius(cid, UInt32(window.windowNumber), 0)
+                }
             }
-        }
         #endif
     }
 
@@ -141,25 +142,26 @@ extension AppDelegate {
         let visualEffectAlpha = min(1.0, sqrt(normalizedBlur) * 1.2)
 
         #if APP_STORE
-        for blurView in blurViews {
-            blurView.alphaValue = visualEffectAlpha
-        }
+            for blurView in blurViews {
+                blurView.alphaValue = visualEffectAlpha
+            }
         #else
-        if useCompatibilityMode {
-            for blurView in blurViews {
-                blurView.alphaValue = visualEffectAlpha
+            if useCompatibilityMode {
+                for blurView in blurViews {
+                    blurView.alphaValue = visualEffectAlpha
+                }
+            } else if let getConnectionID = cgsMainConnectionID,
+                let setBlurRadius = cgsSetWindowBackgroundBlurRadius
+            {
+                let cid = getConnectionID()
+                for window in windows {
+                    _ = setBlurRadius(cid, UInt32(window.windowNumber), currentBlurRadius)
+                }
+            } else {
+                for blurView in blurViews {
+                    blurView.alphaValue = visualEffectAlpha
+                }
             }
-        } else if let getConnectionID = cgsMainConnectionID,
-                  let setBlurRadius = cgsSetWindowBackgroundBlurRadius {
-            let cid = getConnectionID()
-            for window in windows {
-                _ = setBlurRadius(cid, UInt32(window.windowNumber), currentBlurRadius)
-            }
-        } else {
-            for blurView in blurViews {
-                blurView.alphaValue = visualEffectAlpha
-            }
-        }
         #endif
     }
 }

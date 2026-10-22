@@ -24,7 +24,8 @@ final class CameraObserver {
             queue: .main
         ) { [weak self] notification in
             guard let device = notification.object as? AVCaptureDevice,
-                  device.hasMediaType(.video) else { return }
+                device.hasMediaType(.video)
+            else { return }
             self?.onCameraConnected?(device)
         }
 
@@ -34,7 +35,8 @@ final class CameraObserver {
             queue: .main
         ) { [weak self] notification in
             guard let device = notification.object as? AVCaptureDevice,
-                  device.hasMediaType(.video) else { return }
+                device.hasMediaType(.video)
+            else { return }
             self?.onCameraDisconnected?(device)
         }
     }

@@ -268,17 +268,17 @@ struct PostureEngine {
     static func canTransition(from currentState: AppState, to newState: AppState) -> Bool {
         switch (currentState, newState) {
         case (.disabled, .monitoring),
-             (.disabled, .paused),
-             (.disabled, .calibrating),
-             (.monitoring, .disabled),
-             (.monitoring, .paused),
-             (.monitoring, .calibrating),
-             (.paused, .disabled),
-             (.paused, .monitoring),
-             (.paused, .calibrating),
-             (.calibrating, .monitoring),
-             (.calibrating, .paused),
-             (.calibrating, .disabled):
+            (.disabled, .paused),
+            (.disabled, .calibrating),
+            (.monitoring, .disabled),
+            (.monitoring, .paused),
+            (.monitoring, .calibrating),
+            (.paused, .disabled),
+            (.paused, .monitoring),
+            (.paused, .calibrating),
+            (.calibrating, .monitoring),
+            (.calibrating, .paused),
+            (.calibrating, .disabled):
             return true
         default:
             return currentState != newState

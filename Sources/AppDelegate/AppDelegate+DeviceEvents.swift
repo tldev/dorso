@@ -1,5 +1,5 @@
-import AppKit
 import AVFoundation
+import AppKit
 
 extension AppDelegate {
     // MARK: - Camera Hot-Plug
@@ -101,9 +101,10 @@ extension AppDelegate {
         let configKey = DisplayMonitor.getCurrentConfigKey()
         let profile = loadProfile(forKey: configKey)
         let hasMatchingProfileCamera = profile.map { cameraIDs.contains($0.cameraID) } ?? false
-        let selectedCameraMatchesProfile = profile.map { profile in
-            selectedCameraID == profile.cameraID
-        } ?? false
+        let selectedCameraMatchesProfile =
+            profile.map { profile in
+                selectedCameraID == profile.cameraID
+            } ?? false
 
         // Switching cameras is what normally applies a profile's calibration,
         // but one camera can serve several display setups
@@ -139,7 +140,8 @@ extension AppDelegate {
             return
         }
         guard deskStore.activeDesk(forKey: key)?.id != id,
-              deskStore.selectDesk(id: id, forKey: key) != nil else { return }
+            deskStore.selectDesk(id: id, forKey: key) != nil
+        else { return }
         await applyActiveDesk(forKey: key)
     }
 

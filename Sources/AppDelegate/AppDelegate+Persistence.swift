@@ -32,7 +32,8 @@ extension AppDelegate {
         defaults.set(trackingStore.withState { $0.preferredSource.rawValue }, forKey: SettingsKeys.preferredSource)
         defaults.set(trackingStore.withState { $0.autoReturnEnabled }, forKey: SettingsKeys.autoReturnEnabled)
         if let airPodsCalibration = airPodsCalibration,
-           let data = try? JSONEncoder().encode(airPodsCalibration) {
+            let data = try? JSONEncoder().encode(airPodsCalibration)
+        {
             defaults.set(data, forKey: SettingsKeys.airPodsCalibration)
         }
     }
@@ -45,7 +46,8 @@ extension AppDelegate {
 
         useCompatibilityMode = defaults.bool(forKey: SettingsKeys.useCompatibilityMode)
         if let appearanceString = defaults.string(forKey: SettingsKeys.appAppearance),
-           let appearance = AppAppearance(rawValue: appearanceString) {
+            let appearance = AppAppearance(rawValue: appearanceString)
+        {
             appAppearance = appearance
         }
         blurWhenAway = defaults.bool(forKey: SettingsKeys.blurWhenAway)
@@ -57,22 +59,26 @@ extension AppDelegate {
         useFullScreenOverlay = defaults.bool(forKey: SettingsKeys.useFullScreenOverlay)
         cameraDetector.selectedCameraID = defaults.string(forKey: SettingsKeys.lastCameraID)
         if let sourceString = defaults.string(forKey: SettingsKeys.trackingSource),
-           let source = TrackingSource(rawValue: sourceString) {
+            let source = TrackingSource(rawValue: sourceString)
+        {
             trackingSource = source
         }
         if let modeString = defaults.string(forKey: SettingsKeys.trackingMode),
-           let mode = TrackingMode(rawValue: modeString) {
+            let mode = TrackingMode(rawValue: modeString)
+        {
             applyTrackingAction(.setTrackingMode(mode))
         }
         if let prefString = defaults.string(forKey: SettingsKeys.preferredSource),
-           let pref = TrackingSource(rawValue: prefString) {
+            let pref = TrackingSource(rawValue: prefString)
+        {
             applyTrackingAction(.setPreferredSource(pref))
         }
         if defaults.object(forKey: SettingsKeys.autoReturnEnabled) != nil {
             applyTrackingAction(.setAutoReturnEnabled(defaults.bool(forKey: SettingsKeys.autoReturnEnabled)))
         }
         if let data = defaults.data(forKey: SettingsKeys.airPodsCalibration),
-           let calibration = try? JSONDecoder().decode(AirPodsCalibrationData.self, from: data) {
+            let calibration = try? JSONDecoder().decode(AirPodsCalibrationData.self, from: data)
+        {
             airPodsCalibration = calibration
         }
         if defaults.object(forKey: SettingsKeys.toggleShortcutEnabled) != nil {
@@ -80,7 +86,8 @@ extension AppDelegate {
         }
         if defaults.object(forKey: SettingsKeys.toggleShortcutKeyCode) != nil {
             let keyCode = UInt16(defaults.integer(forKey: SettingsKeys.toggleShortcutKeyCode))
-            let modifiers = NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: SettingsKeys.toggleShortcutModifiers)))
+            let modifiers = NSEvent.ModifierFlags(
+                rawValue: UInt(defaults.integer(forKey: SettingsKeys.toggleShortcutModifiers)))
             toggleShortcut = KeyboardShortcut(keyCode: keyCode, modifiers: modifiers)
         }
     }

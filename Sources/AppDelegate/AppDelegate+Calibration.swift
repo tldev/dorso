@@ -167,7 +167,8 @@ extension AppDelegate {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = L("alert.permissionRequired")
-        alert.informativeText = source == .airpods
+        alert.informativeText =
+            source == .airpods
             ? L("alert.permissionRequired.airpods")
             : L("alert.permissionRequired.camera")
         alert.addButton(withTitle: L("alert.openSettings"))
@@ -186,7 +187,8 @@ extension AppDelegate {
 
         let source = calibratingSource ?? activeTrackingSource
         let pane = source == .airpods ? "Privacy_Motion" : "Privacy_Camera"
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(pane)") else { return }
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(pane)")
+        else { return }
         NSWorkspace.shared.open(url)
     }
 

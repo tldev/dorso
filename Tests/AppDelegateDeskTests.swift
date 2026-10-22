@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import DorsoCore
 
 @MainActor
@@ -21,7 +22,9 @@ final class AppDelegateDeskTests: XCTestCase {
     }
 
     private func profile(goodY: CGFloat, cameraID: String) -> ProfileData {
-        ProfileData(goodPostureY: goodY, badPostureY: goodY - 0.1, neutralY: goodY - 0.05, postureRange: 0.1, cameraID: cameraID)
+        ProfileData(
+            goodPostureY: goodY, badPostureY: goodY - 0.1, neutralY: goodY - 0.05, postureRange: 0.1, cameraID: cameraID
+        )
     }
 
     /// Desks in a throwaway defaults suite; detectors never start
@@ -40,7 +43,8 @@ final class AppDelegateDeskTests: XCTestCase {
     func testSwitchingDeskWhileDisabledLinesUpItsCameraAndCalibration() async {
         let appDelegate = makeAppDelegate(cameraIDs: ["builtin", "external"])
         appDelegate.deskStore.addDesk(named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
-        let office = appDelegate.deskStore.addDesk(named: "Office", profile: profile(goodY: 0.8, cameraID: "external"), forKey: key)
+        let office = appDelegate.deskStore.addDesk(
+            named: "Office", profile: profile(goodY: 0.8, cameraID: "external"), forKey: key)
         let home = appDelegate.deskStore.desks(forKey: key).first!
         _ = appDelegate.deskStore.selectDesk(id: home.id, forKey: key)
         appDelegate.selectedCameraID = "builtin"
@@ -56,8 +60,10 @@ final class AppDelegateDeskTests: XCTestCase {
 
     func testSwitchingWhileDisabledToDeskWithMissingCameraClearsCalibration() async {
         let appDelegate = makeAppDelegate(cameraIDs: ["builtin"])
-        let home = appDelegate.deskStore.addDesk(named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
-        let office = appDelegate.deskStore.addDesk(named: "Office", profile: profile(goodY: 0.8, cameraID: "external"), forKey: key)
+        let home = appDelegate.deskStore.addDesk(
+            named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
+        let office = appDelegate.deskStore.addDesk(
+            named: "Office", profile: profile(goodY: 0.8, cameraID: "external"), forKey: key)
         _ = appDelegate.deskStore.selectDesk(id: home.id, forKey: key)
         appDelegate.selectedCameraID = "builtin"
         appDelegate.applyCameraCalibration(from: home.profile)
@@ -70,7 +76,8 @@ final class AppDelegateDeskTests: XCTestCase {
 
     func testSwitchingDeskNotifiesListeners() async {
         let appDelegate = makeAppDelegate(cameraIDs: ["builtin"])
-        let home = appDelegate.deskStore.addDesk(named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
+        let home = appDelegate.deskStore.addDesk(
+            named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
         appDelegate.deskStore.addDesk(named: "Uni", profile: profile(goodY: 0.8, cameraID: "builtin"), forKey: key)
         var notifications = 0
         appDelegate.onDesksChanged = { notifications += 1 }
@@ -95,8 +102,10 @@ final class AppDelegateDeskTests: XCTestCase {
 
     /// Home on the built-in camera (active) and Office on an external one
     private func makeTwoCameraDesks(_ appDelegate: AppDelegate) -> (home: Desk, office: Desk) {
-        let home = appDelegate.deskStore.addDesk(named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
-        let office = appDelegate.deskStore.addDesk(named: "Office", profile: profile(goodY: 0.8, cameraID: "external"), forKey: key)
+        let home = appDelegate.deskStore.addDesk(
+            named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
+        let office = appDelegate.deskStore.addDesk(
+            named: "Office", profile: profile(goodY: 0.8, cameraID: "external"), forKey: key)
         _ = appDelegate.deskStore.selectDesk(id: home.id, forKey: key)
         appDelegate.selectedCameraID = "builtin"
         appDelegate.applyCameraCalibration(from: home.profile)

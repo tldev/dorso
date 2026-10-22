@@ -12,9 +12,9 @@ private var localizationBundle: Bundle {
 private func localizedString(_ key: String) -> String {
     let value = NSLocalizedString(key, bundle: localizationBundle, comment: "")
     #if DEBUG
-    if value == key {
-        NSLog("Missing localization for key: %@", key)
-    }
+        if value == key {
+            NSLog("Missing localization for key: %@", key)
+        }
     #endif
     return value
 }

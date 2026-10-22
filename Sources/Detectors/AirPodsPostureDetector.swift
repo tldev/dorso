@@ -8,32 +8,32 @@ private let log = OSLog(subsystem: "com.thelazydeveloper.dorso", category: "AirP
 // MARK: - AirPods Product ID Detection
 
 #if !APP_STORE
-/// Private IOBluetooth API to access Bluetooth product/vendor IDs
-@objc private protocol IOBluetoothDeviceIdentifiers {
-    @objc optional var productID: UInt32 { get }
-    @objc optional var vendorID: UInt32 { get }
-}
+    /// Private IOBluetooth API to access Bluetooth product/vendor IDs
+    @objc private protocol IOBluetoothDeviceIdentifiers {
+        @objc optional var productID: UInt32 { get }
+        @objc optional var vendorID: UInt32 { get }
+    }
 
-private let appleVendorID: UInt32 = 0x004C
+    private let appleVendorID: UInt32 = 0x004C
 
-/// Apple AirPods product IDs that have motion sensors (head tracking capable)
-private let compatibleProductIDs: Set<UInt32> = [
-    0x200E,  // AirPods Pro (1st gen)
-    0x2014,  // AirPods Pro (2nd gen) Lightning
-    0x2030,  // AirPods Pro (2nd gen) USB-C
-    0x2013,  // AirPods (3rd gen) Lightning
-    0x2024,  // AirPods (3rd gen) MagSafe
-    0x200A,  // AirPods Max (1st gen)
-    0x2028,  // AirPods Max (2nd gen / USB-C)
-    0x2036,  // AirPods 4 with ANC
-]
+    /// Apple AirPods product IDs that have motion sensors (head tracking capable)
+    private let compatibleProductIDs: Set<UInt32> = [
+        0x200E,  // AirPods Pro (1st gen)
+        0x2014,  // AirPods Pro (2nd gen) Lightning
+        0x2030,  // AirPods Pro (2nd gen) USB-C
+        0x2013,  // AirPods (3rd gen) Lightning
+        0x2024,  // AirPods (3rd gen) MagSafe
+        0x200A,  // AirPods Max (1st gen)
+        0x2028,  // AirPods Max (2nd gen / USB-C)
+        0x2036,  // AirPods 4 with ANC
+    ]
 
-/// Apple AirPods product IDs without motion sensors
-private let incompatibleProductIDs: Set<UInt32> = [
-    0x2002,  // AirPods (1st gen)
-    0x200F,  // AirPods (2nd gen)
-    0x2033,  // AirPods 4 (standard)
-]
+    /// Apple AirPods product IDs without motion sensors
+    private let incompatibleProductIDs: Set<UInt32> = [
+        0x2002,  // AirPods (1st gen)
+        0x200F,  // AirPods (2nd gen)
+        0x2033,  // AirPods 4 (standard)
+    ]
 #endif
 
 /// Represents a paired AirPods device
@@ -103,8 +103,9 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
         }
 
         let status = currentAuthorizationStatus()
-        os_log(.info, log: log, "requestAuthorization: current status = %{public}@",
-               String(describing: status))
+        os_log(
+            .info, log: log, "requestAuthorization: current status = %{public}@",
+            String(describing: status))
 
         switch status {
         case .authorized:
@@ -167,8 +168,9 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
                 guard !hasCompleted else { return }
                 guard let self else { return }
                 let newStatus = self.currentAuthorizationStatus()
-                os_log(.info, log: log, "App activated - checking auth status: %{public}@",
-                       String(describing: newStatus))
+                os_log(
+                    .info, log: log, "App activated - checking auth status: %{public}@",
+                    String(describing: newStatus))
                 if newStatus == .authorized {
                     os_log(.info, log: log, "Permission granted via activation observer")
                     complete(true)
@@ -211,23 +213,23 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
     /// falls back to name-based detection for App Store builds.
     private func checkCompatibility(device: IOBluetoothDevice, lowercaseName: String) -> Bool {
         #if !APP_STORE
-        let identifiable = unsafeBitCast(device, to: IOBluetoothDeviceIdentifiers.self)
-        if let vendorID = identifiable.vendorID, let productID = identifiable.productID,
-           vendorID == appleVendorID {
-            os_log(.debug, log: log, "AirPods '%{public}@' productID=0x%04X", device.name ?? "", productID)
-            if compatibleProductIDs.contains(productID) { return true }
-            if incompatibleProductIDs.contains(productID) { return false }
-            // Unknown product ID — log it so we can add support later
-            os_log(.info, log: log, "Unknown AirPods productID 0x%04X for '%{public}@', falling back to name check",
-                   productID, device.name ?? "")
-        }
+            let identifiable = unsafeBitCast(device, to: IOBluetoothDeviceIdentifiers.self)
+            if let vendorID = identifiable.vendorID, let productID = identifiable.productID,
+                vendorID == appleVendorID
+            {
+                os_log(.debug, log: log, "AirPods '%{public}@' productID=0x%04X", device.name ?? "", productID)
+                if compatibleProductIDs.contains(productID) { return true }
+                if incompatibleProductIDs.contains(productID) { return false }
+                // Unknown product ID — log it so we can add support later
+                os_log(
+                    .info, log: log, "Unknown AirPods productID 0x%04X for '%{public}@', falling back to name check",
+                    productID, device.name ?? "")
+            }
         #endif
 
         // Fallback: name-based detection
-        return lowercaseName.contains("pro") ||
-               lowercaseName.contains("max") ||
-               lowercaseName.contains("3") ||
-               lowercaseName.contains("4")
+        return lowercaseName.contains("pro") || lowercaseName.contains("max") || lowercaseName.contains("3")
+            || lowercaseName.contains("4")
     }
 
     /// Check if any paired AirPods are currently Bluetooth-connected.
@@ -266,7 +268,6 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
     private(set) var currentPitch: Double = 0.0
     private(set) var currentRoll: Double = 0.0
     private(set) var currentYaw: Double = 0.0
-
 
     // MARK: - Thresholds
 
@@ -362,11 +363,13 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
             self.currentYaw = motion.attitude.yaw
 
             // Send calibration update if handler is set
-            self.onCalibrationUpdate?(.airPods(AirPodsCalibrationSample(
-                pitch: self.currentPitch,
-                roll: self.currentRoll,
-                yaw: self.currentYaw
-            )))
+            self.onCalibrationUpdate?(
+                .airPods(
+                    AirPodsCalibrationSample(
+                        pitch: self.currentPitch,
+                        roll: self.currentRoll,
+                        yaw: self.currentYaw
+                    )))
 
             // Evaluate posture if monitoring
             if self.isMonitoring, let calibration = self.calibrationData {
@@ -413,7 +416,7 @@ class AirPodsPostureDetector: NSObject, PostureDetector {
     /// Stop connection-only monitoring.
     func stopConnectionMonitoring() {
         guard #available(macOS 14.0, *) else { return }
-        guard !isActive else { return } // Don't stop if full detector is running
+        guard !isActive else { return }  // Don't stop if full detector is running
         motionManager?.stopConnectionStatusUpdates()
         motionManager?.delegate = nil
         os_log(.info, log: log, "Stopped AirPods connection monitoring")

@@ -1,5 +1,5 @@
-import Foundation
 import AVFoundation
+import Foundation
 import Vision
 import os.log
 
@@ -288,7 +288,9 @@ class CameraPostureDetector: NSObject, PostureDetector {
         // natural resting position is closer to screen than average calibration position
         let neutralWidth = widthValues.max() ?? 0.0
 
-        os_log(.info, log: log, "Created calibration: goodY=%.3f, badY=%.3f, range=%.3f, neutralWidth=%.3f (max)", maxY, minY, range, neutralWidth)
+        os_log(
+            .info, log: log, "Created calibration: goodY=%.3f, badY=%.3f, range=%.3f, neutralWidth=%.3f (max)", maxY,
+            minY, range, neutralWidth)
 
         return CameraCalibrationData(
             goodPostureY: maxY,
@@ -372,7 +374,8 @@ class CameraPostureDetector: NSObject, PostureDetector {
         }
 
         guard let selectedCamera = camera,
-              let input = try? AVCaptureDeviceInput(device: selectedCamera) else {
+            let input = try? AVCaptureDeviceInput(device: selectedCamera)
+        else {
             session.commitConfiguration()
             os_log(.error, log: log, "Failed to create camera input")
             return
@@ -462,7 +465,8 @@ class CameraPostureDetector: NSObject, PostureDetector {
 
             let cameras = self.getAvailableCameras()
             guard let camera = cameras.first(where: { $0.uniqueID == cameraID }),
-                  let input = try? AVCaptureDeviceInput(device: camera) else {
+                let input = try? AVCaptureDeviceInput(device: camera)
+            else {
                 session.commitConfiguration()
                 os_log(.error, log: log, "Failed to switch to camera: %{public}@", cameraID)
                 return
@@ -589,7 +593,8 @@ class CameraPostureDetector: NSObject, PostureDetector {
             if ratio > forwardHeadThreshold {
                 isBadPosture = true
                 let sizeExcess = ratio - forwardHeadThreshold
-                forwardHeadSeverity = min(1.0, max(0.0, Double(sizeExcess / CameraCalibrationData.forwardHeadSeverityRange)))
+                forwardHeadSeverity = min(
+                    1.0, max(0.0, Double(sizeExcess / CameraCalibrationData.forwardHeadSeverityRange)))
             }
         }
 
@@ -632,7 +637,9 @@ class CameraPostureDetector: NSObject, PostureDetector {
 // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 
 extension CameraPostureDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+    func captureOutput(
+        _ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection
+    ) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
         let now = Date()

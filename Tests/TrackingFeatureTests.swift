@@ -1,5 +1,6 @@
-import XCTest
 import ComposableArchitecture
+import XCTest
+
 @testable import DorsoCore
 
 private actor EffectIntentRecorder {
@@ -15,8 +16,8 @@ private actor EffectIntentRecorder {
     }
 }
 
-private extension TrackingRuntimeClient {
-    static func recording(_ recorder: EffectIntentRecorder) -> Self {
+extension TrackingRuntimeClient {
+    fileprivate static func recording(_ recorder: EffectIntentRecorder) -> Self {
         Self(perform: { intent in await recorder.record(intent) })
     }
 }
@@ -242,7 +243,7 @@ final class TrackingFeatureTests: XCTestCase {
         await assertIntents(
             [
                 .trackAnalytics(interval: 1.5, isSlouching: false),
-                .updateBlur
+                .updateBlur,
             ],
             recorder: recorder
         )
@@ -1230,7 +1231,7 @@ final class TrackingFeatureTests: XCTestCase {
         await assertIntents(
             [
                 .stopDetector(.camera),
-                .persistTrackingSource
+                .persistTrackingSource,
             ],
             recorder: recorder
         )
@@ -1261,7 +1262,7 @@ final class TrackingFeatureTests: XCTestCase {
             [
                 .stopDetector(.camera),
                 .persistTrackingSource,
-                .startMonitoring
+                .startMonitoring,
             ],
             recorder: recorder
         )

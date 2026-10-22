@@ -25,11 +25,12 @@ extension NSWindow {
             center()
             return
         }
-        setFrameOrigin(NSPoint(
-            x: visible.midX - frame.width / 2,
-            // Match center()'s placement: somewhat above the vertical middle.
-            y: visible.minY + (visible.height - frame.height) * 2 / 3
-        ))
+        setFrameOrigin(
+            NSPoint(
+                x: visible.midX - frame.width / 2,
+                // Match center()'s placement: somewhat above the vertical middle.
+                y: visible.minY + (visible.height - frame.height) * 2 / 3
+            ))
     }
 
     /// Moves the window the minimum distance needed to sit fully inside the
@@ -42,10 +43,12 @@ extension NSWindow {
         guard let visible = (overlapArea(with: target) > 0 ? target : activeScreen)?.visibleFrame else { return }
 
         var origin = frame.origin
-        origin.x = frame.width >= visible.width
+        origin.x =
+            frame.width >= visible.width
             ? visible.minX
             : min(max(origin.x, visible.minX), visible.maxX - frame.width)
-        origin.y = frame.height >= visible.height
+        origin.y =
+            frame.height >= visible.height
             ? visible.maxY - frame.height
             : min(max(origin.y, visible.minY), visible.maxY - frame.height)
         setFrameOrigin(origin)

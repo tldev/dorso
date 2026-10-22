@@ -1,5 +1,6 @@
 import AppKit
 import XCTest
+
 @testable import DorsoCore
 
 final class CalibrationKeyActionTests: XCTestCase {
@@ -68,7 +69,8 @@ final class CalibrationKeyActionTests: XCTestCase {
 
     func testPickerLettersStartCalibration() {
         XCTAssertEqual(action(keyCode: 45, characters: "n", isChoosingDesk: true, deskCount: 2), .calibrateNewDesk)
-        XCTAssertEqual(action(keyCode: 15, characters: "r", isChoosingDesk: true, deskCount: 2), .recalibrateCurrentDesk)
+        XCTAssertEqual(
+            action(keyCode: 15, characters: "r", isChoosingDesk: true, deskCount: 2), .recalibrateCurrentDesk)
     }
 
     func testShortcutChordsAreIgnored() {
@@ -78,7 +80,9 @@ final class CalibrationKeyActionTests: XCTestCase {
     }
 
     func testShiftedDigitsStillSelectDesks() {
-        XCTAssertEqual(action(keyCode: 18, characters: "1", modifiers: .shift, isChoosingDesk: true, deskCount: 2), .selectDesk(index: 0))
+        XCTAssertEqual(
+            action(keyCode: 18, characters: "1", modifiers: .shift, isChoosingDesk: true, deskCount: 2),
+            .selectDesk(index: 0))
     }
 
     func testPickerKeysFromOtherAppsAreIgnored() {
@@ -102,7 +106,9 @@ final class CalibrationKeyActionTests: XCTestCase {
     }
 
     func testArrowsCarryNumericPadFlagOnSomeKeyboards() {
-        XCTAssertEqual(action(keyCode: 125, modifiers: [.numericPad, .function], isChoosingDesk: true, deskCount: 2), .moveFocus(by: 1))
+        XCTAssertEqual(
+            action(keyCode: 125, modifiers: [.numericPad, .function], isChoosingDesk: true, deskCount: 2),
+            .moveFocus(by: 1))
     }
 
     func testReturnAndEnterActivateFocusedRow() {
@@ -133,6 +139,7 @@ final class CalibrationKeyActionTests: XCTestCase {
         // On a Russian layout the N and R keys type "т" and "к"
         XCTAssertEqual(action(keyCode: 45, characters: "т", deskCount: 1), .toggleNewDesk)
         XCTAssertEqual(action(keyCode: 45, characters: "т", isChoosingDesk: true, deskCount: 2), .calibrateNewDesk)
-        XCTAssertEqual(action(keyCode: 15, characters: "к", isChoosingDesk: true, deskCount: 2), .recalibrateCurrentDesk)
+        XCTAssertEqual(
+            action(keyCode: 15, characters: "к", isChoosingDesk: true, deskCount: 2), .recalibrateCurrentDesk)
     }
 }

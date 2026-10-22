@@ -25,12 +25,12 @@ enum CalibrationKeyAction: Equatable {
         isChoosingDesk: Bool,
         deskCount: Int
     ) -> CalibrationKeyAction? {
-        if keyCode == 53 { return .cancel } // Escape
+        if keyCode == 53 { return .cancel }  // Escape
         guard modifiers.intersection([.command, .option, .control]).isEmpty else { return nil }
 
         // Arrows may repeat
         if isChoosingDesk, isFromDorso {
-            if keyCode == 126 { return .moveFocus(by: -1) } // Up arrow
+            if keyCode == 126 { return .moveFocus(by: -1) }  // Up arrow
             if keyCode == 125 { return .moveFocus(by: 1) }  // Down arrow
         }
         guard !isRepeat else { return nil }
@@ -43,7 +43,7 @@ enum CalibrationKeyAction: Equatable {
         }
         if isChoosingDesk {
             guard isFromDorso else { return nil }
-            if keyCode == 36 || keyCode == 76 { return .activateFocused } // Return, keypad Enter
+            if keyCode == 36 || keyCode == 76 { return .activateFocused }  // Return, keypad Enter
             let number = Int(key) ?? numberRowKeyCodes.firstIndex(of: keyCode).map { $0 + 1 }
             if let number, number >= 1, number <= min(deskCount, 9) {
                 return .selectDesk(index: number - 1)
@@ -53,7 +53,7 @@ enum CalibrationKeyAction: Equatable {
             return nil
         }
 
-        if keyCode == 49 { return .capture } // Space
+        if keyCode == 49 { return .capture }  // Space
         if key == "n", deskCount > 0, isFromDorso { return .toggleNewDesk }
         return nil
     }
@@ -149,13 +149,13 @@ class CalibrationView: NSView {
         let titleAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 32, weight: .semibold),
             .foregroundColor: NSColor.white,
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
         ]
 
         let stepAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 20, weight: .regular),
             .foregroundColor: NSColor.white.withAlphaComponent(0.7),
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
         ]
 
         // Draw step indicator at top center
@@ -209,26 +209,28 @@ class CalibrationView: NSView {
 
         let titleAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 24, weight: .semibold),
-            .foregroundColor: NSColor.white
+            .foregroundColor: NSColor.white,
         ]
         let subtitleAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 14, weight: .regular),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.6)
+            .foregroundColor: NSColor.white.withAlphaComponent(0.6),
         ]
         let textWidth = cardWidth - padding * 2
         let textOptions: NSString.DrawingOptions = [.usesLineFragmentOrigin, .usesFontLeading]
         let title = deskPickerTitle as NSString
         let subtitle = deskPickerSubtitle as NSString
-        let titleHeight = ceil(title.boundingRect(
-            with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
-            options: textOptions,
-            attributes: titleAttrs
-        ).height)
-        let subtitleHeight = ceil(subtitle.boundingRect(
-            with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
-            options: textOptions,
-            attributes: subtitleAttrs
-        ).height)
+        let titleHeight = ceil(
+            title.boundingRect(
+                with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
+                options: textOptions,
+                attributes: titleAttrs
+            ).height)
+        let subtitleHeight = ceil(
+            subtitle.boundingRect(
+                with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
+                options: textOptions,
+                attributes: subtitleAttrs
+            ).height)
 
         let hasDivider = rows.contains(where: \.isSecondary) && rows.contains(where: { !$0.isSecondary })
         var rowsHeight: CGFloat = 0
@@ -332,7 +334,7 @@ class CalibrationView: NSView {
 
             let keyAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.monospacedSystemFont(ofSize: row.isSecondary ? 12 : 14, weight: .semibold),
-                .foregroundColor: row.isCurrent ? accent : NSColor.white.withAlphaComponent(0.85)
+                .foregroundColor: row.isCurrent ? accent : NSColor.white.withAlphaComponent(0.85),
             ]
             let key = row.key as NSString
             let keySize = key.size(withAttributes: keyAttrs)
@@ -346,7 +348,7 @@ class CalibrationView: NSView {
         if row.isCurrent {
             let badgeAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
-                .foregroundColor: accent
+                .foregroundColor: accent,
             ]
             let badge = L("calibration.desk.current") as NSString
             let badgeSize = badge.size(withAttributes: badgeAttrs)
@@ -367,7 +369,7 @@ class CalibrationView: NSView {
         let titleAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: row.isSecondary ? 14 : 17, weight: row.isSecondary ? .regular : .medium),
             .foregroundColor: NSColor.white.withAlphaComponent(row.isSecondary ? 0.7 : 1),
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
         ]
         let title = row.title as NSString
         let titleHeight = title.size(withAttributes: titleAttrs).height
@@ -383,7 +385,8 @@ class CalibrationView: NSView {
         for area in trackingAreas {
             removeTrackingArea(area)
         }
-        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeAlways, .inVisibleRect], owner: self))
+        addTrackingArea(
+            NSTrackingArea(rect: .zero, options: [.mouseMoved, .activeAlways, .inVisibleRect], owner: self))
     }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
@@ -404,8 +407,9 @@ class CalibrationView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         guard let rows = deskPickerRows,
-              let index = deskPickerRowIndex(at: convert(event.locationInWindow, from: nil)),
-              index < rows.count else { return }
+            let index = deskPickerRowIndex(at: convert(event.locationInWindow, from: nil)),
+            index < rows.count
+        else { return }
         hoveredRowIndex = nil
         NSCursor.arrow.set()
         onDeskPickerRowSelected?(rows[index].action)
@@ -425,11 +429,11 @@ class CalibrationView: NSView {
 
         let textAttrs: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: textColor
+            .foregroundColor: textColor,
         ]
         let keycapTextAttrs: [NSAttributedString.Key: Any] = [
             .font: keycapFont,
-            .foregroundColor: NSColor.white
+            .foregroundColor: NSColor.white,
         ]
 
         let keycapPaddingH: CGFloat = 8
@@ -471,7 +475,8 @@ class CalibrationView: NSView {
                 keycapPath.stroke()
 
                 let keycapTextY = keycapRect.minY + (keycapRect.height - keycapTextSize.height) / 2
-                (segment.text as NSString).draw(at: NSPoint(x: currentX + keycapPaddingH, y: keycapTextY), withAttributes: keycapTextAttrs)
+                (segment.text as NSString).draw(
+                    at: NSPoint(x: currentX + keycapPaddingH, y: keycapTextY), withAttributes: keycapTextAttrs)
                 currentX += keycapWidth
             } else {
                 (segment.text as NSString).draw(at: NSPoint(x: currentX, y: centerY), withAttributes: textAttrs)
@@ -523,7 +528,7 @@ class CalibrationView: NSView {
         let iconAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 72, weight: .light),
             .foregroundColor: NSColor.cyan.withAlphaComponent(0.7 + 0.3 * sin(pulsePhase)),
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
         ]
         let iconRect = NSRect(x: 0, y: bounds.midY + 20, width: bounds.width, height: 90)
         (icon as NSString).draw(in: iconRect, withAttributes: iconAttrs)
@@ -532,7 +537,7 @@ class CalibrationView: NSView {
         let titleAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 28, weight: .semibold),
             .foregroundColor: NSColor.white,
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
         ]
         let titleRect = NSRect(x: 0, y: bounds.midY - 30, width: bounds.width, height: 45)
         (title as NSString).draw(in: titleRect, withAttributes: titleAttrs)
@@ -541,7 +546,7 @@ class CalibrationView: NSView {
         let subtitleAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 16, weight: .regular),
             .foregroundColor: NSColor.white.withAlphaComponent(0.7),
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
         ]
         let subtitleRect = NSRect(x: 0, y: bounds.midY - 70, width: bounds.width, height: 30)
         (subtitle as NSString).draw(in: subtitleRect, withAttributes: subtitleAttrs)
@@ -643,11 +648,12 @@ class CalibrationWindowController: NSObject {
 
         for screenIndex in 0..<NSScreen.screens.count {
             for corner in corners {
-                steps.append(CalibrationStep(
-                    instruction: L("calibration.lookAtCorner", corner.name),
-                    screenIndex: screenIndex,
-                    corner: corner
-                ))
+                steps.append(
+                    CalibrationStep(
+                        instruction: L("calibration.lookAtCorner", corner.name),
+                        screenIndex: screenIndex,
+                        corner: corner
+                    ))
             }
         }
     }
@@ -747,15 +753,17 @@ class CalibrationWindowController: NSObject {
     // MARK: - Keyboard
 
     private func handleKey(_ event: NSEvent, isFromDorso: Bool) -> Bool {
-        guard let action = CalibrationKeyAction.forKey(
-            keyCode: event.keyCode,
-            characters: event.charactersIgnoringModifiers,
-            modifiers: event.modifierFlags,
-            isRepeat: event.isARepeat,
-            isFromDorso: isFromDorso,
-            isChoosingDesk: isChoosingDesk,
-            deskCount: desks.count
-        ) else { return false }
+        guard
+            let action = CalibrationKeyAction.forKey(
+                keyCode: event.keyCode,
+                characters: event.charactersIgnoringModifiers,
+                modifiers: event.modifierFlags,
+                isRepeat: event.isARepeat,
+                isFromDorso: isFromDorso,
+                isChoosingDesk: isChoosingDesk,
+                deskCount: desks.count
+            )
+        else { return false }
         perform(action)
         return true
     }
@@ -797,10 +805,14 @@ class CalibrationWindowController: NSObject {
         var rows: [DeskPickerRow] = []
         for (index, desk) in desks.enumerated() {
             let key = index < 9 ? "\(index + 1)" : ""
-            rows.append(DeskPickerRow(key: key, title: desk.name, action: .selectDesk(index: index), isCurrent: desk.isActive))
+            rows.append(
+                DeskPickerRow(key: key, title: desk.name, action: .selectDesk(index: index), isCurrent: desk.isActive))
         }
-        rows.append(DeskPickerRow(key: "N", title: L("calibration.desk.new"), action: .calibrateNewDesk, isSecondary: true))
-        rows.append(DeskPickerRow(key: "R", title: L("calibration.desk.recalibrate"), action: .recalibrateCurrentDesk, isSecondary: true))
+        rows.append(
+            DeskPickerRow(key: "N", title: L("calibration.desk.new"), action: .calibrateNewDesk, isSecondary: true))
+        rows.append(
+            DeskPickerRow(
+                key: "R", title: L("calibration.desk.recalibrate"), action: .recalibrateCurrentDesk, isSecondary: true))
         deskPickerRows = rows
         focusedRowIndex = rows.firstIndex(where: \.isCurrent) ?? 0
         for view in calibrationViews {
@@ -928,7 +940,7 @@ class CalibrationWindowController: NSObject {
         // Respect accessibility reduce motion preference
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
 
-        animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { [weak self] _ in
+        animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
                 for view in self.calibrationViews {

@@ -49,16 +49,18 @@ class GlowGradientLayer: CALayer {
             NSColor.clear.cgColor,
             warningColor.withAlphaComponent(alpha * 0.4).cgColor,
             warningColor.withAlphaComponent(alpha * 0.8).cgColor,
-            warningColor.withAlphaComponent(alpha).cgColor
+            warningColor.withAlphaComponent(alpha).cgColor,
         ]
 
         let locations: [CGFloat] = [0.0, 0.3, 0.6, 1.0]
 
-        guard let gradient = CGGradient(
-            colorsSpace: colorSpace,
-            colors: colors as CFArray,
-            locations: locations
-        ) else { return }
+        guard
+            let gradient = CGGradient(
+                colorsSpace: colorSpace,
+                colors: colors as CFArray,
+                locations: locations
+            )
+        else { return }
 
         ctx.drawRadialGradient(
             gradient,
@@ -176,16 +178,19 @@ class BorderGradientLayer: CALayer {
         let innerColor = NSColor.clear.cgColor
 
         // Create gradient once and reuse for all edges
-        guard let gradient = CGGradient(
-            colorsSpace: colorSpace,
-            colors: [outerColor, innerColor] as CFArray,
-            locations: [0.0, 1.0]
-        ) else { return }
+        guard
+            let gradient = CGGradient(
+                colorsSpace: colorSpace,
+                colors: [outerColor, innerColor] as CFArray,
+                locations: [0.0, 1.0]
+            )
+        else { return }
 
         // Top border
         ctx.saveGState()
         ctx.clip(to: CGRect(x: 0, y: bounds.height - borderWidth, width: bounds.width, height: borderWidth))
-        ctx.drawLinearGradient(gradient,
+        ctx.drawLinearGradient(
+            gradient,
             start: CGPoint(x: bounds.midX, y: bounds.height),
             end: CGPoint(x: bounds.midX, y: bounds.height - borderWidth),
             options: [])
@@ -194,7 +199,8 @@ class BorderGradientLayer: CALayer {
         // Bottom border
         ctx.saveGState()
         ctx.clip(to: CGRect(x: 0, y: 0, width: bounds.width, height: borderWidth))
-        ctx.drawLinearGradient(gradient,
+        ctx.drawLinearGradient(
+            gradient,
             start: CGPoint(x: bounds.midX, y: 0),
             end: CGPoint(x: bounds.midX, y: borderWidth),
             options: [])
@@ -203,7 +209,8 @@ class BorderGradientLayer: CALayer {
         // Left border
         ctx.saveGState()
         ctx.clip(to: CGRect(x: 0, y: 0, width: borderWidth, height: bounds.height))
-        ctx.drawLinearGradient(gradient,
+        ctx.drawLinearGradient(
+            gradient,
             start: CGPoint(x: 0, y: bounds.midY),
             end: CGPoint(x: borderWidth, y: bounds.midY),
             options: [])
@@ -212,7 +219,8 @@ class BorderGradientLayer: CALayer {
         // Right border
         ctx.saveGState()
         ctx.clip(to: CGRect(x: bounds.width - borderWidth, y: 0, width: borderWidth, height: bounds.height))
-        ctx.drawLinearGradient(gradient,
+        ctx.drawLinearGradient(
+            gradient,
             start: CGPoint(x: bounds.width, y: bounds.midY),
             end: CGPoint(x: bounds.width - borderWidth, y: bounds.midY),
             options: [])

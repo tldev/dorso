@@ -1,8 +1,8 @@
-import AppKit
 import AVFoundation
+import AppKit
+import ComposableArchitecture
 import Vision
 import os.log
-import ComposableArchitecture
 
 private let log = OSLog(subsystem: "com.thelazydeveloper.dorso", category: "AppDelegate")
 
@@ -32,10 +32,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     let menuBarManager = MenuBarManager()
 
     #if !APP_STORE
-    /// Sparkle auto-updater. Created in applicationDidFinishLaunching (not
-    /// init) so headless tests constructing AppDelegate never start the
-    /// update machinery.
-    var updaterManager: UpdaterManager?
+        /// Sparkle auto-updater. Created in applicationDidFinishLaunching (not
+        /// init) so headless tests constructing AppDelegate never start the
+        /// update machinery.
+        var updaterManager: UpdaterManager?
     #endif
 
     // Overlay windows and blur
@@ -407,17 +407,18 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
-           let icon = NSImage(contentsOfFile: iconPath) {
+            let icon = NSImage(contentsOfFile: iconPath)
+        {
             NSApp.applicationIconImage = applyMacOSIconMask(to: icon)
         }
 
         #if !APP_STORE
-        // UI preview launches must not start the updater: with silent
-        // updates enabled it can stage and install a store build over the
-        // dev build mid-iteration
-        if !CommandLine.arguments.contains("--open-settings") {
-            updaterManager = UpdaterManager()
-        }
+            // UI preview launches must not start the updater: with silent
+            // updates enabled it can stage and install a store build over the
+            // dev build mid-iteration
+            if !CommandLine.arguments.contains("--open-settings") {
+                updaterManager = UpdaterManager()
+            }
         #endif
 
         setupDetectors()
@@ -583,11 +584,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         #if !APP_STORE
-        menuBarManager.onCheckForUpdates = { [weak self] in
-            Task { @MainActor in
-                self?.updaterManager?.checkForUpdates()
+            menuBarManager.onCheckForUpdates = { [weak self] in
+                Task { @MainActor in
+                    self?.updaterManager?.checkForUpdates()
+                }
             }
-        }
         #endif
     }
 

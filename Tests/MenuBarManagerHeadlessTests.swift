@@ -1,5 +1,6 @@
 import AppKit
 import XCTest
+
 @testable import DorsoCore
 
 /// Exercises MenuBarManager's update paths without a window server by

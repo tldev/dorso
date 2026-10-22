@@ -1,6 +1,7 @@
 import AppKit
+
 #if SWIFT_PACKAGE
-import DorsoCore
+    import DorsoCore
 #endif
 
 @main
@@ -21,7 +22,8 @@ struct DorsoMain {
         let appMenu = NSMenu()
         appMenuItem.submenu = appMenu
 
-        let quitItem = NSMenuItem(title: L("appmenu.quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quitItem = NSMenuItem(
+            title: L("appmenu.quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appMenu.addItem(quitItem)
 
         // File menu (for Cmd+W)
@@ -30,7 +32,8 @@ struct DorsoMain {
         let fileMenu = NSMenu(title: L("appmenu.file"))
         fileMenuItem.submenu = fileMenu
 
-        let closeItem = NSMenuItem(title: L("appmenu.closeWindow"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        let closeItem = NSMenuItem(
+            title: L("appmenu.closeWindow"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         fileMenu.addItem(closeItem)
 
         // Edit menu (for standard text editing shortcuts)
@@ -45,10 +48,10 @@ struct DorsoMain {
         editMenu.addItem(NSMenuItem(title: L("appmenu.cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
         editMenu.addItem(NSMenuItem(title: L("appmenu.copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
         editMenu.addItem(NSMenuItem(title: L("appmenu.paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
-        editMenu.addItem(NSMenuItem(title: L("appmenu.selectAll"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editMenu.addItem(
+            NSMenuItem(title: L("appmenu.selectAll"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
 
         app.mainMenu = mainMenu
         app.run()
     }
 }
-

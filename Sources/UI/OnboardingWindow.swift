@@ -1,6 +1,6 @@
+import AVFoundation
 import AppKit
 import SwiftUI
-import AVFoundation
 
 // MARK: - Onboarding Window Controller
 
@@ -169,7 +169,9 @@ struct OnboardingView: View {
                                     .padding(.vertical, 3)
                                     .background(
                                         Capsule()
-                                            .fill(airpods.isCompatible ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
+                                            .fill(
+                                                airpods.isCompatible
+                                                    ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
                                     )
                             }
                             .padding(.vertical, 8)
@@ -279,8 +281,10 @@ struct TrackingOptionCard: View {
 
                     if let status = statusText {
                         HStack(spacing: 4) {
-                            Image(systemName: statusIsPositive ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                                .font(.system(size: 10))
+                            Image(
+                                systemName: statusIsPositive ? "checkmark.circle.fill" : "exclamationmark.circle.fill"
+                            )
+                            .font(.system(size: 10))
                             Text(status)
                                 .font(.system(size: 11))
                         }

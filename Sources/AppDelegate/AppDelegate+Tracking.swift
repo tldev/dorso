@@ -34,7 +34,9 @@ extension AppDelegate {
     }
 
     private func handleStateTransition(from oldState: AppState, to newState: AppState) {
-        os_log(.info, log: log, "State transition: %{public}@ -> %{public}@", String(describing: oldState), String(describing: newState))
+        os_log(
+            .info, log: log, "State transition: %{public}@ -> %{public}@", String(describing: oldState),
+            String(describing: newState))
         syncDetectorToState()
         if !newState.isActive {
             clearBlur()
@@ -174,12 +176,14 @@ extension AppDelegate {
         let transition = await sendTrackingAction(.airPodsConnectionChanged(isConnected))
 
         if isConnected,
-           transition.oldState.appState == .paused(.airPodsRemoved),
-           transition.newState.appState == .monitoring {
+            transition.oldState.appState == .paused(.airPodsRemoved),
+            transition.newState.appState == .monitoring
+        {
             os_log(.info, log: log, "AirPods back in ears - resuming monitoring")
         } else if !isConnected,
-                  transition.oldState.appState == .monitoring,
-                  transition.newState.appState == .paused(.airPodsRemoved) {
+            transition.oldState.appState == .monitoring,
+            transition.newState.appState == .paused(.airPodsRemoved)
+        {
             os_log(.info, log: log, "AirPods removed - pausing monitoring")
         }
     }
@@ -270,9 +274,10 @@ extension AppDelegate {
         let configKey = DisplayMonitor.getCurrentConfigKey()
         let profile = loadProfile(forKey: configKey)
         let cameras = cameraDetector.getAvailableCameras()
-        let profileCameraAvailable = profile.map { profile in
-            cameras.contains(where: { $0.uniqueID == profile.cameraID })
-        } ?? false
+        let profileCameraAvailable =
+            profile.map { profile in
+                cameras.contains(where: { $0.uniqueID == profile.cameraID })
+            } ?? false
 
         return InitialSetupContext(
             profile: profile,

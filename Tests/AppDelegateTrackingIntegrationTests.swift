@@ -1,5 +1,6 @@
 import AppKit
 import XCTest
+
 @testable import DorsoCore
 
 final class AppDelegateTrackingIntegrationTests: XCTestCase {
@@ -80,7 +81,8 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
         await appDelegate.initialSetupFlow()
 
-        XCTAssertEqual(executedIntents, [.applyStartupCameraProfile(profile), .startMonitoring, .beginMonitoringSession])
+        XCTAssertEqual(
+            executedIntents, [.applyStartupCameraProfile(profile), .startMonitoring, .beginMonitoringSession])
         XCTAssertEqual(onboardingCalls, 0)
         XCTAssertEqual(appDelegate.selectedCameraID, profile.cameraID)
         XCTAssertEqual(appDelegate.cameraCalibration?.cameraID, profile.cameraID)
@@ -204,7 +206,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
         let expectedIntents: [TrackingFeature.EffectIntent] = [
             .switchCamera(.matchingProfile(profile)),
-            .startMonitoring
+            .startMonitoring,
         ]
 
         XCTAssertEqual(executedIntents, expectedIntents)
@@ -264,7 +266,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
         let expectedIntents: [TrackingFeature.EffectIntent] = [
             .switchCamera(.matchingProfile(profile)),
-            .startMonitoring
+            .startMonitoring,
         ]
 
         XCTAssertEqual(executedIntents, expectedIntents)
@@ -294,7 +296,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
 
         let expectedIntents: [TrackingFeature.EffectIntent] = [
             .switchCamera(.fallback()),
-            .startMonitoring
+            .startMonitoring,
         ]
 
         XCTAssertEqual(executedIntents, expectedIntents)
@@ -514,7 +516,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         await appDelegate.switchTrackingSource(to: .airpods)
         let expectedIntents: [TrackingFeature.EffectIntent] = [
             .stopDetector(.camera),
-            .persistTrackingSource
+            .persistTrackingSource,
         ]
 
         XCTAssertEqual(executedIntents, expectedIntents)
@@ -541,7 +543,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         let expectedPrefix: [TrackingFeature.EffectIntent] = [
             .stopDetector(.airpods),
             .persistTrackingSource,
-            .startMonitoring
+            .startMonitoring,
         ]
 
         XCTAssertEqual(Array(executedIntents.prefix(expectedPrefix.count)), expectedPrefix)
@@ -607,7 +609,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             .camera(.init(noseY: 0.4, faceWidth: 0.2)),
             .camera(.init(noseY: 0.5, faceWidth: 0.21)),
             .camera(.init(noseY: 0.6, faceWidth: 0.19)),
-            .camera(.init(noseY: 0.55, faceWidth: 0.22))
+            .camera(.init(noseY: 0.55, faceWidth: 0.22)),
         ]
         await appDelegate.finishCalibration(values: samples)
 
@@ -721,9 +723,10 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             retryInvocations += 1
         }
 
-        await appDelegate.sendTrackingAction(.calibrationStartFailed(
-            errorMessage: "camera unavailable"
-        ))
+        await appDelegate.sendTrackingAction(
+            .calibrationStartFailed(
+                errorMessage: "camera unavailable"
+            ))
 
         XCTAssertEqual(
             executedIntents,
@@ -752,9 +755,10 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             retryInvocations += 1
         }
 
-        await appDelegate.sendTrackingAction(.calibrationStartFailed(
-            errorMessage: nil
-        ))
+        await appDelegate.sendTrackingAction(
+            .calibrationStartFailed(
+                errorMessage: nil
+            ))
 
         XCTAssertEqual(executedIntents, [.showCameraCalibrationRetryAlert(message: nil)])
         XCTAssertEqual(retryInvocations, 0)
@@ -780,9 +784,10 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             return false
         }
 
-        await appDelegate.sendTrackingAction(.calibrationStartFailed(
-            errorMessage: "ignored"
-        ))
+        await appDelegate.sendTrackingAction(
+            .calibrationStartFailed(
+                errorMessage: "ignored"
+            ))
 
         XCTAssertEqual(executedIntents, [])
         XCTAssertEqual(retryAlertDecisionCalls, 0)

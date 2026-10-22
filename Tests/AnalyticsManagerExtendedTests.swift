@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import DorsoCore
 
 final class AnalyticsManagerExtendedTests: XCTestCase {
@@ -146,12 +147,15 @@ final class AnalyticsManagerExtendedTests: XCTestCase {
 
         // First 6 days should have zero values (no data recorded for them)
         for i in 0..<6 {
-            XCTAssertEqual(days[i].totalSeconds, 0, accuracy: 0.0001,
-                           "Day at index \(i) should have zero totalSeconds")
-            XCTAssertEqual(days[i].slouchSeconds, 0, accuracy: 0.0001,
-                           "Day at index \(i) should have zero slouchSeconds")
-            XCTAssertEqual(days[i].slouchCount, 0,
-                           "Day at index \(i) should have zero slouchCount")
+            XCTAssertEqual(
+                days[i].totalSeconds, 0, accuracy: 0.0001,
+                "Day at index \(i) should have zero totalSeconds")
+            XCTAssertEqual(
+                days[i].slouchSeconds, 0, accuracy: 0.0001,
+                "Day at index \(i) should have zero slouchSeconds")
+            XCTAssertEqual(
+                days[i].slouchCount, 0,
+                "Day at index \(i) should have zero slouchCount")
         }
     }
 
@@ -266,23 +270,28 @@ final class AnalyticsManagerExtendedTests: XCTestCase {
 
         // If saveHistoryIfNeeded was a no-op, the marker byte should still be there
         let data2 = try Data(contentsOf: fileURL)
-        XCTAssertEqual(data2.count, markerData.count,
-                       "File should not be rewritten when there are no changes")
+        XCTAssertEqual(
+            data2.count, markerData.count,
+            "File should not be rewritten when there are no changes")
     }
 
     // MARK: - Legacy Migration Tests
 
     func testLegacyMigrationMergesFilesAndRetainsLegacyFile() throws {
         let rootDir = makeTempDirectory()
-        let currentURL = rootDir
+        let currentURL =
+            rootDir
             .appendingPathComponent("Dorso", isDirectory: true)
             .appendingPathComponent("analytics.json")
-        let legacyURL = rootDir
+        let legacyURL =
+            rootDir
             .appendingPathComponent("Posturr", isDirectory: true)
             .appendingPathComponent("analytics.json")
 
-        try FileManager.default.createDirectory(at: currentURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: legacyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: currentURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: legacyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
         let day1 = makeDate(2026, 2, 1)
         let day2 = makeDate(2026, 2, 2)
@@ -294,11 +303,11 @@ final class AnalyticsManagerExtendedTests: XCTestCase {
 
         let currentHistory: [String: DailyStats] = [
             day2Key: DailyStats(date: day2, totalSeconds: 20, slouchSeconds: 5, slouchCount: 1),
-            day3Key: DailyStats(date: day3, totalSeconds: 40, slouchSeconds: 8, slouchCount: 2)
+            day3Key: DailyStats(date: day3, totalSeconds: 40, slouchSeconds: 8, slouchCount: 2),
         ]
         let legacyHistory: [String: DailyStats] = [
             day1Key: DailyStats(date: day1, totalSeconds: 60, slouchSeconds: 6, slouchCount: 3),
-            day2Key: DailyStats(date: day2, totalSeconds: 10, slouchSeconds: 2, slouchCount: 1)
+            day2Key: DailyStats(date: day2, totalSeconds: 10, slouchSeconds: 2, slouchCount: 1),
         ]
 
         try JSONEncoder().encode(currentHistory).write(to: currentURL, options: [.atomic])
@@ -339,10 +348,12 @@ final class AnalyticsManagerExtendedTests: XCTestCase {
 
     func testLegacyMigrationMarksCompleteWhenNoLegacyFileExists() throws {
         let rootDir = makeTempDirectory()
-        let currentURL = rootDir
+        let currentURL =
+            rootDir
             .appendingPathComponent("Dorso", isDirectory: true)
             .appendingPathComponent("analytics.json")
-        let legacyURL = rootDir
+        let legacyURL =
+            rootDir
             .appendingPathComponent("Posturr", isDirectory: true)
             .appendingPathComponent("analytics.json")
 
@@ -371,15 +382,19 @@ final class AnalyticsManagerExtendedTests: XCTestCase {
 
     func testLegacyMigrationDoesNotDoubleCountEquivalentEntries() throws {
         let rootDir = makeTempDirectory()
-        let currentURL = rootDir
+        let currentURL =
+            rootDir
             .appendingPathComponent("Dorso", isDirectory: true)
             .appendingPathComponent("analytics.json")
-        let legacyURL = rootDir
+        let legacyURL =
+            rootDir
             .appendingPathComponent("Posturr", isDirectory: true)
             .appendingPathComponent("analytics.json")
 
-        try FileManager.default.createDirectory(at: currentURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: legacyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: currentURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: legacyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
         let day = makeDate(2026, 2, 4)
         let dayKey = DailyStats.dayKey(for: day, calendar: calendar)

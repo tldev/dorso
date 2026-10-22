@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import DorsoCore
 
 final class PostureEngineTests: XCTestCase {
@@ -114,7 +115,7 @@ final class PostureEngineTests: XCTestCase {
 
     func testBadFrameAtThresholdStartsTimer() {
         let now = Date()
-        let state = makeState(badFrames: 7) // Will become 8
+        let state = makeState(badFrames: 7)  // Will become 8
         let result = PostureEngine.processReading(
             makeReading(bad: true),
             state: state,
@@ -174,7 +175,7 @@ final class PostureEngineTests: XCTestCase {
 
     func testIntensityZeroDefaultsToOne() {
         let now = Date()
-        let state = makeState(badFrames: 7) // Will become 8
+        let state = makeState(badFrames: 7)  // Will become 8
         let result = PostureEngine.processReading(
             makeReading(bad: true, severity: 0.8),
             state: state,
@@ -187,7 +188,7 @@ final class PostureEngineTests: XCTestCase {
 
     func testSeverityIsClampedToZeroToOne() {
         let now = Date()
-        let state = makeState(badFrames: 7) // Will become 8
+        let state = makeState(badFrames: 7)  // Will become 8
 
         let high = PostureEngine.processReading(
             makeReading(bad: true, severity: 2.0),
@@ -210,11 +211,11 @@ final class PostureEngineTests: XCTestCase {
 
     func testOnsetDelayPreventsImmediateSlouching() {
         let now = Date()
-        let state = makeState(badFrames: 7, badPostureStartTime: now) // Just started
+        let state = makeState(badFrames: 7, badPostureStartTime: now)  // Just started
         let result = PostureEngine.processReading(
             makeReading(bad: true),
             state: state,
-            config: makeConfig(onsetDelay: 2.0), // 2 second delay
+            config: makeConfig(onsetDelay: 2.0),  // 2 second delay
             currentTime: now
         )
 
@@ -224,11 +225,11 @@ final class PostureEngineTests: XCTestCase {
 
     func testOnsetDelayAllowsSlouchingAfterWaiting() {
         let now = Date()
-        let state = makeState(badFrames: 7, badPostureStartTime: now.addingTimeInterval(-3)) // 3 seconds ago
+        let state = makeState(badFrames: 7, badPostureStartTime: now.addingTimeInterval(-3))  // 3 seconds ago
         let result = PostureEngine.processReading(
             makeReading(bad: true),
             state: state,
-            config: makeConfig(onsetDelay: 2.0), // 2 second delay - we're past it
+            config: makeConfig(onsetDelay: 2.0),  // 2 second delay - we're past it
             currentTime: now
         )
 
@@ -238,7 +239,7 @@ final class PostureEngineTests: XCTestCase {
     // MARK: - Recovery Tests
 
     func testRecoveryAfterGoodFrameThreshold() {
-        let state = makeState(goodFrames: 4, slouching: true) // Will become 5
+        let state = makeState(goodFrames: 4, slouching: true)  // Will become 5
         let result = PostureEngine.processReading(
             makeReading(bad: false),
             state: state,
@@ -250,7 +251,7 @@ final class PostureEngineTests: XCTestCase {
     }
 
     func testNoRecoveryBeforeThreshold() {
-        let state = makeState(goodFrames: 3, slouching: true) // Will become 4
+        let state = makeState(goodFrames: 3, slouching: true)  // Will become 4
         let result = PostureEngine.processReading(
             makeReading(bad: false),
             state: state,

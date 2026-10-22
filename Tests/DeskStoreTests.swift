@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import DorsoCore
 
 @MainActor
@@ -25,12 +26,15 @@ final class DeskStoreTests: XCTestCase {
     }
 
     private func profile(goodY: CGFloat, range: CGFloat = 0.1, cameraID: String = "cam") -> ProfileData {
-        ProfileData(goodPostureY: goodY, badPostureY: goodY - range, neutralY: goodY - range / 2, postureRange: range, cameraID: cameraID)
+        ProfileData(
+            goodPostureY: goodY, badPostureY: goodY - range, neutralY: goodY - range / 2, postureRange: range,
+            cameraID: cameraID)
     }
 
     private func legacyProfile(forKey key: String) -> ProfileData? {
         guard let legacy = defaults.dictionary(forKey: SettingsKeys.profiles) as? [String: Data],
-              let data = legacy[key] else { return nil }
+            let data = legacy[key]
+        else { return nil }
         return try? JSONDecoder().decode(ProfileData.self, from: data)
     }
 
@@ -231,10 +235,11 @@ final class DeskStoreTests: XCTestCase {
     }
 
     func testFieldsFromNewerBuildSurviveChangesToOtherSetups() {
-        let newer = Data("""
-        {"activeDeskID":"o","desks":[{"id":"o","name":"Office","icon":"building",\
-        "profile":{"goodPostureY":0.7,"badPostureY":0.6,"neutralY":0.65,"postureRange":0.1,"cameraID":"cam"}}],"version":2}
-        """.utf8)
+        let newer = Data(
+            """
+            {"activeDeskID":"o","desks":[{"id":"o","name":"Office","icon":"building",\
+            "profile":{"goodPostureY":0.7,"badPostureY":0.6,"neutralY":0.65,"postureRange":0.1,"cameraID":"cam"}}],"version":2}
+            """.utf8)
         defaults.set(["displays:EXTERNAL": newer], forKey: SettingsKeys.desks)
 
         XCTAssertEqual(store.desks(forKey: "displays:EXTERNAL").map(\.name), ["Office"])

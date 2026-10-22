@@ -1,6 +1,6 @@
 import AppKit
-import SwiftUI
 import ServiceManagement
+import SwiftUI
 
 // MARK: - Settings View
 
@@ -28,7 +28,7 @@ struct SettingsView: View {
     @State private var launchAtLogin: Bool
     @State private var appAppearance: AppAppearance
     #if !APP_STORE
-    @State private var autoCheckForUpdates: Bool
+        @State private var autoCheckForUpdates: Bool
     #endif
     @State private var toggleShortcutEnabled: Bool
     @State private var toggleShortcut: KeyboardShortcut
@@ -67,10 +67,20 @@ struct SettingsView: View {
     let detectionModes: [DetectionMode] = [.responsive, .balanced, .performance]
 
     let intensityValues: [Double] = [0.08, 0.15, 0.35, 0.65, 1.2]
-    var intensityLabels: [String] { [L("settings.intensity.gentle"), L("settings.intensity.easy"), L("settings.intensity.medium"), L("settings.intensity.firm"), L("settings.intensity.aggressive")] }
+    var intensityLabels: [String] {
+        [
+            L("settings.intensity.gentle"), L("settings.intensity.easy"), L("settings.intensity.medium"),
+            L("settings.intensity.firm"), L("settings.intensity.aggressive"),
+        ]
+    }
 
     let deadZoneValues: [Double] = [0.0, 0.08, 0.15, 0.25, 0.40]
-    var deadZoneLabels: [String] { [L("settings.deadZone.strict"), L("settings.deadZone.tight"), L("settings.deadZone.medium"), L("settings.deadZone.relaxed"), L("settings.deadZone.loose")] }
+    var deadZoneLabels: [String] {
+        [
+            L("settings.deadZone.strict"), L("settings.deadZone.tight"), L("settings.deadZone.medium"),
+            L("settings.deadZone.relaxed"), L("settings.deadZone.loose"),
+        ]
+    }
 
     init(appDelegate: AppDelegate) {
         self.init(appDelegate: appDelegate, settingsProfileManager: appDelegate.settingsProfileManager)
@@ -93,8 +103,10 @@ struct SettingsView: View {
 
         _intensity = State(initialValue: profileIntensity)
         _deadZone = State(initialValue: profileDeadZone)
-        _intensitySlider = State(initialValue: Double(Self.closestIndex(for: Double(profileIntensity), in: intensityValues)))
-        _deadZoneSlider = State(initialValue: Double(Self.closestIndex(for: Double(profileDeadZone), in: deadZoneValues)))
+        _intensitySlider = State(
+            initialValue: Double(Self.closestIndex(for: Double(profileIntensity), in: intensityValues)))
+        _deadZoneSlider = State(
+            initialValue: Double(Self.closestIndex(for: Double(profileDeadZone), in: deadZoneValues)))
         _blurWhenAway = State(initialValue: appDelegate.blurWhenAway)
         _showInDock = State(initialValue: appDelegate.showInDock)
         _pauseOnTheGo = State(initialValue: appDelegate.pauseOnTheGo)
@@ -109,7 +121,8 @@ struct SettingsView: View {
         _launchAtLogin = State(initialValue: SMAppService.mainApp.status == .enabled)
         _appAppearance = State(initialValue: appDelegate.appAppearance)
         #if !APP_STORE
-        _autoCheckForUpdates = State(initialValue: appDelegate.updaterManager?.automaticallyChecksForUpdates ?? false)
+            _autoCheckForUpdates = State(
+                initialValue: appDelegate.updaterManager?.automaticallyChecksForUpdates ?? false)
         #endif
         _toggleShortcutEnabled = State(initialValue: appDelegate.toggleShortcutEnabled)
         _toggleShortcut = State(initialValue: appDelegate.toggleShortcut)
@@ -118,8 +131,9 @@ struct SettingsView: View {
         _trackingModeSelection = State(initialValue: appDelegate.trackingStore.withState { $0.trackingMode })
         _preferredSource = State(initialValue: appDelegate.trackingStore.withState { $0.preferredSource })
         _airPodsAvailable = State(initialValue: appDelegate.airPodsDetector.isAvailable)
-        let needsAirPods = appDelegate.trackingStore.withState { $0.trackingMode } == .automatic ||
-                           appDelegate.trackingSource == .airpods
+        let needsAirPods =
+            appDelegate.trackingStore.withState { $0.trackingMode } == .automatic
+            || appDelegate.trackingSource == .airpods
         _airPodsConnected = State(initialValue: needsAirPods ? appDelegate.airPodsDetector.isBluetoothConnected : false)
         _cameraCalibrated = State(initialValue: appDelegate.cameraCalibration?.isValid ?? false)
         _airPodsCalibrated = State(initialValue: appDelegate.airPodsCalibration?.isValid ?? false)
@@ -190,165 +204,171 @@ struct SettingsView: View {
 
             VStack(spacing: 10) {
 
-            // Tracking card: mode picker in the header, source + device below
-            SettingsCard(icon: "scope", title: L("settings.tracking"), helpText: L("settings.tracking.help")) {
-                CompactModePicker(selection: $trackingModeSelection)
-                    .frame(width: 170)
-                    .onChange(of: trackingModeSelection) { newValue in
-                        Task { @MainActor in
-                            await appDelegate.setTrackingMode(newValue)
-                            activeSource = appDelegate.activeTrackingSource
-                        }
-                    }
-            } content: {
-                VStack(spacing: 6) {
-
-                if trackingModeSelection == .manual {
-                    // Manual mode: source picker + device row for selected source
-                    HStack(spacing: 8) {
-                        Text(L("settings.source"))
-                            .font(.system(size: 11))
-
-                        Spacer()
-
-                        CompactTrackingSourcePicker(
-                            selection: $trackingSource,
-                            airPodsAvailable: airPodsAvailable
-                        )
+                // Tracking card: mode picker in the header, source + device below
+                SettingsCard(icon: "scope", title: L("settings.tracking"), helpText: L("settings.tracking.help")) {
+                    CompactModePicker(selection: $trackingModeSelection)
                         .frame(width: 170)
-                        .onChange(of: trackingSource) { newValue in
-                            if newValue != appDelegate.trackingSource {
-                                Task { @MainActor in
-                                    await appDelegate.switchTrackingSource(to: newValue)
-                                }
+                        .onChange(of: trackingModeSelection) { newValue in
+                            Task { @MainActor in
+                                await appDelegate.setTrackingMode(newValue)
+                                activeSource = appDelegate.activeTrackingSource
                             }
                         }
-                    }
-                    .frame(height: 26)
-
-                    DeviceStatusRow(
-                        source: trackingSource,
-                        isCalibrated: trackingSource == .camera ? cameraCalibrated : airPodsCalibrated,
-                        isConnected: trackingSource == .camera ? !availableCameras.isEmpty : airPodsConnected,
-                        isPreferred: false,
-                        isActive: appDelegate.state.isActive,
-                        cameraDropdown: trackingSource == .camera && !availableCameras.isEmpty ? AnyView(
-                            Picker("", selection: $selectedCameraID) {
-                                ForEach(availableCameras, id: \.id) { camera in
-                                    Text(camera.name).tag(camera.id)
-                                }
-                            }
-                            .labelsHidden()
-                            .frame(minWidth: 130, maxWidth: 220)
-                            .onChange(of: selectedCameraID) { newValue in
-                                if newValue != appDelegate.selectedCameraID {
-                                    appDelegate.selectedCameraID = newValue
-                                    appDelegate.saveSettings()
-                                    appDelegate.restartCamera()
-                                }
-                            }
-                        ) : nil,
-                        onCalibrate: {
-                            appDelegate.startCalibration()
-                        }
-                    )
-
-                    if trackingSource == .camera {
-                        deskRow
-                    }
-                } else {
-                    // Automatic mode layout
+                } content: {
                     VStack(spacing: 6) {
-                        // Preferred source picker
-                        HStack(spacing: 8) {
-                            Text(L("settings.preferred"))
-                                .font(.system(size: 11))
 
-                            Spacer()
+                        if trackingModeSelection == .manual {
+                            // Manual mode: source picker + device row for selected source
+                            HStack(spacing: 8) {
+                                Text(L("settings.source"))
+                                    .font(.system(size: 11))
 
-                            CompactTrackingSourcePicker(
-                                selection: $preferredSource,
-                                airPodsAvailable: true
-                            )
-                            .frame(width: 170)
-                            .onChange(of: preferredSource) { newValue in
-                                Task { @MainActor in
-                                    await appDelegate.setPreferredSource(newValue)
-                                    activeSource = appDelegate.activeTrackingSource
-                                }
-                            }
-                        }
-                        .frame(height: 26)
-
-                        // Device status rows
-                        DeviceStatusRow(
-                            source: .camera,
-                            isCalibrated: cameraCalibrated,
-                            isConnected: !availableCameras.isEmpty,
-                            isPreferred: preferredSource == .camera,
-                            isActive: activeSource == .camera && appDelegate.state.isActive,
-                            cameraDropdown: availableCameras.isEmpty ? nil : AnyView(
-                                Picker("", selection: $selectedCameraID) {
-                                    ForEach(availableCameras, id: \.id) { camera in
-                                        Text(camera.name).tag(camera.id)
-                                    }
-                                }
-                                .labelsHidden()
-                                .frame(minWidth: 130, maxWidth: 220)
-                                .onChange(of: selectedCameraID) { newValue in
-                                    if newValue != appDelegate.selectedCameraID {
-                                        appDelegate.selectedCameraID = newValue
-                                        appDelegate.saveSettings()
-                                        appDelegate.restartCamera()
-                                    }
-                                }
-                            ),
-                            onCalibrate: {
-                                appDelegate.startCalibration(for: .camera)
-                            }
-                        )
-
-                        deskRow
-
-                        DeviceStatusRow(
-                            source: .airpods,
-                            isCalibrated: airPodsCalibrated,
-                            isConnected: airPodsConnected,
-                            isPreferred: preferredSource == .airpods,
-                            isActive: activeSource == .airpods && appDelegate.state.isActive,
-                            onCalibrate: {
-                                appDelegate.startCalibration(for: .airpods)
-                            }
-                        )
-
-                        // Warning banner when preferred device not calibrated
-                        if (preferredSource == .camera && !cameraCalibrated)
-                            || (preferredSource == .airpods && !airPodsCalibrated)
-                        {
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.orange)
-                                Text(L("settings.preferredNeedsCalibration"))
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
                                 Spacer()
+
+                                CompactTrackingSourcePicker(
+                                    selection: $trackingSource,
+                                    airPodsAvailable: airPodsAvailable
+                                )
+                                .frame(width: 170)
+                                .onChange(of: trackingSource) { newValue in
+                                    if newValue != appDelegate.trackingSource {
+                                        Task { @MainActor in
+                                            await appDelegate.switchTrackingSource(to: newValue)
+                                        }
+                                    }
+                                }
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(Color.orange.opacity(0.08))
+                            .frame(height: 26)
+
+                            DeviceStatusRow(
+                                source: trackingSource,
+                                isCalibrated: trackingSource == .camera ? cameraCalibrated : airPodsCalibrated,
+                                isConnected: trackingSource == .camera ? !availableCameras.isEmpty : airPodsConnected,
+                                isPreferred: false,
+                                isActive: appDelegate.state.isActive,
+                                cameraDropdown: trackingSource == .camera && !availableCameras.isEmpty
+                                    ? AnyView(
+                                        Picker("", selection: $selectedCameraID) {
+                                            ForEach(availableCameras, id: \.id) { camera in
+                                                Text(camera.name).tag(camera.id)
+                                            }
+                                        }
+                                        .labelsHidden()
+                                        .frame(minWidth: 130, maxWidth: 220)
+                                        .onChange(of: selectedCameraID) { newValue in
+                                            if newValue != appDelegate.selectedCameraID {
+                                                appDelegate.selectedCameraID = newValue
+                                                appDelegate.saveSettings()
+                                                appDelegate.restartCamera()
+                                            }
+                                        }
+                                    ) : nil,
+                                onCalibrate: {
+                                    appDelegate.startCalibration()
+                                }
                             )
+
+                            if trackingSource == .camera {
+                                deskRow
+                            }
+                        } else {
+                            // Automatic mode layout
+                            VStack(spacing: 6) {
+                                // Preferred source picker
+                                HStack(spacing: 8) {
+                                    Text(L("settings.preferred"))
+                                        .font(.system(size: 11))
+
+                                    Spacer()
+
+                                    CompactTrackingSourcePicker(
+                                        selection: $preferredSource,
+                                        airPodsAvailable: true
+                                    )
+                                    .frame(width: 170)
+                                    .onChange(of: preferredSource) { newValue in
+                                        Task { @MainActor in
+                                            await appDelegate.setPreferredSource(newValue)
+                                            activeSource = appDelegate.activeTrackingSource
+                                        }
+                                    }
+                                }
+                                .frame(height: 26)
+
+                                // Device status rows
+                                DeviceStatusRow(
+                                    source: .camera,
+                                    isCalibrated: cameraCalibrated,
+                                    isConnected: !availableCameras.isEmpty,
+                                    isPreferred: preferredSource == .camera,
+                                    isActive: activeSource == .camera && appDelegate.state.isActive,
+                                    cameraDropdown: availableCameras.isEmpty
+                                        ? nil
+                                        : AnyView(
+                                            Picker("", selection: $selectedCameraID) {
+                                                ForEach(availableCameras, id: \.id) { camera in
+                                                    Text(camera.name).tag(camera.id)
+                                                }
+                                            }
+                                            .labelsHidden()
+                                            .frame(minWidth: 130, maxWidth: 220)
+                                            .onChange(of: selectedCameraID) { newValue in
+                                                if newValue != appDelegate.selectedCameraID {
+                                                    appDelegate.selectedCameraID = newValue
+                                                    appDelegate.saveSettings()
+                                                    appDelegate.restartCamera()
+                                                }
+                                            }
+                                        ),
+                                    onCalibrate: {
+                                        appDelegate.startCalibration(for: .camera)
+                                    }
+                                )
+
+                                deskRow
+
+                                DeviceStatusRow(
+                                    source: .airpods,
+                                    isCalibrated: airPodsCalibrated,
+                                    isConnected: airPodsConnected,
+                                    isPreferred: preferredSource == .airpods,
+                                    isActive: activeSource == .airpods && appDelegate.state.isActive,
+                                    onCalibrate: {
+                                        appDelegate.startCalibration(for: .airpods)
+                                    }
+                                )
+
+                                // Warning banner when preferred device not calibrated
+                                if (preferredSource == .camera && !cameraCalibrated)
+                                    || (preferredSource == .airpods && !airPodsCalibrated)
+                                {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.orange)
+                                        Text(L("settings.preferredNeedsCalibration"))
+                                            .font(.system(size: 10))
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .fill(Color.orange.opacity(0.08))
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-                }
-            }
 
-            // Posture response card: profile management in the header,
-            // warning style + tuning sliders below
-            SettingsCard(icon: "slider.horizontal.3", title: L("settings.section.response"), helpText: L("settings.profile.help")) {
+                // Posture response card: profile management in the header,
+                // warning style + tuning sliders below
+                SettingsCard(
+                    icon: "slider.horizontal.3", title: L("settings.section.response"),
+                    helpText: L("settings.profile.help")
+                ) {
                     HStack(spacing: 4) {
                         Picker("", selection: $selectedSettingsProfileID) {
                             ForEach(settingsProfiles) { profile in
@@ -387,7 +407,8 @@ struct SettingsView: View {
                             help: L("settings.profile.renameTitle"),
                             isEnabled: canRenameCurrentProfile
                         ) {
-                            renameProfileName = settingsProfiles.first(where: { $0.id == selectedSettingsProfileID })?.name ?? ""
+                            renameProfileName =
+                                settingsProfiles.first(where: { $0.id == selectedSettingsProfileID })?.name ?? ""
                             showingRenameProfilePrompt = true
                         }
 
@@ -401,269 +422,273 @@ struct SettingsView: View {
                                 .frame(width: 24, height: 20)
                                 .background(
                                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .fill(canDeleteCurrentProfile ? Color.red.opacity(0.08) : Color.primary.opacity(0.04))
+                                        .fill(
+                                            canDeleteCurrentProfile
+                                                ? Color.red.opacity(0.08) : Color.primary.opacity(0.04))
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .strokeBorder(canDeleteCurrentProfile ? Color.red.opacity(0.25) : Color.primary.opacity(0.06), lineWidth: 1)
+                                        .strokeBorder(
+                                            canDeleteCurrentProfile
+                                                ? Color.red.opacity(0.25) : Color.primary.opacity(0.06), lineWidth: 1)
                                 )
                         }
                         .buttonStyle(.plain)
                         .disabled(!canDeleteCurrentProfile)
                         .help(L("settings.profile.deleteTitle"))
                     }
-            } content: {
-                VStack(spacing: 6) {
+                } content: {
+                    VStack(spacing: 6) {
 
-                // Warning row
-                HStack(spacing: 8) {
-                    HStack(spacing: 3) {
-                        Text(L("settings.warning"))
-                            .font(.system(size: 11))
-                            .frame(width: 82, alignment: .leading)
-                        HelpButton(text: L("settings.warning.help"))
-                    }
-
-                    CompactWarningStylePicker(selection: $warningMode)
-                        .frame(maxWidth: .infinity)
-                        .onChange(of: warningMode) { newValue in
-                            settingsProfileManager.updateActiveProfile(warningMode: newValue)
-                            appDelegate.switchWarningMode()
-                        }
-
-                    // Color only applies to the drawn warning styles, so the
-                    // swatch would be dead weight next to Blur/None
-                    if warningMode.usesWarningOverlay {
-                        InlineColorPicker(color: $warningColor)
-                            .onChange(of: warningColor) { newValue in
-                                let nsColor = NSColor(newValue)
-                                settingsProfileManager.updateActiveProfile(warningColor: nsColor)
-                                appDelegate.updateWarningColor(nsColor)
+                        // Warning row
+                        HStack(spacing: 8) {
+                            HStack(spacing: 3) {
+                                Text(L("settings.warning"))
+                                    .font(.system(size: 11))
+                                    .frame(width: 82, alignment: .leading)
+                                HelpButton(text: L("settings.warning.help"))
                             }
-                    }
-                }
-                .frame(height: 26)
 
-                // Sliders
-                CompactSlider(
-                    title: L("settings.deadZone"),
-                    helpText: L("settings.deadZone.help"),
-                    value: $deadZoneSlider,
-                    range: 0...4,
-                    step: 1,
-                    valueLabel: deadZoneLabels[Int(deadZoneSlider)]
-                )
-                .onChange(of: deadZoneSlider) { newValue in
-                    let index = Int(newValue)
-                    deadZone = deadZoneValues[index]
-                    settingsProfileManager.updateActiveProfile(deadZone: deadZone)
-                    appDelegate.applyActiveSettingsProfile()
-                }
+                            CompactWarningStylePicker(selection: $warningMode)
+                                .frame(maxWidth: .infinity)
+                                .onChange(of: warningMode) { newValue in
+                                    settingsProfileManager.updateActiveProfile(warningMode: newValue)
+                                    appDelegate.switchWarningMode()
+                                }
 
-                CompactSlider(
-                    title: L("settings.intensity"),
-                    helpText: L("settings.intensity.help"),
-                    value: $intensitySlider,
-                    range: 0...4,
-                    step: 1,
-                    valueLabel: intensityLabels[Int(intensitySlider)]
-                )
-                .onChange(of: intensitySlider) { newValue in
-                    let index = Int(newValue)
-                    intensity = intensityValues[index]
-                    settingsProfileManager.updateActiveProfile(intensity: intensity)
-                    appDelegate.applyActiveSettingsProfile()
-                }
-
-                CompactSlider(
-                    title: L("settings.delay"),
-                    helpText: L("settings.delay.help"),
-                    value: $warningOnsetDelay,
-                    range: 0...30,
-                    step: 1,
-                    valueLabel: "\(Int(warningOnsetDelay))s"
-                )
-                .onChange(of: warningOnsetDelay) { newValue in
-                    settingsProfileManager.updateActiveProfile(warningOnsetDelay: newValue)
-                    appDelegate.applyActiveSettingsProfile()
-                }
-
-                CompactSlider(
-                    title: L("settings.detection"),
-                    helpText: L("settings.detection.help"),
-                    value: $detectionModeSlider,
-                    range: 0...2,
-                    step: 1,
-                    valueLabel: detectionModes[Int(detectionModeSlider)].displayName
-                )
-                .onChange(of: detectionModeSlider) { newValue in
-                    let index = Int(newValue)
-                    settingsProfileManager.updateActiveProfile(detectionMode: detectionModes[index])
-                    appDelegate.applyActiveSettingsProfile()
-                }
-                }
-            }
-
-            // Behavior card: appearance in the header (matching the other
-            // cards' header-control pattern), app-level toggles below
-            SettingsCard(icon: "switch.2", title: L("settings.section.behavior")) {
-                CompactSegmentedPicker(
-                    // Side effects live in the binding so they run inside the
-                    // click action itself; the custom-drawn controls keep
-                    // their brand colors through the appearance change
-                    selection: Binding(
-                        get: { appAppearance },
-                        set: { newValue in
-                            appDelegate.appAppearance = newValue
-                            appDelegate.saveSettings()
-                            appDelegate.applyAppearance()
-                            appAppearance = newValue
-                        }
-                    ),
-                    options: AppAppearance.allCases.map { ($0, $0.displayName) }
-                )
-                .frame(width: 170)
-                .help(L("settings.appearance"))
-            } content: {
-                VStack(spacing: 6) {
-
-                HStack(spacing: 0) {
-                    CompactToggle(
-                        title: L("settings.launchAtLogin"),
-                        helpText: L("settings.launchAtLogin.help"),
-                        isOn: $launchAtLogin
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: launchAtLogin) { newValue in
-                        do {
-                            if newValue {
-                                try SMAppService.mainApp.register()
-                            } else {
-                                try SMAppService.mainApp.unregister()
+                            // Color only applies to the drawn warning styles, so the
+                            // swatch would be dead weight next to Blur/None
+                            if warningMode.usesWarningOverlay {
+                                InlineColorPicker(color: $warningColor)
+                                    .onChange(of: warningColor) { newValue in
+                                        let nsColor = NSColor(newValue)
+                                        settingsProfileManager.updateActiveProfile(warningColor: nsColor)
+                                        appDelegate.updateWarningColor(nsColor)
+                                    }
                             }
-                        } catch {
-                            launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
-                    }
+                        .frame(height: 26)
 
-                    CompactToggle(
-                        title: L("settings.showInDock"),
-                        helpText: L("settings.showInDock.help"),
-                        isOn: $showInDock
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: showInDock) { newValue in
-                        appDelegate.showInDock = newValue
-                        appDelegate.saveSettings()
-                        NSApp.setActivationPolicy(newValue ? .regular : .accessory)
-                        DispatchQueue.main.async {
-                            appDelegate.settingsWindowController.window?.makeKeyAndOrderFront(nil)
-                            NSApp.activate(ignoringOtherApps: true)
+                        // Sliders
+                        CompactSlider(
+                            title: L("settings.deadZone"),
+                            helpText: L("settings.deadZone.help"),
+                            value: $deadZoneSlider,
+                            range: 0...4,
+                            step: 1,
+                            valueLabel: deadZoneLabels[Int(deadZoneSlider)]
+                        )
+                        .onChange(of: deadZoneSlider) { newValue in
+                            let index = Int(newValue)
+                            deadZone = deadZoneValues[index]
+                            settingsProfileManager.updateActiveProfile(deadZone: deadZone)
+                            appDelegate.applyActiveSettingsProfile()
                         }
-                    }
-                }
 
-                #if !APP_STORE
-                HStack(spacing: 0) {
-                    CompactToggle(
-                        title: L("settings.autoUpdates"),
-                        helpText: L("settings.autoUpdates.help"),
-                        isOn: $autoCheckForUpdates
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: autoCheckForUpdates) { newValue in
-                        appDelegate.updaterManager?.automaticallyChecksForUpdates = newValue
-                    }
-
-                    CompactToggle(
-                        title: L("settings.compatibilityMode"),
-                        helpText: L("settings.compatibilityMode.help"),
-                        isOn: $useCompatibilityMode
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: useCompatibilityMode) { newValue in
-                        appDelegate.useCompatibilityMode = newValue
-                        appDelegate.saveSettings()
-                        // Clear both blur mechanisms, not just the visual
-                        // effect views: the CGS background blur radius of the
-                        // outgoing private-API path survives alpha resets and
-                        // would otherwise stay on screen indefinitely
-                        appDelegate.clearBlur()
-                    }
-                }
-                #endif
-
-                HStack(spacing: 0) {
-                    CompactToggle(
-                        title: L("settings.pauseOnTheGo"),
-                        helpText: L("settings.pauseOnTheGo.help"),
-                        isOn: $pauseOnTheGo
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: pauseOnTheGo) { newValue in
-                        Task { @MainActor in
-                            await appDelegate.setPauseOnTheGoEnabled(newValue)
+                        CompactSlider(
+                            title: L("settings.intensity"),
+                            helpText: L("settings.intensity.help"),
+                            value: $intensitySlider,
+                            range: 0...4,
+                            step: 1,
+                            valueLabel: intensityLabels[Int(intensitySlider)]
+                        )
+                        .onChange(of: intensitySlider) { newValue in
+                            let index = Int(newValue)
+                            intensity = intensityValues[index]
+                            settingsProfileManager.updateActiveProfile(intensity: intensity)
+                            appDelegate.applyActiveSettingsProfile()
                         }
-                    }
 
-                    CompactToggle(
-                        title: L("settings.pauseOnBattery"),
-                        helpText: L("settings.pauseOnBattery.help"),
-                        isOn: $pauseOnBattery
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: pauseOnBattery) { newValue in
-                        Task { @MainActor in
-                            await appDelegate.setPauseOnBatteryEnabled(newValue)
+                        CompactSlider(
+                            title: L("settings.delay"),
+                            helpText: L("settings.delay.help"),
+                            value: $warningOnsetDelay,
+                            range: 0...30,
+                            step: 1,
+                            valueLabel: "\(Int(warningOnsetDelay))s"
+                        )
+                        .onChange(of: warningOnsetDelay) { newValue in
+                            settingsProfileManager.updateActiveProfile(warningOnsetDelay: newValue)
+                            appDelegate.applyActiveSettingsProfile()
+                        }
+
+                        CompactSlider(
+                            title: L("settings.detection"),
+                            helpText: L("settings.detection.help"),
+                            value: $detectionModeSlider,
+                            range: 0...2,
+                            step: 1,
+                            valueLabel: detectionModes[Int(detectionModeSlider)].displayName
+                        )
+                        .onChange(of: detectionModeSlider) { newValue in
+                            let index = Int(newValue)
+                            settingsProfileManager.updateActiveProfile(detectionMode: detectionModes[index])
+                            appDelegate.applyActiveSettingsProfile()
                         }
                     }
                 }
 
-                HStack(spacing: 0) {
-                    CompactToggle(
-                        title: L("settings.blurWhenAway"),
-                        helpText: trackingSource == .airpods
-                            ? L("settings.blurWhenAway.help.airpods")
-                            : L("settings.blurWhenAway.help.camera"),
-                        isOn: $blurWhenAway,
-                        isDisabled: trackingSource == .airpods
+                // Behavior card: appearance in the header (matching the other
+                // cards' header-control pattern), app-level toggles below
+                SettingsCard(icon: "switch.2", title: L("settings.section.behavior")) {
+                    CompactSegmentedPicker(
+                        // Side effects live in the binding so they run inside the
+                        // click action itself; the custom-drawn controls keep
+                        // their brand colors through the appearance change
+                        selection: Binding(
+                            get: { appAppearance },
+                            set: { newValue in
+                                appDelegate.appAppearance = newValue
+                                appDelegate.saveSettings()
+                                appDelegate.applyAppearance()
+                                appAppearance = newValue
+                            }
+                        ),
+                        options: AppAppearance.allCases.map { ($0, $0.displayName) }
                     )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: blurWhenAway) { newValue in
-                        appDelegate.blurWhenAway = newValue
-                        appDelegate.saveSettings()
-                    }
+                    .frame(width: 170)
+                    .help(L("settings.appearance"))
+                } content: {
+                    VStack(spacing: 6) {
 
-                    CompactToggle(
-                        title: L("settings.fullScreenOverlay"),
-                        helpText: L("settings.fullScreenOverlay.help"),
-                        isOn: $useFullScreenOverlay
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: useFullScreenOverlay) { newValue in
-                        appDelegate.useFullScreenOverlay = newValue
-                        appDelegate.saveSettings()
-                        appDelegate.rebuildOverlayWindows()
-                    }
-                }
+                        HStack(spacing: 0) {
+                            CompactToggle(
+                                title: L("settings.launchAtLogin"),
+                                helpText: L("settings.launchAtLogin.help"),
+                                isOn: $launchAtLogin
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .onChange(of: launchAtLogin) { newValue in
+                                do {
+                                    if newValue {
+                                        try SMAppService.mainApp.register()
+                                    } else {
+                                        try SMAppService.mainApp.unregister()
+                                    }
+                                } catch {
+                                    launchAtLogin = SMAppService.mainApp.status == .enabled
+                                }
+                            }
 
-                // Shortcut row (full width so the recorder chip doesn't
-                // disrupt the toggle grid rhythm)
-                HStack(spacing: 0) {
-                    CompactShortcutRecorder(
-                        shortcut: $toggleShortcut,
-                        isEnabled: $toggleShortcutEnabled,
-                        onShortcutChange: {
-                            appDelegate.toggleShortcutEnabled = toggleShortcutEnabled
-                            appDelegate.toggleShortcut = toggleShortcut
-                            appDelegate.saveSettings()
-                            appDelegate.updateGlobalKeyMonitor()
+                            CompactToggle(
+                                title: L("settings.showInDock"),
+                                helpText: L("settings.showInDock.help"),
+                                isOn: $showInDock
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .onChange(of: showInDock) { newValue in
+                                appDelegate.showInDock = newValue
+                                appDelegate.saveSettings()
+                                NSApp.setActivationPolicy(newValue ? .regular : .accessory)
+                                DispatchQueue.main.async {
+                                    appDelegate.settingsWindowController.window?.makeKeyAndOrderFront(nil)
+                                    NSApp.activate(ignoringOtherApps: true)
+                                }
+                            }
                         }
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                        #if !APP_STORE
+                            HStack(spacing: 0) {
+                                CompactToggle(
+                                    title: L("settings.autoUpdates"),
+                                    helpText: L("settings.autoUpdates.help"),
+                                    isOn: $autoCheckForUpdates
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .onChange(of: autoCheckForUpdates) { newValue in
+                                    appDelegate.updaterManager?.automaticallyChecksForUpdates = newValue
+                                }
+
+                                CompactToggle(
+                                    title: L("settings.compatibilityMode"),
+                                    helpText: L("settings.compatibilityMode.help"),
+                                    isOn: $useCompatibilityMode
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .onChange(of: useCompatibilityMode) { newValue in
+                                    appDelegate.useCompatibilityMode = newValue
+                                    appDelegate.saveSettings()
+                                    // Clear both blur mechanisms, not just the visual
+                                    // effect views: the CGS background blur radius of the
+                                    // outgoing private-API path survives alpha resets and
+                                    // would otherwise stay on screen indefinitely
+                                    appDelegate.clearBlur()
+                                }
+                            }
+                        #endif
+
+                        HStack(spacing: 0) {
+                            CompactToggle(
+                                title: L("settings.pauseOnTheGo"),
+                                helpText: L("settings.pauseOnTheGo.help"),
+                                isOn: $pauseOnTheGo
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .onChange(of: pauseOnTheGo) { newValue in
+                                Task { @MainActor in
+                                    await appDelegate.setPauseOnTheGoEnabled(newValue)
+                                }
+                            }
+
+                            CompactToggle(
+                                title: L("settings.pauseOnBattery"),
+                                helpText: L("settings.pauseOnBattery.help"),
+                                isOn: $pauseOnBattery
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .onChange(of: pauseOnBattery) { newValue in
+                                Task { @MainActor in
+                                    await appDelegate.setPauseOnBatteryEnabled(newValue)
+                                }
+                            }
+                        }
+
+                        HStack(spacing: 0) {
+                            CompactToggle(
+                                title: L("settings.blurWhenAway"),
+                                helpText: trackingSource == .airpods
+                                    ? L("settings.blurWhenAway.help.airpods")
+                                    : L("settings.blurWhenAway.help.camera"),
+                                isOn: $blurWhenAway,
+                                isDisabled: trackingSource == .airpods
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .onChange(of: blurWhenAway) { newValue in
+                                appDelegate.blurWhenAway = newValue
+                                appDelegate.saveSettings()
+                            }
+
+                            CompactToggle(
+                                title: L("settings.fullScreenOverlay"),
+                                helpText: L("settings.fullScreenOverlay.help"),
+                                isOn: $useFullScreenOverlay
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .onChange(of: useFullScreenOverlay) { newValue in
+                                appDelegate.useFullScreenOverlay = newValue
+                                appDelegate.saveSettings()
+                                appDelegate.rebuildOverlayWindows()
+                            }
+                        }
+
+                        // Shortcut row (full width so the recorder chip doesn't
+                        // disrupt the toggle grid rhythm)
+                        HStack(spacing: 0) {
+                            CompactShortcutRecorder(
+                                shortcut: $toggleShortcut,
+                                isEnabled: $toggleShortcutEnabled,
+                                onShortcutChange: {
+                                    appDelegate.toggleShortcutEnabled = toggleShortcutEnabled
+                                    appDelegate.toggleShortcut = toggleShortcut
+                                    appDelegate.saveSettings()
+                                    appDelegate.updateGlobalKeyMonitor()
+                                }
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
                 }
-                }
-            }
 
             }
         }
@@ -722,7 +747,8 @@ struct SettingsView: View {
             TextField(L("desk.namePlaceholder"), text: $renameDeskName)
             Button(L("common.cancel"), role: .cancel) {}
             Button(L("common.rename")) {
-                appDelegate.deskStore.renameDesk(id: activeDeskID, to: renameDeskName, forKey: DisplayMonitor.getCurrentConfigKey())
+                appDelegate.deskStore.renameDesk(
+                    id: activeDeskID, to: renameDeskName, forKey: DisplayMonitor.getCurrentConfigKey())
                 reloadDesks()
             }
         }
@@ -850,4 +876,3 @@ struct SettingsView: View {
         return "Profile \(index)"
     }
 }
-

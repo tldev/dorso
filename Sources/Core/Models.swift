@@ -1,6 +1,6 @@
-import Foundation
-import CoreGraphics
 import AppKit
+import CoreGraphics
+import Foundation
 
 // MARK: - Icon Utilities
 
@@ -8,18 +8,20 @@ import AppKit
 func applyMacOSIconMask(to image: NSImage) -> NSImage {
     let size = NSSize(width: 512, height: 512)
 
-    guard let bitmapRep = NSBitmapImageRep(
-        bitmapDataPlanes: nil,
-        pixelsWide: Int(size.width),
-        pixelsHigh: Int(size.height),
-        bitsPerSample: 8,
-        samplesPerPixel: 4,
-        hasAlpha: true,
-        isPlanar: false,
-        colorSpaceName: .deviceRGB,
-        bytesPerRow: 0,
-        bitsPerPixel: 0
-    ) else { return image }
+    guard
+        let bitmapRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(size.width),
+            pixelsHigh: Int(size.height),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+    else { return image }
 
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmapRep)
@@ -76,7 +78,8 @@ enum MenuBarIcon: String, CaseIterable {
     var image: NSImage? {
         // Try to load custom PDF icon from Resources/Icons/
         if let url = Bundle.main.url(forResource: rawValue, withExtension: "pdf", subdirectory: "Icons"),
-           let customImage = NSImage(contentsOf: url) {
+            let customImage = NSImage(contentsOf: url)
+        {
             // Resize to menu bar height (18pt) while preserving aspect ratio
             let targetHeight: CGFloat = 18
             let aspectRatio = customImage.size.width / customImage.size.height
@@ -85,10 +88,11 @@ enum MenuBarIcon: String, CaseIterable {
 
             let resizedImage = NSImage(size: targetSize)
             resizedImage.lockFocus()
-            customImage.draw(in: NSRect(origin: .zero, size: targetSize),
-                           from: NSRect(origin: .zero, size: customImage.size),
-                           operation: .copy,
-                           fraction: 1.0)
+            customImage.draw(
+                in: NSRect(origin: .zero, size: targetSize),
+                from: NSRect(origin: .zero, size: customImage.size),
+                operation: .copy,
+                fraction: 1.0)
             resizedImage.unlockFocus()
             resizedImage.isTemplate = true
             return resizedImage
@@ -159,8 +163,8 @@ enum WarningMode: String, CaseIterable, Codable {
 
 enum DetectionMode: String, CaseIterable, Codable {
     case responsive = "responsive"  // 10 fps - best accuracy (default)
-    case balanced = "balanced"      // 4 fps - good balance
-    case performance = "performance" // 2 fps - best battery life
+    case balanced = "balanced"  // 4 fps - good balance
+    case performance = "performance"  // 2 fps - best battery life
 
     var frameRate: Double {
         switch self {

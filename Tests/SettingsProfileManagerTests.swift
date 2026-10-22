@@ -1,5 +1,6 @@
 import AppKit
 import XCTest
+
 @testable import DorsoCore
 
 @MainActor
@@ -34,7 +35,8 @@ final class SettingsProfileManagerTests: XCTestCase {
         defaults.set(legacyWarningOnsetDelay, forKey: SettingsKeys.warningOnsetDelay)
         defaults.set(legacyWarningMode.rawValue, forKey: SettingsKeys.warningMode)
         defaults.set(legacyDetectionMode.rawValue, forKey: SettingsKeys.detectionMode)
-        let legacyColorData = try NSKeyedArchiver.archivedData(withRootObject: legacyWarningColor, requiringSecureCoding: false)
+        let legacyColorData = try NSKeyedArchiver.archivedData(
+            withRootObject: legacyWarningColor, requiringSecureCoding: false)
         defaults.set(legacyColorData, forKey: SettingsKeys.warningColor)
 
         let manager = SettingsProfileManager(userDefaults: defaults)

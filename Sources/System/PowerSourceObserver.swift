@@ -65,7 +65,8 @@ final class PowerSourceObserver {
     private static func systemIsOnBattery() -> Bool {
         let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue()
         guard let snapshot,
-              let sourceType = IOPSGetProvidingPowerSourceType(snapshot)?.takeUnretainedValue() as String? else {
+            let sourceType = IOPSGetProvidingPowerSourceType(snapshot)?.takeUnretainedValue() as String?
+        else {
             return false
         }
         return sourceType == kIOPMBatteryPowerKey

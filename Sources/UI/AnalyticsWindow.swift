@@ -1,6 +1,6 @@
-import SwiftUI
-import Charts
 import AppKit
+import Charts
+import SwiftUI
 
 // MARK: - Window Controller
 
@@ -10,7 +10,8 @@ class AnalyticsWindowController: NSWindowController, NSWindowDelegate {
 
     convenience init() {
         let hostingController = NSHostingController(rootView: AnalyticsView())
-        let fittingSize = hostingController.sizeThatFits(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+        let fittingSize = hostingController.sizeThatFits(
+            in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: fittingSize.width, height: fittingSize.height),
@@ -171,13 +172,13 @@ struct AnalyticsView: View {
         .frame(width: 580)
         .fixedSize(horizontal: false, vertical: true)
     }
-    
+
     func scoreColor(_ score: Double) -> Color {
         if score >= 85 { return .brandCyan }
         if score >= 70 { return .yellow }
         return .orange
     }
-    
+
     private static let hourMinuteFormatter: DateComponentsFormatter = {
         let f = DateComponentsFormatter()
         f.unitsStyle = .abbreviated

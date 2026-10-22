@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import DorsoCore
 
 final class CalibrationDataTests: XCTestCase {
@@ -11,7 +12,7 @@ final class CalibrationDataTests: XCTestCase {
             .camera(CameraCalibrationSample(noseY: 0.60, faceWidth: 0.20)),
             .camera(CameraCalibrationSample(noseY: 0.50, faceWidth: nil)),
             .camera(CameraCalibrationSample(noseY: 0.40, faceWidth: 0.25)),
-            .camera(CameraCalibrationSample(noseY: 0.30, faceWidth: nil))
+            .camera(CameraCalibrationSample(noseY: 0.30, faceWidth: nil)),
         ]
 
         let calibration = detector.createCalibrationData(from: samples) as? CameraCalibrationData
@@ -29,7 +30,7 @@ final class CalibrationDataTests: XCTestCase {
 
         let samples: [CalibrationSample] = [
             .airPods(AirPodsCalibrationSample(pitch: 0.10, roll: 0.20, yaw: 0.30)),
-            .airPods(AirPodsCalibrationSample(pitch: 0.30, roll: 0.40, yaw: 0.50))
+            .airPods(AirPodsCalibrationSample(pitch: 0.30, roll: 0.40, yaw: 0.50)),
         ]
 
         let calibration = detector.createCalibrationData(from: samples) as? AirPodsCalibrationData
@@ -39,4 +40,3 @@ final class CalibrationDataTests: XCTestCase {
         XCTAssertEqual(calibration?.yaw ?? 0, 0.40, accuracy: 0.0001)
     }
 }
-

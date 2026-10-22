@@ -1,5 +1,5 @@
-import Carbon.HIToolbox
 import AppKit
+import Carbon.HIToolbox
 
 /// Manages global keyboard shortcut registration using Carbon API
 final class HotkeyManager {
@@ -46,7 +46,7 @@ final class HotkeyManager {
         let carbonModifiers = carbonModifiersFromNSEvent(shortcut.modifiers)
 
         var hotKeyID = EventHotKeyID()
-        hotKeyID.signature = OSType(0x504F5354) // "POST"
+        hotKeyID.signature = OSType(0x504F_5354)  // "POST"
         hotKeyID.id = 1
 
         if carbonEventHandler == nil {

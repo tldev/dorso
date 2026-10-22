@@ -1,4 +1,5 @@
 import Foundation
+
 @testable import DorsoCore
 
 enum TrackingScenarioEvent: Equatable {

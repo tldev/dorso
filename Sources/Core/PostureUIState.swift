@@ -121,7 +121,8 @@ struct PostureUIState: Equatable {
         case .onBattery:
             return L("status.pausedOnBattery")
         case .timed(let until):
-            return L("status.pausedUntil", DateFormatter.localizedString(from: until, dateStyle: .none, timeStyle: .short))
+            return L(
+                "status.pausedUntil", DateFormatter.localizedString(from: until, dateStyle: .none, timeStyle: .short))
         }
     }
 }
