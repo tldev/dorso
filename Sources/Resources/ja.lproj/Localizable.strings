@@ -4,6 +4,8 @@
 
 "menu.status.starting" = "状態: 起動中...";
 "menu.enable" = "有効にする";
+"menu.pause" = "一時停止";
+"menu.resumeNow" = "今すぐ再開";
 "menu.recalibrate" = "再キャリブレーション";
 "menu.support" = "サポート";
 "menu.analytics" = "統計";
@@ -39,6 +41,7 @@
 "status.pausedScreenLocked" = "状態: 一時停止 (画面ロック中)";
 "status.pausedPutInAirPods" = "状態: 一時停止 (AirPods を装着してください)";
 "status.pausedOnBattery" = "状態: 一時停止 (バッテリー駆動中)";
+"status.pausedUntil" = "状態: 一時停止 (%@まで)";
 
 // MARK: - Menu Bar Icon Accessibility (Models.swift)
 

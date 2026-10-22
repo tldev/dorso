@@ -20,8 +20,8 @@ extension AppDelegate {
         to newTrackingState: TrackingFeature.State,
         applyStateTransition: Bool = true
     ) {
-        if applyStateTransition, oldTrackingState.appState != newTrackingState.appState {
-            handleStateTransition(from: oldTrackingState.appState, to: newTrackingState.appState)
+        if applyStateTransition, oldTrackingState.effectiveAppState != newTrackingState.effectiveAppState {
+            handleStateTransition(from: oldTrackingState.effectiveAppState, to: newTrackingState.effectiveAppState)
         } else if oldTrackingState.activeSource != newTrackingState.activeSource {
             syncDetectorToState()
             syncUIToState()
@@ -56,7 +56,8 @@ extension AppDelegate {
         }
 
         let activeSource = activeTrackingSource
-        let shouldRun = PostureEngine.shouldDetectorRun(for: state, trackingSource: activeSource)
+        let effectiveState = trackingStore.withState { $0.effectiveAppState }
+        let shouldRun = PostureEngine.shouldDetectorRun(for: effectiveState, trackingSource: activeSource)
 
         // Always stop the other detector so in-flight starts are cancelled
         // even if that detector has not flipped isActive=true yet.
@@ -102,7 +103,7 @@ extension AppDelegate {
 
     func syncUIToState() {
         let uiState = PostureUIState.derive(
-            from: state,
+            from: trackingStore.withState { $0.effectiveAppState },
             isCalibrated: isCalibrated,
             isCurrentlyAway: isCurrentlyAway,
             isCurrentlySlouching: isCurrentlySlouching,
@@ -113,6 +114,7 @@ extension AppDelegate {
         menuBarManager.updateStatus(text: uiState.statusText, icon: uiState.icon.menuBarIcon)
         menuBarManager.updateEnabledState(uiState.isEnabled)
         menuBarManager.updateRecalibrateEnabled(uiState.canRecalibrate)
+        menuBarManager.updatePauseState(canPause: uiState.canPause, isTimedPause: uiState.isTimedPause)
     }
 
     func updateSourceReadiness() {
@@ -206,6 +208,34 @@ extension AppDelegate {
             )
         )
         saveSettings()
+    }
+
+    // MARK: - Timed Pause
+
+    func pause(for duration: TimeInterval) async {
+        await sendTrackingAction(.timedPauseRequested(until: Date().addingTimeInterval(duration)))
+    }
+
+    func resumeFromTimedPause() async {
+        await sendTrackingAction(.timedPauseEnded)
+    }
+
+    func scheduleTimedPauseEnd(at date: Date) {
+        cancelTimedPauseEnd()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(wallDeadline: .now() + max(0, date.timeIntervalSinceNow))
+        timer.setEventHandler { [weak self] in
+            Task { @MainActor in
+                await self?.sendTrackingAction(.timedPauseDeadlineReached(date))
+            }
+        }
+        timer.resume()
+        timedPauseTimer = timer
+    }
+
+    func cancelTimedPauseEnd() {
+        timedPauseTimer?.cancel()
+        timedPauseTimer = nil
     }
 
     // MARK: - Initial Setup Flow

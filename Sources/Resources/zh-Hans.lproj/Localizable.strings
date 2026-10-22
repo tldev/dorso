@@ -4,6 +4,8 @@
 
 "menu.status.starting" = "状态：启动中...";
 "menu.enable" = "启用";
+"menu.pause" = "暂停";
+"menu.resumeNow" = "立即恢复";
 "menu.recalibrate" = "重新校准";
 "menu.support" = "支持";
 "menu.analytics" = "统计";
@@ -39,6 +41,7 @@
 "status.pausedScreenLocked" = "状态：已暂停（屏幕已锁定）";
 "status.pausedPutInAirPods" = "状态：已暂停（请佩戴 AirPods）";
 "status.pausedOnBattery" = "状态：已暂停（电池供电）";
+"status.pausedUntil" = "状态：已暂停（至 %@）";
 
 // MARK: - Menu Bar Icon Accessibility (Models.swift)
 
