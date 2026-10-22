@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Run tests
+        run: swift test
+
+  app-store-build:
+    # The App Store build compiles out Sparkle and private APIs via the
+    # APP_STORE flag, so it needs its own compile check
+    name: App Store build
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-appstore-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-appstore-${{ runner.os }}-
+
+      - name: Build
+        run: swift build --product Dorso -Xswiftc -D -Xswiftc APP_STORE -Xlinker -dead_strip_dylibs
