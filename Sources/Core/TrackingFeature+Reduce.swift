@@ -4,19 +4,20 @@ import Foundation
 extension TrackingFeature {
     func handle(_ action: Action, into state: inout State) -> Effect<Action> {
         switch action {
-        case .appLaunched, .setAppState, .toggleEnabled, .setTrackingMode, .setManualSource, .setPreferredSource,
-            .setAutoReturnEnabled, .setPostureConfiguration, .pauseOnTheGoSettingChanged, .switchTrackingSource,
-            .sourceReadinessChanged:
+        case .appLaunched, .setAppState, .setMarketingMode, .setSelectedCamera, .toggleEnabled, .setTrackingMode,
+            .setManualSource, .setPreferredSource, .setAutoReturnEnabled, .setPostureConfiguration,
+            .pauseOnTheGoSettingChanged, .switchTrackingSource, .sourceReadinessChanged:
             return reduceSettings(into: &state, action: action)
         case .postureReadingReceived, .awayStateChanged, .initialSetupEvaluated, .startMonitoringRequested,
             .timedPauseRequested, .timedPauseDeadlineReached, .timedPauseEnded:
             return reduceMonitoring(into: &state, action: action)
         case .airPodsConnectionChanged, .cameraConnected, .cameraDisconnected, .screenLocked, .screenUnlocked,
-            .powerSourceChanged, .setPauseOnBatteryEnabled, .displayConfigurationChanged, .cameraSelectionChanged:
+            .powerSourceChanged, .setPauseOnBatteryEnabled, .displayConfigurationChanged, .cameraSelectionChanged,
+            .deskProfileApplied:
             return reduceDeviceEvents(into: &state, action: action)
         case .calibrationAuthorizationDenied, .calibrationOpenSettingsRequested, .calibrationRetryRequested,
             .calibrationAuthorizationGranted, .calibrationStartFailed, .runtimeDetectorStartFailed,
-            .calibrationCancelled, .calibrationCompleted:
+            .calibrationCancelled, .calibrationCompleted, .cameraCalibrationChanged, .airPodsCalibrationChanged:
             return reduceCalibration(into: &state, action: action)
         }
     }
@@ -27,9 +28,12 @@ extension TrackingFeature {
         switch action {
         case .setAppState(let appState):
             state.appState = appState
-        case .toggleEnabled(let trackingSource, let isCalibrated, let detectorAvailable):
-            return toggleEnabled(
-                &state, trackingSource, isCalibrated: isCalibrated, detectorAvailable: detectorAvailable)
+        case .setMarketingMode(let isMarketingMode):
+            state.isMarketingMode = isMarketingMode
+        case .setSelectedCamera(let cameraID):
+            state.selectedCameraID = cameraID
+        case .toggleEnabled(let detectorAvailable):
+            return toggleEnabled(&state, detectorAvailable: detectorAvailable)
         case .setTrackingMode(let mode):
             return setTrackingMode(&state, mode)
         case .setManualSource(let source):
@@ -42,12 +46,13 @@ extension TrackingFeature {
             state.postureConfig.intensity = CGFloat(intensity)
             state.postureConfig.warningOnsetDelay = warningOnsetDelay
         case .pauseOnTheGoSettingChanged(let isEnabled):
+            state.pauseOnTheGoEnabled = isEnabled
             state.appState = PostureEngine.stateWhenPauseOnTheGoSettingChanges(
                 currentState: state.appState,
                 isEnabled: isEnabled
             )
-        case .switchTrackingSource(let newSource, let isNewSourceCalibrated):
-            return switchTrackingSource(&state, newSource, isNewSourceCalibrated: isNewSourceCalibrated)
+        case .switchTrackingSource(let newSource):
+            return switchTrackingSource(&state, newSource)
         case .sourceReadinessChanged(let source, let readiness):
             return sourceReadinessChanged(&state, source, readiness)
         default:
@@ -56,17 +61,12 @@ extension TrackingFeature {
         return .none
     }
 
-    private func toggleEnabled(
-        _ state: inout State,
-        _ trackingSource: TrackingSource,
-        isCalibrated: Bool,
-        detectorAvailable: Bool
-    ) -> Effect<Action> {
-        state.manualSource = trackingSource
+    private func toggleEnabled(_ state: inout State, detectorAvailable: Bool) -> Effect<Action> {
+        let trackingSource = state.manualSource
         state.activeSource = trackingSource
         if state.appState == .disabled {
             state.appState = PostureEngine.stateWhenEnabling(
-                isCalibrated: isCalibrated,
+                isCalibrated: state.isCalibrated(trackingSource),
                 detectorAvailable: detectorAvailable,
                 trackingSource: trackingSource
             )
@@ -112,17 +112,13 @@ extension TrackingFeature {
         return .none
     }
 
-    private func switchTrackingSource(
-        _ state: inout State,
-        _ newSource: TrackingSource,
-        isNewSourceCalibrated: Bool
-    ) -> Effect<Action> {
+    private func switchTrackingSource(_ state: inout State, _ newSource: TrackingSource) -> Effect<Action> {
         let previousSource = state.activeSource
         let result = PostureEngine.stateWhenSwitchingTrackingSource(
             currentState: state.appState,
             currentSource: previousSource,
             newSource: newSource,
-            isNewSourceCalibrated: isNewSourceCalibrated
+            isNewSourceCalibrated: state.isCalibrated(newSource)
         )
 
         state.manualSource = result.newSource

@@ -28,7 +28,7 @@ extension AppDelegate {
                 if !authorized {
                     os_log(.error, log: log, "Authorization denied for %{public}@", source.displayName)
                     await self.sendTrackingAction(
-                        .calibrationAuthorizationDenied(isCalibrated: self.isCalibrated)
+                        .calibrationAuthorizationDenied
                     )
                     self.calibratingSource = nil
                     return
@@ -107,8 +107,9 @@ extension AppDelegate {
             return
         }
 
+        let completed: TrackingFeature.CompletedCalibration
         if let cameraCalibration = calibration as? CameraCalibrationData {
-            self.cameraCalibration = cameraCalibration
+            completed = .camera(cameraCalibration)
             let profile = ProfileData(
                 goodPostureY: cameraCalibration.goodPostureY,
                 badPostureY: cameraCalibration.badPostureY,
@@ -123,21 +124,24 @@ extension AppDelegate {
                 deskStore.replaceActiveCalibration(forKey: key, with: profile)
             }
         } else if let airPodsCalibration = calibration as? AirPodsCalibrationData {
-            self.airPodsCalibration = airPodsCalibration
+            completed = .airPods(airPodsCalibration)
+        } else {
+            await cancelCalibration()
+            return
         }
 
         calibratingSource = nil
-        saveSettings()
         calibrationController = nil
 
-        await sendTrackingAction(.calibrationCompleted(source: source))
+        await sendTrackingAction(.calibrationCompleted(completed))
+        saveSettings()
         onCalibrationComplete?()
     }
 
     func cancelCalibration() async {
         calibratingSource = nil
         calibrationController = nil
-        await sendTrackingAction(.calibrationCancelled(isCalibrated: isCalibrated))
+        await sendTrackingAction(.calibrationCancelled)
     }
 
     func finishCalibrationBySelectingDesk(id: String) async {
@@ -146,9 +150,9 @@ extension AppDelegate {
         calibrationController = nil
 
         if deskStore.selectDesk(id: id, forKey: key) != nil {
-            lineUpActiveDesk(forKey: key)
+            await lineUpActiveDesk(forKey: key)
         }
-        await sendTrackingAction(.calibrationCancelled(isCalibrated: isCalibrated))
+        await sendTrackingAction(.calibrationCancelled)
         onDesksChanged?()
         onCalibrationComplete?()
     }

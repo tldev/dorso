@@ -75,58 +75,47 @@ struct TrackingReducerScenarioHarness {
             detectorAvailable = available
         case .startMonitoringRequested(let isMarketingMode, let isConnected):
             self.isConnected = isConnected
-            intents = await dispatch(
-                .startMonitoringRequested(
-                    isMarketingMode: isMarketingMode,
-                    trackingSource: reducerState.manualSource,
-                    isCalibrated: isCalibrated,
-                    isConnected: isConnected
-                )
-            )
+            syncCalibration(for: reducerState.manualSource)
+            reducerState.isMarketingMode = isMarketingMode
+            intents = await dispatch(.startMonitoringRequested(isConnected: isConnected))
+            reducerState.isMarketingMode = false
         case .switchTrackingSource(let newSource, let newSourceCalibrated):
-            intents = await dispatch(
-                .switchTrackingSource(
-                    newSource,
-                    isNewSourceCalibrated: newSourceCalibrated
-                )
-            )
             isCalibrated = newSourceCalibrated
+            syncCalibration(for: newSource)
+            intents = await dispatch(.switchTrackingSource(newSource))
         case .toggleEnabled:
-            intents = await dispatch(
-                .toggleEnabled(
-                    trackingSource: reducerState.manualSource,
-                    isCalibrated: isCalibrated,
-                    detectorAvailable: detectorAvailable
-                )
-            )
+            syncCalibration(for: reducerState.manualSource)
+            intents = await dispatch(.toggleEnabled(detectorAvailable: detectorAvailable))
         case .calibrationAuthorizationDenied:
-            intents = await dispatch(.calibrationAuthorizationDenied(isCalibrated: isCalibrated))
+            syncCalibration(for: reducerState.activeSource)
+            intents = await dispatch(.calibrationAuthorizationDenied)
         case .calibrationAuthorizationGranted:
             intents = await dispatch(.calibrationAuthorizationGranted)
         case .calibrationStartFailed:
             intents = await dispatch(.calibrationStartFailed(errorMessage: nil))
         case .runtimeDetectorStartFailed:
-            intents = await dispatch(.runtimeDetectorStartFailed(trackingSource: reducerState.manualSource))
+            intents = await dispatch(.runtimeDetectorStartFailed)
         case .calibrationCancelled:
-            intents = await dispatch(.calibrationCancelled(isCalibrated: isCalibrated))
+            syncCalibration(for: reducerState.activeSource)
+            intents = await dispatch(.calibrationCancelled)
         case .calibrationCompleted:
-            intents = await dispatch(.calibrationCompleted(source: reducerState.activeSource))
+            let completed: TrackingFeature.CompletedCalibration =
+                reducerState.activeSource == .camera ? .camera(.valid(cameraID: Camera.selected)) : .airPods(.valid)
+            intents = await dispatch(.calibrationCompleted(completed))
             isCalibrated = true
         case .airPodsConnectionChanged(let isConnected):
             self.isConnected = isConnected
             intents = await dispatch(.airPodsConnectionChanged(isConnected))
         case .cameraConnected(let hasMatchingProfile):
-            intents = await dispatch(.cameraConnected(hasMatchingProfile: hasMatchingProfile))
-        case .cameraDisconnected(
-            let disconnectedCameraIsSelected,
-            let hasFallbackCamera,
-            let fallbackHasMatchingProfile
-        ):
+            let profile = hasMatchingProfile ? Self.profile(cameraID: Camera.connected) : nil
+            intents = await dispatch(.cameraConnected(matchingProfile: profile))
+        case .cameraDisconnected(let isSelected, let hasFallback, let fallbackMatches):
+            reducerState.selectedCameraID = Camera.selected
             intents = await dispatch(
                 .cameraDisconnected(
-                    disconnectedCameraIsSelected: disconnectedCameraIsSelected,
-                    hasFallbackCamera: hasFallbackCamera,
-                    fallbackHasMatchingProfile: fallbackHasMatchingProfile
+                    cameraID: isSelected ? Camera.selected : Camera.other,
+                    fallbackCameraID: hasFallback ? Camera.fallback : nil,
+                    profile: fallbackMatches ? Self.profile(cameraID: Camera.fallback) : nil
                 )
             )
         case .displayConfigurationChanged(
@@ -136,17 +125,20 @@ struct TrackingReducerScenarioHarness {
             let hasMatchingProfileCamera,
             let selectedCameraMatchesProfile
         ):
+            reducerState.pauseOnTheGoEnabled = pauseOnTheGoEnabled
+            reducerState.selectedCameraID = Camera.selected
+            let profileCamera = selectedCameraMatchesProfile ? Camera.selected : Camera.profile
+            let hasProfile = hasMatchingProfileCamera || selectedCameraMatchesProfile
             intents = await dispatch(
                 .displayConfigurationChanged(
-                    pauseOnTheGoEnabled: pauseOnTheGoEnabled,
                     isLaptopOnlyConfiguration: isLaptopOnlyConfiguration,
                     hasAnyCamera: hasAnyCamera,
                     hasMatchingProfileCamera: hasMatchingProfileCamera,
-                    selectedCameraMatchesProfile: selectedCameraMatchesProfile
+                    matchingProfile: hasProfile ? Self.profile(cameraID: profileCamera) : nil
                 )
             )
         case .cameraSelectionChanged:
-            intents = await dispatch(.cameraSelectionChanged)
+            intents = await dispatch(.cameraSelectionChanged(Camera.selected))
         case .screenLocked:
             intents = await dispatch(.screenLocked)
         case .screenUnlocked:
@@ -191,17 +183,14 @@ struct TrackingReducerScenarioHarness {
             resetMonitoringRequested = false
         }
         let fallbackSwitchRequested = intents.contains { intent in
-            if case .switchCamera(.fallback(cameraID: _, profile: _)) = intent {
+            if case .switchCamera(to: Camera.fallback) = intent {
                 return true
             }
             return false
         }
         let selectedCameraSwitchRequested = intents.contains { intent in
-            if case .switchCamera(.matchingProfile(_)) = intent {
-                return true
-            }
-            if case .switchCamera(.selectedCamera) = intent {
-                return true
+            if case .switchCamera(let cameraID) = intent {
+                return cameraID != Camera.fallback
             }
             return false
         }
@@ -232,6 +221,29 @@ struct TrackingReducerScenarioHarness {
             selectedCameraSwitchRequested: selectedCameraSwitchRequested,
             uiSyncRequested: uiSyncRequested
         )
+    }
+
+    /// Camera IDs standing in for real devices
+    private enum Camera {
+        static let selected = "selected-camera"
+        static let fallback = "fallback-camera"
+        static let connected = "connected-camera"
+        static let profile = "profile-camera"
+        static let other = "other-camera"
+    }
+
+    private static func profile(cameraID: String) -> ProfileData {
+        ProfileData(goodPostureY: 0.6, badPostureY: 0.4, neutralY: 0.5, postureRange: 0.2, cameraID: cameraID)
+    }
+
+    /// The scenarios describe calibration as a flag; the reducer reads it from state
+    private mutating func syncCalibration(for source: TrackingSource) {
+        switch source {
+        case .camera:
+            reducerState.cameraCalibration = isCalibrated ? .valid(cameraID: Camera.selected) : nil
+        case .airpods:
+            reducerState.airPodsCalibration = isCalibrated ? .valid : nil
+        }
     }
 
     private mutating func dispatch(_ action: TrackingFeature.Action) async -> [TrackingFeature.EffectIntent] {

@@ -56,9 +56,9 @@ extension SettingsView {
                                 .frame(minWidth: 130, maxWidth: 220)
                                 .onChange(of: selectedCameraID) { newValue in
                                     if newValue != appDelegate.selectedCameraID {
-                                        appDelegate.selectedCameraID = newValue
-                                        appDelegate.saveSettings()
-                                        appDelegate.restartCamera()
+                                        Task { @MainActor in
+                                            await appDelegate.selectCamera(newValue)
+                                        }
                                     }
                                 }
                             ) : nil,
@@ -113,9 +113,9 @@ extension SettingsView {
                                     .frame(minWidth: 130, maxWidth: 220)
                                     .onChange(of: selectedCameraID) { newValue in
                                         if newValue != appDelegate.selectedCameraID {
-                                            appDelegate.selectedCameraID = newValue
-                                            appDelegate.saveSettings()
-                                            appDelegate.restartCamera()
+                                            Task { @MainActor in
+                                                await appDelegate.selectCamera(newValue)
+                                            }
                                         }
                                     }
                                 ),

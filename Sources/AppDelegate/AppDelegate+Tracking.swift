@@ -7,7 +7,6 @@ private let log = OSLog(subsystem: "com.thelazydeveloper.dorso", category: "Trac
 struct InitialSetupContext {
     let profile: ProfileData?
     let profileCameraAvailable: Bool
-    let hasValidAirPodsCalibration: Bool
 }
 
 extension AppDelegate {
@@ -20,6 +19,10 @@ extension AppDelegate {
         to newTrackingState: TrackingFeature.State,
         applyStateTransition: Bool = true
     ) {
+        // Before syncing detectors, so a camera that starts uses the selection
+        if oldTrackingState.selectedCameraID != newTrackingState.selectedCameraID {
+            cameraDetector.selectedCameraID = newTrackingState.selectedCameraID
+        }
         if applyStateTransition, oldTrackingState.effectiveAppState != newTrackingState.effectiveAppState {
             handleStateTransition(from: oldTrackingState.effectiveAppState, to: newTrackingState.effectiveAppState)
         } else if oldTrackingState.activeSource != newTrackingState.activeSource {
@@ -90,7 +93,7 @@ extension AppDelegate {
                         Task { @MainActor in
                             guard let self else { return }
                             await self.sendTrackingAction(
-                                .runtimeDetectorStartFailed(trackingSource: self.trackingSource)
+                                .runtimeDetectorStartFailed
                             )
                         }
                     }
@@ -190,14 +193,14 @@ extension AppDelegate {
 
     private func handlePostureReading(_ reading: PostureReading) async {
         await sendTrackingAction(
-            .postureReadingReceived(reading, isMarketingMode: isMarketingMode),
+            .postureReadingReceived(reading),
             applyStateTransition: false
         )
     }
 
     func handleAwayStateChange(_ isAway: Bool) async {
         await sendTrackingAction(
-            .awayStateChanged(isAway, isMarketingMode: isMarketingMode),
+            .awayStateChanged(isAway),
             applyStateTransition: false
         )
     }
@@ -206,11 +209,7 @@ extension AppDelegate {
 
     func toggleEnabled() async {
         await sendTrackingAction(
-            .toggleEnabled(
-                trackingSource: trackingSource,
-                isCalibrated: isCalibrated,
-                detectorAvailable: activeDetector.isAvailable
-            )
+            .toggleEnabled(detectorAvailable: activeDetector.isAvailable)
         )
         saveSettings()
     }
@@ -253,11 +252,8 @@ extension AppDelegate {
         let context = makeInitialSetupContext()
         await sendTrackingAction(
             .initialSetupEvaluated(
-                isMarketingMode: isMarketingMode,
-                hasCameraProfile: context.profile != nil,
-                profileCameraAvailable: context.profileCameraAvailable,
-                hasValidAirPodsCalibration: context.hasValidAirPodsCalibration,
-                cameraProfile: context.profile
+                cameraProfile: context.profile,
+                profileCameraAvailable: context.profileCameraAvailable
             )
         )
 
@@ -279,11 +275,7 @@ extension AppDelegate {
                 cameras.contains(where: { $0.uniqueID == profile.cameraID })
             } ?? false
 
-        return InitialSetupContext(
-            profile: profile,
-            profileCameraAvailable: profileCameraAvailable,
-            hasValidAirPodsCalibration: airPodsCalibration?.isValid ?? false
-        )
+        return InitialSetupContext(profile: profile, profileCameraAvailable: profileCameraAvailable)
     }
 
     func showOnboarding() {
@@ -298,7 +290,7 @@ extension AppDelegate {
 
                 await self.switchTrackingSource(to: source)
                 if let cameraID = cameraID {
-                    self.cameraDetector.selectedCameraID = cameraID
+                    self.selectedCameraID = cameraID
                 }
                 self.saveSettings()
 
@@ -311,20 +303,7 @@ extension AppDelegate {
     // MARK: - Tracking Source Management
 
     func switchTrackingSource(to source: TrackingSource) async {
-        let isNewSourceCalibrated: Bool
-        switch source {
-        case .camera:
-            isNewSourceCalibrated = isMarketingMode || (cameraCalibration?.isValid ?? false)
-        case .airpods:
-            isNewSourceCalibrated = isMarketingMode || (airPodsCalibration?.isValid ?? false)
-        }
-
-        await sendTrackingAction(
-            .switchTrackingSource(
-                source,
-                isNewSourceCalibrated: isNewSourceCalibrated
-            )
-        )
+        await sendTrackingAction(.switchTrackingSource(source))
     }
 
     func setTrackingMode(_ mode: TrackingMode) async {
@@ -340,9 +319,8 @@ extension AppDelegate {
     }
 
     func setPauseOnTheGoEnabled(_ isEnabled: Bool) async {
-        pauseOnTheGo = isEnabled
-        saveSettings()
         await sendTrackingAction(.pauseOnTheGoSettingChanged(isEnabled: isEnabled))
+        saveSettings()
     }
 
     func setPauseOnBatteryEnabled(_ isEnabled: Bool) async {
@@ -354,12 +332,7 @@ extension AppDelegate {
 
     func startMonitoring() async {
         let transition = await sendTrackingAction(
-            .startMonitoringRequested(
-                isMarketingMode: isMarketingMode,
-                trackingSource: trackingSource,
-                isCalibrated: isCalibrated,
-                isConnected: activeDetector.isConnected
-            )
+            .startMonitoringRequested(isConnected: activeDetector.isConnected)
         )
 
         if transition.newState.appState == .paused(.airPodsRemoved) {

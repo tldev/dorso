@@ -15,11 +15,6 @@ extension AppDelegate {
         case .beginMonitoringSession:
             beginMonitoringSession()
 
-        case .applyStartupCameraProfile(let profile):
-            guard let profile else { return }
-            cameraDetector.selectedCameraID = profile.cameraID
-            applyCameraCalibration(from: profile)
-
         case .showOnboarding:
             if let showOnboardingHandler {
                 showOnboardingHandler()
@@ -27,8 +22,9 @@ extension AppDelegate {
                 showOnboarding()
             }
 
-        case .switchCamera(let switchIntent):
-            switchCamera(switchIntent)
+        case .switchCamera(let cameraID):
+            cameraDetector.selectedCameraID = cameraID
+            cameraDetector.switchCamera(to: cameraID)
 
         case .syncUI:
             syncUIToState()
@@ -73,28 +69,6 @@ extension AppDelegate {
         )
     }
 
-    private func switchCamera(_ switchIntent: TrackingFeature.CameraSwitchIntent) {
-        switch switchIntent {
-        case .matchingProfile(let profile):
-            guard let profile else { return }
-            cameraDetector.selectedCameraID = profile.cameraID
-            applyCameraCalibration(from: profile)
-            cameraDetector.switchCamera(to: profile.cameraID)
-
-        case .fallback(let cameraID, let profile):
-            guard let cameraID else { return }
-            cameraDetector.selectedCameraID = cameraID
-            if let profile, profile.cameraID == cameraID {
-                applyCameraCalibration(from: profile)
-            }
-            cameraDetector.switchCamera(to: cameraID)
-
-        case .selectedCamera:
-            guard let selectedCameraID else { return }
-            cameraDetector.switchCamera(to: selectedCameraID)
-        }
-    }
-
     private func performCalibrationEffect(_ intent: TrackingFeature.EffectIntent) async {
         switch intent {
         case .showCalibrationPermissionDeniedAlert:
@@ -116,15 +90,5 @@ extension AppDelegate {
         default:
             break
         }
-    }
-
-    func applyCameraCalibration(from profile: ProfileData) {
-        cameraCalibration = CameraCalibrationData(
-            goodPostureY: profile.goodPostureY,
-            badPostureY: profile.badPostureY,
-            neutralY: profile.neutralY,
-            postureRange: profile.postureRange,
-            cameraID: profile.cameraID
-        )
     }
 }

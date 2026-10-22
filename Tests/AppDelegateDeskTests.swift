@@ -47,7 +47,7 @@ final class AppDelegateDeskTests: XCTestCase {
         let home = appDelegate.deskStore.desks(forKey: key).first!
         _ = appDelegate.deskStore.selectDesk(id: home.id, forKey: key)
         appDelegate.selectedCameraID = "builtin"
-        appDelegate.applyCameraCalibration(from: home.profile)
+        appDelegate.cameraCalibration = CameraCalibrationData(profile: home.profile)
         XCTAssertEqual(appDelegate.state, .disabled)
 
         await appDelegate.selectDesk(id: office.id)
@@ -65,7 +65,7 @@ final class AppDelegateDeskTests: XCTestCase {
             named: "Office", profile: profile(goodY: 0.8, cameraID: "external"), forKey: key)
         _ = appDelegate.deskStore.selectDesk(id: home.id, forKey: key)
         appDelegate.selectedCameraID = "builtin"
-        appDelegate.applyCameraCalibration(from: home.profile)
+        appDelegate.cameraCalibration = CameraCalibrationData(profile: home.profile)
 
         await appDelegate.selectDesk(id: office.id)
 
@@ -90,7 +90,7 @@ final class AppDelegateDeskTests: XCTestCase {
         let appDelegate = makeAppDelegate(cameraIDs: ["builtin"])
         appDelegate.deskStore.addDesk(named: "Home", profile: profile(goodY: 0.7, cameraID: "builtin"), forKey: key)
         appDelegate.selectedCameraID = "builtin"
-        appDelegate.applyCameraCalibration(from: profile(goodY: 0.5, cameraID: "builtin"))
+        appDelegate.cameraCalibration = CameraCalibrationData(profile: profile(goodY: 0.5, cameraID: "builtin"))
         appDelegate.state = .monitoring
 
         await appDelegate.handleDisplayConfigurationChange(rebuildOverlays: false)
@@ -107,7 +107,7 @@ final class AppDelegateDeskTests: XCTestCase {
             named: "Office", profile: profile(goodY: 0.8, cameraID: "external"), forKey: key)
         _ = appDelegate.deskStore.selectDesk(id: home.id, forKey: key)
         appDelegate.selectedCameraID = "builtin"
-        appDelegate.applyCameraCalibration(from: home.profile)
+        appDelegate.cameraCalibration = CameraCalibrationData(profile: home.profile)
         return (home, office)
     }
 
@@ -192,12 +192,18 @@ final class AppDelegateDeskTests: XCTestCase {
         XCTAssertEqual(appDelegate.deskStore.activeProfile(forKey: key)?.goodPostureY ?? 0, 0.8, accuracy: 0.0001)
     }
 
-    func testSavingSettingsWritesToInjectedDefaults() {
+    func testSavingSettingsWritesToInjectedDefaults() async {
         let appDelegate = makeAppDelegate(cameraIDs: [])
-        appDelegate.pauseOnTheGo = true
-
-        appDelegate.saveSettings()
+        await appDelegate.setPauseOnTheGoEnabled(true)
 
         XCTAssertTrue(defaults.bool(forKey: SettingsKeys.pauseOnTheGo))
+    }
+
+    func testSelectedCameraReachesTheDetector() {
+        let appDelegate = makeAppDelegate(cameraIDs: ["builtin"])
+
+        appDelegate.selectedCameraID = "builtin"
+
+        XCTAssertEqual(appDelegate.cameraDetector.selectedCameraID, "builtin")
     }
 }

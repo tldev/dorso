@@ -6,24 +6,10 @@ extension TrackingFeature {
         switch action {
         case .airPodsConnectionChanged(let isConnected):
             return airPodsConnectionChanged(&state, isConnected)
-        case .cameraConnected(let hasMatchingProfile, let matchingProfile):
-            return cameraConnected(&state, hasMatchingProfile: hasMatchingProfile, matchingProfile: matchingProfile)
-        case .cameraDisconnected(let isSelected, let hasFallback, let fallbackMatches, let fallbackID, let profile):
-            if isSelected {
-                state.cameraReadiness.connected = hasFallback
-            }
-            if state.trackingMode == .automatic, state.appState != .disabled {
-                return resolveAutomaticSource(&state)
-            }
-            let result = PostureEngine.stateWhenCameraDisconnects(
-                currentState: state.appState,
-                trackingSource: state.activeSource,
-                disconnectedCameraIsSelected: isSelected,
-                hasFallbackCamera: hasFallback,
-                fallbackMatchesProfile: fallbackMatches
-            )
-            state.appState = result.newState
-            return cameraDisconnectedEffects(result.action, fallbackCameraID: fallbackID, fallbackProfile: profile)
+        case .cameraConnected(let matchingProfile):
+            return cameraConnected(&state, matchingProfile: matchingProfile)
+        case .cameraDisconnected(let cameraID, let fallbackCameraID, let profile):
+            return cameraDisconnected(&state, cameraID: cameraID, fallbackCameraID: fallbackCameraID, profile: profile)
         case .screenLocked:
             let result = PostureEngine.stateWhenScreenLocks(
                 currentState: state.appState,
@@ -39,22 +25,29 @@ extension TrackingFeature {
             return powerSourceChanged(&state, isOnBattery: isOnBattery)
         case .setPauseOnBatteryEnabled(let isEnabled):
             return setPauseOnBatteryEnabled(&state, isEnabled)
-        case .displayConfigurationChanged(
-            let onTheGo, let laptopOnly, let anyCamera, let matching, let selected, let profile):
+        case .displayConfigurationChanged(let laptopOnly, let anyCamera, let matching, let profile):
             let context = DisplayConfigurationContext(
-                pauseOnTheGoEnabled: onTheGo,
+                pauseOnTheGoEnabled: state.pauseOnTheGoEnabled,
                 isLaptopOnlyConfiguration: laptopOnly,
                 hasAnyCamera: anyCamera,
                 hasMatchingProfileCamera: matching,
-                selectedCameraMatchesProfile: selected
+                selectedCameraMatchesProfile: profile != nil && profile?.cameraID == state.selectedCameraID
             )
             return displayConfigurationChanged(&state, context, matchingProfile: profile)
-        case .cameraSelectionChanged:
+        case .cameraSelectionChanged(let cameraID):
+            state.selectedCameraID = cameraID
             state.appState = PostureEngine.stateWhenCameraSelectionChanges(
                 currentState: state.appState,
                 trackingSource: state.activeSource
             )
-            return state.activeSource == .camera ? perform(.switchCamera(.selectedCamera)) : .none
+            return state.activeSource == .camera ? perform(.switchCamera(to: cameraID)) : .none
+        case .deskProfileApplied(let profile, let isCameraAvailable):
+            guard let profile, isCameraAvailable else {
+                state.setCameraCalibration(nil)
+                return .none
+            }
+            let cameraChanged = state.applyCameraProfile(profile)
+            return cameraChanged ? perform(.switchCamera(to: profile.cameraID)) : .none
         default:
             return .none
         }
@@ -77,28 +70,27 @@ extension TrackingFeature {
         return .none
     }
 
-    private func cameraConnected(
-        _ state: inout State,
-        hasMatchingProfile: Bool,
-        matchingProfile: ProfileData?
-    ) -> Effect<Action> {
+    private func cameraConnected(_ state: inout State, matchingProfile: ProfileData?) -> Effect<Action> {
         state.cameraReadiness.connected = true
-        if hasMatchingProfile {
-            state.cameraReadiness.calibrated = true
-        }
         if state.trackingMode == .automatic, state.appState != .disabled {
-            return resolveAutomaticSource(&state)
+            // The display setup's camera is back, so automatic mode can use it
+            var switchEffect: Effect<Action> = .none
+            if let matchingProfile, state.applyCameraProfile(matchingProfile) {
+                switchEffect = perform(.switchCamera(to: matchingProfile.cameraID))
+            }
+            return .merge(switchEffect, resolveAutomaticSource(&state))
         }
         let previousState = state.appState
         let result = PostureEngine.stateWhenCameraConnects(
             currentState: state.appState,
             trackingSource: state.activeSource,
-            hasMatchingProfileForConnectedCamera: hasMatchingProfile
+            hasMatchingProfileForConnectedCamera: matchingProfile != nil
         )
         state.appState = result.newState
 
-        if result.shouldSelectAndStartMonitoring {
-            return perform(.switchCamera(.matchingProfile(matchingProfile)), .startMonitoring)
+        if result.shouldSelectAndStartMonitoring, let matchingProfile {
+            state.applyCameraProfile(matchingProfile)
+            return perform(.switchCamera(to: matchingProfile.cameraID), .startMonitoring)
         }
 
         if result.newState == previousState {
@@ -107,20 +99,41 @@ extension TrackingFeature {
         return .none
     }
 
-    private func cameraDisconnectedEffects(
-        _ action: CameraDisconnectedAction,
+    private func cameraDisconnected(
+        _ state: inout State,
+        cameraID: String,
         fallbackCameraID: String?,
-        fallbackProfile: ProfileData?
+        profile: ProfileData?
     ) -> Effect<Action> {
-        switch action {
+        let isSelected = cameraID == state.selectedCameraID
+        if isSelected {
+            state.cameraReadiness.connected = fallbackCameraID != nil
+        }
+        if state.trackingMode == .automatic, state.appState != .disabled {
+            return resolveAutomaticSource(&state)
+        }
+        let fallbackMatchesProfile = fallbackCameraID != nil && profile?.cameraID == fallbackCameraID
+        let result = PostureEngine.stateWhenCameraDisconnects(
+            currentState: state.appState,
+            trackingSource: state.activeSource,
+            disconnectedCameraIsSelected: isSelected,
+            hasFallbackCamera: fallbackCameraID != nil,
+            fallbackMatchesProfile: fallbackMatchesProfile
+        )
+        state.appState = result.newState
+
+        switch result.action {
         case .none:
             return .none
         case .syncUIOnly:
             return perform(.syncUI)
         case .switchToFallback(let startMonitoring):
-            var intents: [EffectIntent] = [
-                .switchCamera(.fallback(cameraID: fallbackCameraID, profile: fallbackProfile))
-            ]
+            guard let fallbackCameraID else { return .none }
+            state.selectedCameraID = fallbackCameraID
+            if let profile, fallbackMatchesProfile {
+                state.setCameraCalibration(CameraCalibrationData(profile: profile))
+            }
+            var intents: [EffectIntent] = [.switchCamera(to: fallbackCameraID)]
             if startMonitoring {
                 intents.append(.startMonitoring)
             }
@@ -184,8 +197,15 @@ extension TrackingFeature {
         state.appState = result.newState
 
         var intents: [EffectIntent] = []
-        if result.shouldSwitchToProfileCamera {
-            intents.append(.switchCamera(.matchingProfile(matchingProfile)))
+        if let matchingProfile, context.hasMatchingProfileCamera {
+            if result.shouldSwitchToProfileCamera {
+                state.applyCameraProfile(matchingProfile)
+                intents.append(.switchCamera(to: matchingProfile.cameraID))
+            } else if context.selectedCameraMatchesProfile {
+                // The same camera can serve several display setups, so load
+                // this setup's calibration even without switching
+                state.setCameraCalibration(CameraCalibrationData(profile: matchingProfile))
+            }
         }
         if result.shouldStartMonitoring {
             intents.append(.startMonitoring)

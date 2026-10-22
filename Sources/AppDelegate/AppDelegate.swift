@@ -38,6 +38,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         settingsProfileManager = SettingsProfileManager(userDefaults: userDefaults)
         deskStore = DeskStore(userDefaults: userDefaults)
         super.init()
+        syncMarketingMode()
     }
 
     // UI Components
@@ -90,9 +91,16 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         set { applyTrackingAction(.setTrackingMode(newValue)) }
     }
 
-    // Calibration data storage
-    var cameraCalibration: CameraCalibrationData?
-    var airPodsCalibration: AirPodsCalibrationData?
+    var cameraCalibration: CameraCalibrationData? {
+        get { trackingStore.withState { $0.cameraCalibration } }
+        set { applyTrackingAction(.cameraCalibrationChanged(newValue)) }
+    }
+
+    var airPodsCalibration: AirPodsCalibrationData? {
+        get { trackingStore.withState { $0.airPodsCalibration } }
+        set { applyTrackingAction(.airPodsCalibrationChanged(newValue)) }
+    }
+
     /// Which source is currently being calibrated (nil when not calibrating)
     var calibratingSource: TrackingSource?
     /// Called when calibration completes successfully (for UI refresh)
@@ -103,19 +111,18 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     var onDesksChanged: (() -> Void)?
 
     var currentCalibration: CalibrationData? {
-        activeTrackingSource == .camera ? cameraCalibration : airPodsCalibration
+        trackingStore.withState { $0.calibration(for: $0.activeSource) }
     }
 
-    // Legacy camera ID accessor for settings
     var selectedCameraID: String? {
-        get { cameraDetector.selectedCameraID }
-        set { cameraDetector.selectedCameraID = newValue }
+        get { trackingStore.withState { $0.selectedCameraID } }
+        set { applyTrackingAction(.setSelectedCamera(newValue)) }
     }
 
     // Calibration
     var calibrationController: CalibrationWindowController?
     var isCalibrated: Bool {
-        isMarketingMode || (currentCalibration?.isValid ?? false)
+        trackingStore.withState { $0.isCalibrated($0.activeSource) }
     }
 
     // Settings
@@ -132,7 +139,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
     var showInDock = false
     var appAppearance = AppAppearance.auto
-    var pauseOnTheGo = false
+    var pauseOnTheGo: Bool {
+        trackingStore.withState { $0.pauseOnTheGoEnabled }
+    }
     var pauseOnBattery: Bool {
         trackingStore.withState { $0.pauseOnBatteryEnabled }
     }
@@ -228,14 +237,19 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     var setupComplete = false
-    var marketingModeOverride: Bool?
+    var marketingModeOverride: Bool? {
+        didSet { syncMarketingMode() }
+    }
 
     var isMarketingMode: Bool {
-        if let marketingModeOverride {
-            return marketingModeOverride
-        }
-        return UserDefaults.standard.bool(forKey: "MarketingMode")
-            || CommandLine.arguments.contains("--marketing-mode")
+        trackingStore.withState { $0.isMarketingMode }
+    }
+
+    func syncMarketingMode() {
+        let isMarketingMode =
+            marketingModeOverride
+            ?? (userDefaults.bool(forKey: "MarketingMode") || CommandLine.arguments.contains("--marketing-mode"))
+        applyTrackingAction(.setMarketingMode(isMarketingMode))
     }
 
     // MARK: - State Machine
@@ -419,14 +433,6 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     func getAvailableCameras() -> [AVCaptureDevice] {
         return cameraDetector.getAvailableCameras()
-    }
-
-    func restartCamera() {
-        guard activeTrackingSource == .camera, selectedCameraID != nil else { return }
-
-        Task { @MainActor in
-            await self.applyCameraSelectionTransition()
-        }
     }
 
     func applyDetectionMode() {

@@ -4,8 +4,9 @@ import Foundation
 extension TrackingFeature {
     func reduceCalibration(into state: inout State, action: Action) -> Effect<Action> {
         switch action {
-        case .calibrationAuthorizationDenied(let isCalibrated):
-            state.appState = PostureEngine.stateWhenCalibrationAuthorizationDenied(isCalibrated: isCalibrated)
+        case .calibrationAuthorizationDenied:
+            state.appState = PostureEngine.stateWhenCalibrationAuthorizationDenied(
+                isCalibrated: state.isCalibrated(state.activeSource))
             return perform(.showCalibrationPermissionDeniedAlert)
         case .calibrationOpenSettingsRequested:
             return perform(.openPrivacySettings)
@@ -23,28 +24,34 @@ extension TrackingFeature {
                 return perform(.showCameraCalibrationRetryAlert(message: errorMessage))
             }
             return .none
-        case .runtimeDetectorStartFailed(let trackingSource):
-            state.manualSource = trackingSource
+        case .runtimeDetectorStartFailed:
+            let trackingSource = state.manualSource
             state.activeSource = trackingSource
             state.appState = PostureEngine.unavailableState(for: trackingSource)
             return .none
-        case .calibrationCancelled(let isCalibrated):
+        case .calibrationCancelled:
+            let isCalibrated = state.isCalibrated(state.activeSource)
             state.appState = PostureEngine.stateWhenCalibrationCancels(isCalibrated: isCalibrated)
             return isCalibrated ? perform(.startMonitoring) : .none
-        case .calibrationCompleted(let source):
-            return calibrationCompleted(&state, source)
+        case .calibrationCompleted(let calibration):
+            return calibrationCompleted(&state, calibration)
+        case .cameraCalibrationChanged(let calibration):
+            state.setCameraCalibration(calibration)
+            return .none
+        case .airPodsCalibrationChanged(let calibration):
+            state.setAirPodsCalibration(calibration)
+            return .none
         default:
             return .none
         }
     }
 
-    private func calibrationCompleted(_ state: inout State, _ source: TrackingSource) -> Effect<Action> {
+    private func calibrationCompleted(_ state: inout State, _ calibration: CompletedCalibration) -> Effect<Action> {
         state.monitoringState.reset()
         state.lastPostureReadingTime = nil
-        // Update calibrated flag for the source that was just calibrated
-        switch source {
-        case .camera: state.cameraReadiness.calibrated = true
-        case .airpods: state.airPodsReadiness.calibrated = true
+        switch calibration {
+        case .camera(let data): state.setCameraCalibration(data)
+        case .airPods(let data): state.setAirPodsCalibration(data)
         }
         if state.trackingMode == .automatic {
             return resolveAutomaticSource(&state)

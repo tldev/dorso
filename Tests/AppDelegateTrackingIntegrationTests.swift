@@ -64,8 +64,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         appDelegate.initialSetupContextOverride = {
             InitialSetupContext(
                 profile: profile,
-                profileCameraAvailable: true,
-                hasValidAirPodsCalibration: false
+                profileCameraAvailable: true
             )
         }
 
@@ -82,7 +81,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         await appDelegate.initialSetupFlow()
 
         XCTAssertEqual(
-            executedIntents, [.applyStartupCameraProfile(profile), .startMonitoring, .beginMonitoringSession])
+            executedIntents, [.startMonitoring, .beginMonitoringSession])
         XCTAssertEqual(onboardingCalls, 0)
         XCTAssertEqual(appDelegate.selectedCameraID, profile.cameraID)
         XCTAssertEqual(appDelegate.cameraCalibration?.cameraID, profile.cameraID)
@@ -100,8 +99,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         appDelegate.initialSetupContextOverride = {
             InitialSetupContext(
                 profile: nil,
-                profileCameraAvailable: false,
-                hasValidAirPodsCalibration: true
+                profileCameraAvailable: false
             )
         }
 
@@ -133,8 +131,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         appDelegate.initialSetupContextOverride = {
             InitialSetupContext(
                 profile: nil,
-                profileCameraAvailable: false,
-                hasValidAirPodsCalibration: false
+                profileCameraAvailable: false
             )
         }
 
@@ -199,13 +196,10 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.applyCameraConnectedTransition(
-            hasMatchingProfile: true,
-            matchingProfile: profile
-        )
+        await appDelegate.sendTrackingAction(.cameraConnected(matchingProfile: profile))
 
         let expectedIntents: [TrackingFeature.EffectIntent] = [
-            .switchCamera(.matchingProfile(profile)),
+            .switchCamera(to: profile.cameraID),
             .startMonitoring,
         ]
 
@@ -226,10 +220,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.applyCameraConnectedTransition(
-            hasMatchingProfile: false,
-            matchingProfile: nil
-        )
+        await appDelegate.sendTrackingAction(.cameraConnected(matchingProfile: nil))
 
         XCTAssertEqual(executedIntents, [])
         XCTAssertEqual(appDelegate.state, .paused(.noProfile))
@@ -255,17 +246,17 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.applyDisplayConfigurationTransition(
-            pauseOnTheGoEnabled: false,
-            isLaptopOnlyConfiguration: false,
-            hasAnyCamera: true,
-            hasMatchingProfileCamera: true,
-            selectedCameraMatchesProfile: false,
-            matchingProfile: profile
+        await appDelegate.sendTrackingAction(
+            .displayConfigurationChanged(
+                isLaptopOnlyConfiguration: false,
+                hasAnyCamera: true,
+                hasMatchingProfileCamera: true,
+                matchingProfile: profile
+            )
         )
 
         let expectedIntents: [TrackingFeature.EffectIntent] = [
-            .switchCamera(.matchingProfile(profile)),
+            .switchCamera(to: profile.cameraID),
             .startMonitoring,
         ]
 
@@ -280,22 +271,22 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
+        appDelegate.selectedCameraID = "camera-a"
 
         var executedIntents: [TrackingFeature.EffectIntent] = []
         appDelegate.trackingEffectIntentObserver = { intent in
             executedIntents.append(intent)
         }
 
-        await appDelegate.applyCameraDisconnectedTransition(
-            disconnectedCameraIsSelected: true,
-            hasFallbackCamera: true,
-            fallbackHasMatchingProfile: true,
-            fallbackCamera: nil,
-            fallbackProfile: nil
+        await appDelegate.sendTrackingAction(
+            .cameraDisconnected(
+                cameraID: "camera-a", fallbackCameraID: "camera-b",
+                profile: ProfileData(
+                    goodPostureY: 0.6, badPostureY: 0.4, neutralY: 0.5, postureRange: 0.0, cameraID: "camera-b"))
         )
 
         let expectedIntents: [TrackingFeature.EffectIntent] = [
-            .switchCamera(.fallback()),
+            .switchCamera(to: "camera-b"),
             .startMonitoring,
         ]
 
@@ -309,22 +300,19 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
+        appDelegate.selectedCameraID = "camera-a"
 
         var executedIntents: [TrackingFeature.EffectIntent] = []
         appDelegate.trackingEffectIntentObserver = { intent in
             executedIntents.append(intent)
         }
 
-        await appDelegate.applyCameraDisconnectedTransition(
-            disconnectedCameraIsSelected: true,
-            hasFallbackCamera: true,
-            fallbackHasMatchingProfile: false,
-            fallbackCamera: nil,
-            fallbackProfile: nil
+        await appDelegate.sendTrackingAction(
+            .cameraDisconnected(cameraID: "camera-a", fallbackCameraID: "camera-b", profile: nil)
         )
 
         let expectedIntents: [TrackingFeature.EffectIntent] = [
-            .switchCamera(.fallback())
+            .switchCamera(to: "camera-b")
         ]
 
         XCTAssertEqual(executedIntents, expectedIntents)
@@ -337,18 +325,15 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
+        appDelegate.selectedCameraID = "camera-a"
 
         var executedIntents: [TrackingFeature.EffectIntent] = []
         appDelegate.trackingEffectIntentObserver = { intent in
             executedIntents.append(intent)
         }
 
-        await appDelegate.applyCameraDisconnectedTransition(
-            disconnectedCameraIsSelected: true,
-            hasFallbackCamera: false,
-            fallbackHasMatchingProfile: false,
-            fallbackCamera: nil,
-            fallbackProfile: nil
+        await appDelegate.sendTrackingAction(
+            .cameraDisconnected(cameraID: "camera-a", fallbackCameraID: nil, profile: nil)
         )
 
         XCTAssertEqual(executedIntents, [])
@@ -361,18 +346,15 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
+        appDelegate.selectedCameraID = "camera-a"
 
         var executedIntents: [TrackingFeature.EffectIntent] = []
         appDelegate.trackingEffectIntentObserver = { intent in
             executedIntents.append(intent)
         }
 
-        await appDelegate.applyCameraDisconnectedTransition(
-            disconnectedCameraIsSelected: false,
-            hasFallbackCamera: true,
-            fallbackHasMatchingProfile: true,
-            fallbackCamera: nil,
-            fallbackProfile: nil
+        await appDelegate.sendTrackingAction(
+            .cameraDisconnected(cameraID: "camera-b", fallbackCameraID: "camera-a", profile: nil)
         )
 
         XCTAssertEqual(executedIntents, [.syncUI])
@@ -385,19 +367,20 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
         appDelegate.syncDetectorToStateOverride = {}
 
         appDelegate.state = .monitoring
+        await appDelegate.setPauseOnTheGoEnabled(true)
 
         var executedIntents: [TrackingFeature.EffectIntent] = []
         appDelegate.trackingEffectIntentObserver = { intent in
             executedIntents.append(intent)
         }
 
-        await appDelegate.applyDisplayConfigurationTransition(
-            pauseOnTheGoEnabled: true,
-            isLaptopOnlyConfiguration: true,
-            hasAnyCamera: true,
-            hasMatchingProfileCamera: true,
-            selectedCameraMatchesProfile: false,
-            matchingProfile: nil
+        await appDelegate.sendTrackingAction(
+            .displayConfigurationChanged(
+                isLaptopOnlyConfiguration: true,
+                hasAnyCamera: true,
+                hasMatchingProfileCamera: true,
+                matchingProfile: nil
+            )
         )
 
         XCTAssertEqual(executedIntents, [])
@@ -416,13 +399,13 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.applyDisplayConfigurationTransition(
-            pauseOnTheGoEnabled: false,
-            isLaptopOnlyConfiguration: false,
-            hasAnyCamera: false,
-            hasMatchingProfileCamera: false,
-            selectedCameraMatchesProfile: false,
-            matchingProfile: nil
+        await appDelegate.sendTrackingAction(
+            .displayConfigurationChanged(
+                isLaptopOnlyConfiguration: false,
+                hasAnyCamera: false,
+                hasMatchingProfileCamera: false,
+                matchingProfile: nil
+            )
         )
 
         XCTAssertEqual(executedIntents, [])
@@ -441,13 +424,13 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.applyDisplayConfigurationTransition(
-            pauseOnTheGoEnabled: false,
-            isLaptopOnlyConfiguration: false,
-            hasAnyCamera: true,
-            hasMatchingProfileCamera: false,
-            selectedCameraMatchesProfile: false,
-            matchingProfile: nil
+        await appDelegate.sendTrackingAction(
+            .displayConfigurationChanged(
+                isLaptopOnlyConfiguration: false,
+                hasAnyCamera: true,
+                hasMatchingProfileCamera: false,
+                matchingProfile: nil
+            )
         )
 
         XCTAssertEqual(executedIntents, [])
@@ -492,9 +475,9 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             executedIntents.append(intent)
         }
 
-        await appDelegate.applyCameraSelectionTransition()
+        await appDelegate.selectCamera("camera-selected")
 
-        XCTAssertEqual(executedIntents, [.switchCamera(.selectedCamera)])
+        XCTAssertEqual(executedIntents, [.switchCamera(to: "camera-selected")])
         XCTAssertEqual(appDelegate.state, .paused(.noProfile))
     }
 
@@ -643,7 +626,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             openSettingsInvocations += 1
         }
 
-        await appDelegate.sendTrackingAction(.calibrationAuthorizationDenied(isCalibrated: appDelegate.isCalibrated))
+        await appDelegate.sendTrackingAction(.calibrationAuthorizationDenied)
 
         XCTAssertEqual(executedIntents, [.showCalibrationPermissionDeniedAlert, .openPrivacySettings])
         XCTAssertEqual(openSettingsInvocations, 1)
@@ -670,7 +653,7 @@ final class AppDelegateTrackingIntegrationTests: XCTestCase {
             openSettingsInvocations += 1
         }
 
-        await appDelegate.sendTrackingAction(.calibrationAuthorizationDenied(isCalibrated: appDelegate.isCalibrated))
+        await appDelegate.sendTrackingAction(.calibrationAuthorizationDenied)
 
         XCTAssertEqual(executedIntents, [.showCalibrationPermissionDeniedAlert])
         XCTAssertEqual(openSettingsInvocations, 0)

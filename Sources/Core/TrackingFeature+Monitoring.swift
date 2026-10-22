@@ -4,28 +4,20 @@ import Foundation
 extension TrackingFeature {
     func reduceMonitoring(into state: inout State, action: Action) -> Effect<Action> {
         switch action {
-        case .postureReadingReceived(let reading, let isMarketingMode):
-            return postureReadingReceived(&state, reading, isMarketingMode: isMarketingMode)
-        case .awayStateChanged(let isAway, let isMarketingMode):
-            return awayStateChanged(&state, isAway, isMarketingMode: isMarketingMode)
-        case .initialSetupEvaluated(
-            let isMarketingMode, let hasProfile, let profileAvailable, let hasAirPods, let profile):
-            let result = PostureEngine.stateWhenInitialSetupRuns(
-                isMarketingMode: isMarketingMode,
-                trackingSource: state.activeSource,
-                hasCameraProfile: hasProfile,
-                profileCameraAvailable: profileAvailable,
-                hasValidAirPodsCalibration: hasAirPods
-            )
-            return initialSetupEffects(result, cameraProfile: profile)
-        case .startMonitoringRequested(let isMarketingMode, let source, let isCalibrated, let isConnected):
-            state.manualSource = source
+        case .postureReadingReceived(let reading):
+            return postureReadingReceived(&state, reading)
+        case .awayStateChanged(let isAway):
+            return awayStateChanged(&state, isAway)
+        case .initialSetupEvaluated(let profile, let profileCameraAvailable):
+            return initialSetupEvaluated(&state, cameraProfile: profile, profileCameraAvailable: profileCameraAvailable)
+        case .startMonitoringRequested(let isConnected):
+            let source = state.manualSource
             state.activeSource = source
             state.lastPostureReadingTime = nil
             let result = PostureEngine.stateWhenMonitoringStarts(
-                isMarketingMode: isMarketingMode,
+                isMarketingMode: state.isMarketingMode,
                 trackingSource: source,
-                isCalibrated: isCalibrated,
+                isCalibrated: state.isCalibrated(source),
                 isConnected: isConnected
             )
             state.appState = result.newState
@@ -45,14 +37,10 @@ extension TrackingFeature {
         }
     }
 
-    private func postureReadingReceived(
-        _ state: inout State,
-        _ reading: PostureReading,
-        isMarketingMode: Bool
-    ) -> Effect<Action> {
+    private func postureReadingReceived(_ state: inout State, _ reading: PostureReading) -> Effect<Action> {
         guard state.effectiveAppState == .monitoring else { return .none }
 
-        if isMarketingMode {
+        if state.isMarketingMode {
             state.monitoringState.isCurrentlySlouching = false
             state.monitoringState.postureWarningIntensity = 0
             state.monitoringState.consecutiveBadFrames = 0
@@ -95,8 +83,8 @@ extension TrackingFeature {
         return perform(intents)
     }
 
-    private func awayStateChanged(_ state: inout State, _ isAway: Bool, isMarketingMode: Bool) -> Effect<Action> {
-        guard state.effectiveAppState == .monitoring, !isMarketingMode else { return .none }
+    private func awayStateChanged(_ state: inout State, _ isAway: Bool) -> Effect<Action> {
+        guard state.effectiveAppState == .monitoring, !state.isMarketingMode else { return .none }
 
         let result = PostureEngine.processAwayChange(
             isAway: isAway,
@@ -108,13 +96,23 @@ extension TrackingFeature {
         return perform(.syncUI, .updateBlur)
     }
 
-    private func initialSetupEffects(_ result: InitialSetupTransitionResult, cameraProfile: ProfileData?) -> Effect<
-        Action
-    > {
-        var intents: [EffectIntent] = []
-        if result.shouldApplyStartupCameraProfile {
-            intents.append(.applyStartupCameraProfile(cameraProfile))
+    private func initialSetupEvaluated(
+        _ state: inout State,
+        cameraProfile: ProfileData?,
+        profileCameraAvailable: Bool
+    ) -> Effect<Action> {
+        let result = PostureEngine.stateWhenInitialSetupRuns(
+            isMarketingMode: state.isMarketingMode,
+            trackingSource: state.activeSource,
+            hasCameraProfile: cameraProfile != nil,
+            profileCameraAvailable: profileCameraAvailable,
+            hasValidAirPodsCalibration: state.airPodsCalibration?.isValid ?? false
+        )
+        if result.shouldApplyStartupCameraProfile, let cameraProfile {
+            state.applyCameraProfile(cameraProfile)
         }
+
+        var intents: [EffectIntent] = []
         if result.shouldStartMonitoring {
             intents.append(.startMonitoring)
         }

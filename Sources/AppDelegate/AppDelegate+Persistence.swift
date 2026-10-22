@@ -52,12 +52,12 @@ extension AppDelegate {
         }
         blurWhenAway = defaults.bool(forKey: SettingsKeys.blurWhenAway)
         showInDock = defaults.bool(forKey: SettingsKeys.showInDock)
-        pauseOnTheGo = defaults.bool(forKey: SettingsKeys.pauseOnTheGo)
+        applyTrackingAction(.pauseOnTheGoSettingChanged(isEnabled: defaults.bool(forKey: SettingsKeys.pauseOnTheGo)))
         if defaults.object(forKey: SettingsKeys.pauseOnBattery) != nil {
             applyTrackingAction(.setPauseOnBatteryEnabled(defaults.bool(forKey: SettingsKeys.pauseOnBattery)))
         }
         useFullScreenOverlay = defaults.bool(forKey: SettingsKeys.useFullScreenOverlay)
-        cameraDetector.selectedCameraID = defaults.string(forKey: SettingsKeys.lastCameraID)
+        selectedCameraID = defaults.string(forKey: SettingsKeys.lastCameraID)
         if let sourceString = defaults.string(forKey: SettingsKeys.trackingSource),
             let source = TrackingSource(rawValue: sourceString)
         {

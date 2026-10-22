@@ -64,65 +64,32 @@ extension AppDelegate {
     func handleCameraConnected(_ device: AVCaptureDevice) async {
         guard activeTrackingSource == .camera || trackingMode == .automatic else { return }
 
-        let configKey = DisplayMonitor.getCurrentConfigKey()
-        let profile = loadProfile(forKey: configKey)
-
-        await applyCameraConnectedTransition(
-            hasMatchingProfile: profile?.cameraID == device.uniqueID,
-            matchingProfile: profile
-        )
+        let profile = loadProfile(forKey: DisplayMonitor.getCurrentConfigKey())
+        await sendTrackingAction(
+            .cameraConnected(matchingProfile: profile?.cameraID == device.uniqueID ? profile : nil))
     }
 
     func handleCameraDisconnected(_ device: AVCaptureDevice) async {
         guard activeTrackingSource == .camera || trackingMode == .automatic else { return }
 
-        let disconnectedCameraIsSelected = device.uniqueID == selectedCameraID
-        let fallbackCamera = cameraDetector.getAvailableCameras().first
-        let configKey = DisplayMonitor.getCurrentConfigKey()
-        let profile = loadProfile(forKey: configKey)
-        let fallbackHasMatchingProfile = fallbackCamera != nil && profile?.cameraID == fallbackCamera?.uniqueID
-
-        await applyCameraDisconnectedTransition(
-            disconnectedCameraIsSelected: disconnectedCameraIsSelected,
-            hasFallbackCamera: fallbackCamera != nil,
-            fallbackHasMatchingProfile: fallbackHasMatchingProfile,
-            fallbackCamera: fallbackCamera,
-            fallbackProfile: profile
-        )
-    }
-
-    func applyCameraConnectedTransition(
-        hasMatchingProfile: Bool,
-        matchingProfile: ProfileData?
-    ) async {
-        await sendTrackingAction(
-            .cameraConnected(
-                hasMatchingProfile: hasMatchingProfile,
-                matchingProfile: matchingProfile
-            )
-        )
-    }
-
-    func applyCameraDisconnectedTransition(
-        disconnectedCameraIsSelected: Bool,
-        hasFallbackCamera: Bool,
-        fallbackHasMatchingProfile: Bool,
-        fallbackCamera: AVCaptureDevice?,
-        fallbackProfile: ProfileData?
-    ) async {
         await sendTrackingAction(
             .cameraDisconnected(
-                disconnectedCameraIsSelected: disconnectedCameraIsSelected,
-                hasFallbackCamera: hasFallbackCamera,
-                fallbackHasMatchingProfile: fallbackHasMatchingProfile,
-                fallbackCameraID: fallbackCamera?.uniqueID,
-                fallbackProfile: fallbackProfile
+                cameraID: device.uniqueID,
+                fallbackCameraID: availableCameraIDs().first,
+                profile: loadProfile(forKey: DisplayMonitor.getCurrentConfigKey())
             )
         )
     }
 
-    func applyCameraSelectionTransition() async {
-        await sendTrackingAction(.cameraSelectionChanged)
+    /// Selects a camera from Settings. A camera change needs recalibration
+    /// only while it is the active source.
+    func selectCamera(_ cameraID: String) async {
+        if activeTrackingSource == .camera {
+            await sendTrackingAction(.cameraSelectionChanged(cameraID))
+        } else {
+            selectedCameraID = cameraID
+        }
+        saveSettings()
     }
 
     // MARK: - Screen Lock
@@ -155,27 +122,14 @@ extension AppDelegate {
         guard state != .disabled else { return }
 
         let cameraIDs = availableCameraIDs()
-        let configKey = DisplayMonitor.getCurrentConfigKey()
-        let profile = loadProfile(forKey: configKey)
-        let hasMatchingProfileCamera = profile.map { cameraIDs.contains($0.cameraID) } ?? false
-        let selectedCameraMatchesProfile =
-            profile.map { profile in
-                selectedCameraID == profile.cameraID
-            } ?? false
-
-        // Switching cameras is what normally applies a profile's calibration,
-        // but one camera can serve several display setups
-        if let profile, hasMatchingProfileCamera, selectedCameraMatchesProfile {
-            applyCameraCalibration(from: profile)
-        }
-
-        await applyDisplayConfigurationTransition(
-            pauseOnTheGoEnabled: pauseOnTheGo,
-            isLaptopOnlyConfiguration: DisplayMonitor.isLaptopOnlyConfiguration(),
-            hasAnyCamera: !cameraIDs.isEmpty,
-            hasMatchingProfileCamera: hasMatchingProfileCamera,
-            selectedCameraMatchesProfile: selectedCameraMatchesProfile,
-            matchingProfile: profile
+        let profile = loadProfile(forKey: DisplayMonitor.getCurrentConfigKey())
+        await sendTrackingAction(
+            .displayConfigurationChanged(
+                isLaptopOnlyConfiguration: DisplayMonitor.isLaptopOnlyConfiguration(),
+                hasAnyCamera: !cameraIDs.isEmpty,
+                hasMatchingProfileCamera: profile.map { cameraIDs.contains($0.cameraID) } ?? false,
+                matchingProfile: profile
+            )
         )
     }
 
@@ -212,7 +166,7 @@ extension AppDelegate {
 
     private func applyActiveDesk(forKey key: String) async {
         defer { onDesksChanged?() }
-        lineUpActiveDesk(forKey: key)
+        await lineUpActiveDesk(forKey: key)
         guard state != .disabled else { return }
         await handleDisplayConfigurationChange(rebuildOverlays: false)
     }
@@ -220,17 +174,10 @@ extension AppDelegate {
     /// The display transition leaves the camera alone in several states
     /// (disabled, battery and on-the-go pauses, AirPods active), so point it
     /// at the active desk directly.
-    func lineUpActiveDesk(forKey key: String) {
-        if let profile = loadProfile(forKey: key), availableCameraIDs().contains(profile.cameraID) {
-            if selectedCameraID != profile.cameraID {
-                cameraDetector.selectedCameraID = profile.cameraID
-                // No-op unless the session is running
-                cameraDetector.switchCamera(to: profile.cameraID)
-            }
-            applyCameraCalibration(from: profile)
-        } else {
-            cameraCalibration = nil
-        }
+    func lineUpActiveDesk(forKey key: String) async {
+        let profile = loadProfile(forKey: key)
+        let isCameraAvailable = profile.map { availableCameraIDs().contains($0.cameraID) } ?? false
+        await sendTrackingAction(.deskProfileApplied(profile, isCameraAvailable: isCameraAvailable))
         if trackingMode == .automatic {
             updateSourceReadiness()
         }
@@ -238,25 +185,5 @@ extension AppDelegate {
 
     func availableCameraIDs() -> [String] {
         availableCameraIDsOverride?() ?? cameraDetector.getAvailableCameras().map(\.uniqueID)
-    }
-
-    func applyDisplayConfigurationTransition(
-        pauseOnTheGoEnabled: Bool,
-        isLaptopOnlyConfiguration: Bool,
-        hasAnyCamera: Bool,
-        hasMatchingProfileCamera: Bool,
-        selectedCameraMatchesProfile: Bool,
-        matchingProfile: ProfileData?
-    ) async {
-        await sendTrackingAction(
-            .displayConfigurationChanged(
-                pauseOnTheGoEnabled: pauseOnTheGoEnabled,
-                isLaptopOnlyConfiguration: isLaptopOnlyConfiguration,
-                hasAnyCamera: hasAnyCamera,
-                hasMatchingProfileCamera: hasMatchingProfileCamera,
-                selectedCameraMatchesProfile: selectedCameraMatchesProfile,
-                matchingProfile: matchingProfile
-            )
-        )
     }
 }

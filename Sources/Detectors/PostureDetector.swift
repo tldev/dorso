@@ -41,7 +41,7 @@ enum CalibrationSample: Equatable {
 }
 
 /// Camera-based calibration profile
-struct CameraCalibrationData: CalibrationData {
+struct CameraCalibrationData: CalibrationData, Equatable {
     let goodPostureY: CGFloat
     let badPostureY: CGFloat
     let neutralY: CGFloat
@@ -64,8 +64,21 @@ struct CameraCalibrationData: CalibrationData {
     static let forwardHeadMinSeverity: Double = 0.5
 }
 
+extension CameraCalibrationData {
+    /// Saved profiles don't store face width, so forward-head detection starts from zero
+    init(profile: ProfileData) {
+        self.init(
+            goodPostureY: profile.goodPostureY,
+            badPostureY: profile.badPostureY,
+            neutralY: profile.neutralY,
+            postureRange: profile.postureRange,
+            cameraID: profile.cameraID
+        )
+    }
+}
+
 /// AirPods motion calibration profile
-struct AirPodsCalibrationData: CalibrationData {
+struct AirPodsCalibrationData: CalibrationData, Equatable {
     let pitch: Double
     let roll: Double
     let yaw: Double
