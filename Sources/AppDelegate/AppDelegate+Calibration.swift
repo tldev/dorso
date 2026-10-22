@@ -149,7 +149,7 @@ extension AppDelegate {
         calibrationController = nil
 
         if deskStore.selectDesk(id: id, forKey: key) != nil {
-            await lineUpActiveDesk(forKey: key)
+            await applyActiveDesk(forKey: key)
         }
         await sendTrackingAction(.calibrationCancelled)
     }

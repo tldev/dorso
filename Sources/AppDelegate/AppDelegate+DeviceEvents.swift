@@ -161,22 +161,15 @@ extension AppDelegate {
         await applyActiveDesk(forKey: key)
     }
 
-    private func applyActiveDesk(forKey key: String) async {
-        await lineUpActiveDesk(forKey: key)
-        guard state != .disabled else { return }
-        await handleDisplayConfigurationChange(rebuildOverlays: false)
-    }
-
-    /// The display transition leaves the camera alone in several states
-    /// (disabled, battery and on-the-go pauses, AirPods active), so point it
-    /// at the active desk directly.
-    func lineUpActiveDesk(forKey key: String) async {
+    /// Loads the active desk's calibration; the reducer decides whether
+    /// tracking restarts with it.
+    func applyActiveDesk(forKey key: String) async {
         let profile = loadProfile(forKey: key)
         let isCameraAvailable = profile.map { availableCameraIDs().contains($0.cameraID) } ?? false
-        await sendTrackingAction(.deskProfileApplied(profile, isCameraAvailable: isCameraAvailable))
         if trackingMode == .automatic {
             updateSourceReadiness()
         }
+        await sendTrackingAction(.deskProfileApplied(profile, isCameraAvailable: isCameraAvailable))
     }
 
     func availableCameraIDs() -> [String] {

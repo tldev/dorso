@@ -502,6 +502,79 @@ final class TrackingFeatureTests: XCTestCase {
     }
 
     @MainActor
+    func testDeskSwitchWhileMonitoringRestartsSessionWithoutDisplayRules() async {
+        // Laptop-only with pause-on-the-go on: a desk switch must not pause
+        let recorder = EffectIntentRecorder()
+        let desk = profile(cameraID: "builtin", goodY: 0.8)
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                cameraCalibration: .valid(cameraID: "builtin"),
+                selectedCameraID: "builtin",
+                pauseOnTheGoEnabled: true
+            ),
+            recorder: recorder
+        )
+
+        await store.send(.deskProfileApplied(desk, isCameraAvailable: true)) {
+            $0.cameraCalibration = CameraCalibrationData(profile: desk)
+            $0.cameraReadiness.calibrated = true
+        }
+        await store.finish()
+        await assertIntents([.beginMonitoringSession], recorder: recorder)
+    }
+
+    @MainActor
+    func testDeskSwitchResumesTrackingPausedForMissingCalibration() async {
+        let recorder = EffectIntentRecorder()
+        let desk = profile(cameraID: "builtin")
+        let store = makeStore(
+            initialState: TrackingFeature.State(appState: .paused(.noProfile), selectedCameraID: "builtin"),
+            recorder: recorder
+        )
+
+        await store.send(.deskProfileApplied(desk, isCameraAvailable: true)) {
+            $0.cameraCalibration = CameraCalibrationData(profile: desk)
+            $0.cameraReadiness.calibrated = true
+            $0.appState = .monitoring
+        }
+        await store.finish()
+        await assertIntents([.startMonitoring], recorder: recorder)
+    }
+
+    @MainActor
+    func testDeskSwitchLeavesOtherPausesAlone() async {
+        let desk = profile(cameraID: "builtin")
+        for pause in [PauseReason.onTheGo, .onBattery, .screenLocked] {
+            let store = makeStore(
+                initialState: TrackingFeature.State(appState: .paused(pause), selectedCameraID: "builtin")
+            )
+            await store.send(.deskProfileApplied(desk, isCameraAvailable: true)) {
+                $0.cameraCalibration = CameraCalibrationData(profile: desk)
+                $0.cameraReadiness.calibrated = true
+            }
+        }
+    }
+
+    @MainActor
+    func testDeskSwitchToMissingCameraWhileMonitoringPausesForCalibration() async {
+        let store = makeStore(
+            initialState: TrackingFeature.State(
+                appState: .monitoring,
+                cameraReadiness: TrackingSourceReadiness(calibrated: true),
+                cameraCalibration: .valid(cameraID: "builtin"),
+                selectedCameraID: "builtin"
+            )
+        )
+
+        await store.send(.deskProfileApplied(profile(cameraID: "external"), isCameraAvailable: false)) {
+            $0.cameraCalibration = nil
+            $0.cameraReadiness.calibrated = false
+            $0.appState = .paused(.noProfile)
+        }
+    }
+
+    @MainActor
     func testCameraConnectInAutomaticModeAppliesMatchingProfile() async {
         let recorder = EffectIntentRecorder()
         let desk = profile(cameraID: "external")

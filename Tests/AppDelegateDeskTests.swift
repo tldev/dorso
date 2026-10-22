@@ -228,4 +228,20 @@ final class AppDelegateDeskTests: XCTestCase {
         appDelegate.cameraCalibration = .valid(cameraID: "builtin")
         XCTAssertEqual(model.tracking.cameraCalibration, .valid(cameraID: "builtin"))
     }
+
+    func testSwitchingDeskWhileMonitoringIgnoresPauseOnTheGo() async {
+        let appDelegate = makeAppDelegate(cameraIDs: ["builtin"])
+        let home = appDelegate.deskStore.addDesk(
+            named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
+        appDelegate.deskStore.addDesk(named: "Uni", profile: profile(goodY: 0.8, cameraID: "builtin"), forKey: key)
+        appDelegate.selectedCameraID = "builtin"
+        appDelegate.cameraCalibration = .valid(cameraID: "builtin")
+        await appDelegate.setPauseOnTheGoEnabled(true)
+        appDelegate.state = .monitoring
+
+        await appDelegate.selectDesk(id: home.id)
+
+        XCTAssertEqual(appDelegate.state, .monitoring)
+        XCTAssertEqual(appDelegate.cameraCalibration?.goodPostureY, 0.6)
+    }
 }

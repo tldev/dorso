@@ -42,15 +42,54 @@ extension TrackingFeature {
             )
             return state.activeSource == .camera ? perform(.switchCamera(to: cameraID)) : .none
         case .deskProfileApplied(let profile, let isCameraAvailable):
-            guard let profile, isCameraAvailable else {
-                state.setCameraCalibration(nil)
-                return .none
-            }
-            let cameraChanged = state.applyCameraProfile(profile)
-            return cameraChanged ? perform(.switchCamera(to: profile.cameraID)) : .none
+            return deskProfileApplied(&state, profile, isCameraAvailable: isCameraAvailable)
         default:
             return .none
         }
+    }
+
+    /// A desk switch only swaps the calibration. It isn't a display change, so
+    /// display rules like pause-on-the-go are left alone.
+    private func deskProfileApplied(
+        _ state: inout State,
+        _ profile: ProfileData?,
+        isCameraAvailable: Bool
+    ) -> Effect<Action> {
+        var intents: [EffectIntent] = []
+        if let profile, isCameraAvailable {
+            if state.applyCameraProfile(profile) {
+                intents.append(.switchCamera(to: profile.cameraID))
+            }
+        } else {
+            state.setCameraCalibration(nil)
+        }
+
+        if state.trackingMode == .automatic, state.appState != .disabled {
+            let resolution = resolveAutomaticSource(&state)
+            if state.appState == .monitoring, state.activeSource == .camera {
+                intents.append(.beginMonitoringSession)
+            }
+            return .merge(perform(intents), resolution)
+        }
+
+        guard state.activeSource == .camera else { return perform(intents) }
+        let isCalibrated = state.isCalibrated(.camera)
+        switch state.appState {
+        case .monitoring:
+            if isCalibrated {
+                intents.append(.beginMonitoringSession)
+            } else {
+                state.appState = .paused(.noProfile)
+            }
+        case .paused(.noProfile), .paused(.cameraDisconnected):
+            if isCalibrated {
+                state.appState = .monitoring
+                intents.append(.startMonitoring)
+            }
+        default:
+            break
+        }
+        return perform(intents)
     }
 
     private func airPodsConnectionChanged(_ state: inout State, _ isConnected: Bool) -> Effect<Action> {
