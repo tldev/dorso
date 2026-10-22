@@ -135,7 +135,6 @@ extension AppDelegate {
 
         await sendTrackingAction(.calibrationCompleted(completed))
         saveSettings()
-        onCalibrationComplete?()
     }
 
     func cancelCalibration() async {
@@ -153,8 +152,6 @@ extension AppDelegate {
             await lineUpActiveDesk(forKey: key)
         }
         await sendTrackingAction(.calibrationCancelled)
-        onDesksChanged?()
-        onCalibrationComplete?()
     }
 
     // MARK: - Calibration Alerts

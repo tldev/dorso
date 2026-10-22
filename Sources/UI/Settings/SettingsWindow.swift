@@ -20,8 +20,8 @@ struct SettingsView: View {
     @State var pauseOnBattery: Bool
     @State var useCompatibilityMode: Bool
     @State var useFullScreenOverlay: Bool
-    @State var selectedCameraID: String
     @State var availableCameras: [(id: String, name: String)]
+    @StateObject var model: SettingsModel
     @State var warningMode: WarningMode
     @State var warningColor: Color
     @State var warningOnsetDelay: Double
@@ -33,14 +33,8 @@ struct SettingsView: View {
     @State var toggleShortcutEnabled: Bool
     @State var toggleShortcut: KeyboardShortcut
     @State var detectionModeSlider: Double
-    @State var trackingSource: TrackingSource
-    @State var trackingModeSelection: TrackingMode
-    @State var preferredSource: TrackingSource
     @State var airPodsAvailable: Bool
     @State var airPodsConnected: Bool
-    @State var cameraCalibrated: Bool
-    @State var airPodsCalibrated: Bool
-    @State var activeSource: TrackingSource
     @State var settingsProfiles: [SettingsProfile]
     @State var selectedSettingsProfileID: String
     @State var lastSelectedSettingsProfileID: String
@@ -50,8 +44,6 @@ struct SettingsView: View {
     @State var newProfileName = ""
     @State var showingRenameProfilePrompt = false
     @State var renameProfileName = ""
-    @State var desks: [Desk]
-    @State var activeDeskID: String
     @State var showingRenameDeskPrompt = false
     @State var renameDeskName = ""
     @State var showingDeleteDeskConfirmation = false
@@ -89,6 +81,7 @@ struct SettingsView: View {
     init(appDelegate: AppDelegate, settingsProfileManager: SettingsProfileManager) {
         self.appDelegate = appDelegate
         self.settingsProfileManager = settingsProfileManager
+        _model = StateObject(wrappedValue: SettingsModel(appDelegate: appDelegate))
 
         // Initialize all state from appDelegate synchronously to ensure correct sizing
         let cameras = appDelegate.cameraDetector.getAvailableCameras()
@@ -113,7 +106,6 @@ struct SettingsView: View {
         _pauseOnBattery = State(initialValue: appDelegate.pauseOnBattery)
         _useCompatibilityMode = State(initialValue: appDelegate.useCompatibilityMode)
         _useFullScreenOverlay = State(initialValue: appDelegate.useFullScreenOverlay)
-        _selectedCameraID = State(initialValue: appDelegate.selectedCameraID ?? cameras.first?.uniqueID ?? "")
         _availableCameras = State(initialValue: cameraList)
         _warningMode = State(initialValue: profileWarningMode)
         _warningColor = State(initialValue: Color(profileWarningColor))
@@ -127,17 +119,11 @@ struct SettingsView: View {
         _toggleShortcutEnabled = State(initialValue: appDelegate.toggleShortcutEnabled)
         _toggleShortcut = State(initialValue: appDelegate.toggleShortcut)
         _detectionModeSlider = State(initialValue: Double(detectionModes.firstIndex(of: profileDetectionMode) ?? 0))
-        _trackingSource = State(initialValue: appDelegate.trackingSource)
-        _trackingModeSelection = State(initialValue: appDelegate.trackingStore.withState { $0.trackingMode })
-        _preferredSource = State(initialValue: appDelegate.trackingStore.withState { $0.preferredSource })
         _airPodsAvailable = State(initialValue: appDelegate.airPodsDetector.isAvailable)
         let needsAirPods =
             appDelegate.trackingStore.withState { $0.trackingMode } == .automatic
             || appDelegate.trackingSource == .airpods
         _airPodsConnected = State(initialValue: needsAirPods ? appDelegate.airPodsDetector.isBluetoothConnected : false)
-        _cameraCalibrated = State(initialValue: appDelegate.cameraCalibration?.isValid ?? false)
-        _airPodsCalibrated = State(initialValue: appDelegate.airPodsCalibration?.isValid ?? false)
-        _activeSource = State(initialValue: appDelegate.activeTrackingSource)
         settingsProfileManager.ensureProfilesLoaded()
         let snapshot = settingsProfileManager.profilesState()
         let profiles = snapshot.profiles
@@ -145,9 +131,6 @@ struct SettingsView: View {
         _settingsProfiles = State(initialValue: profiles)
         _selectedSettingsProfileID = State(initialValue: initialProfileID)
         _lastSelectedSettingsProfileID = State(initialValue: initialProfileID)
-        let deskKey = DisplayMonitor.getCurrentConfigKey()
-        _desks = State(initialValue: appDelegate.deskStore.desks(forKey: deskKey))
-        _activeDeskID = State(initialValue: appDelegate.deskStore.activeDesk(forKey: deskKey)?.id ?? "")
     }
 
     var body: some View {
@@ -211,7 +194,6 @@ struct SettingsView: View {
             Button(L("common.rename")) {
                 appDelegate.deskStore.renameDesk(
                     id: activeDeskID, to: renameDeskName, forKey: DisplayMonitor.getCurrentConfigKey())
-                reloadDesks()
             }
         }
         .alert(L("desk.deleteTitle"), isPresented: $showingDeleteDeskConfirmation) {
@@ -220,29 +202,10 @@ struct SettingsView: View {
                 let deskID = activeDeskID
                 Task { @MainActor in
                     await appDelegate.deleteDesk(id: deskID)
-                    reloadDesks()
                 }
             }
         } message: {
             Text(L("desk.deleteMessage"))
-        }
-        .onAppear {
-            // The window is reused
-            reloadDesks()
-            appDelegate.onCalibrationComplete = {
-                reloadDesks()
-                cameraCalibrated = appDelegate.cameraCalibration?.isValid ?? false
-                airPodsCalibrated = appDelegate.airPodsCalibration?.isValid ?? false
-                airPodsConnected = appDelegate.airPodsDetector.isBluetoothConnected
-                activeSource = appDelegate.activeTrackingSource
-            }
-            appDelegate.onActiveSourceChanged = {
-                activeSource = appDelegate.activeTrackingSource
-            }
-            appDelegate.onDesksChanged = {
-                reloadDesks()
-                cameraCalibrated = appDelegate.cameraCalibration?.isValid ?? false
-            }
         }
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             if trackingModeSelection == .automatic || trackingSource == .airpods {

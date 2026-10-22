@@ -116,7 +116,7 @@ extension AppDelegate {
     func handleDisplayConfigurationChange(rebuildOverlays: Bool = true) async {
         if rebuildOverlays {
             rebuildOverlayWindows()
-            onDesksChanged?()
+            displayChanges.send()
         }
 
         guard state != .disabled else { return }
@@ -146,10 +146,7 @@ extension AppDelegate {
     func selectDesk(id: String) async {
         let key = DisplayMonitor.getCurrentConfigKey()
         // Samples being taken belong to the desk active when calibration started
-        guard state != .calibrating else {
-            onDesksChanged?()
-            return
-        }
+        guard state != .calibrating else { return }
         guard deskStore.activeDesk(forKey: key)?.id != id,
             deskStore.selectDesk(id: id, forKey: key) != nil
         else { return }
@@ -165,7 +162,6 @@ extension AppDelegate {
     }
 
     private func applyActiveDesk(forKey key: String) async {
-        defer { onDesksChanged?() }
         await lineUpActiveDesk(forKey: key)
         guard state != .disabled else { return }
         await handleDisplayConfigurationChange(rebuildOverlays: false)

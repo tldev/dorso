@@ -5,14 +5,8 @@ extension SettingsView {
     var trackingCard: some View {
         // Tracking card: mode picker in the header, source + device below
         SettingsCard(icon: "scope", title: L("settings.tracking"), helpText: L("settings.tracking.help")) {
-            CompactModePicker(selection: $trackingModeSelection)
+            CompactModePicker(selection: trackingModeBinding)
                 .frame(width: 170)
-                .onChange(of: trackingModeSelection) { newValue in
-                    Task { @MainActor in
-                        await appDelegate.setTrackingMode(newValue)
-                        activeSource = appDelegate.activeTrackingSource
-                    }
-                }
         } content: {
             VStack(spacing: 6) {
 
@@ -25,17 +19,10 @@ extension SettingsView {
                         Spacer()
 
                         CompactTrackingSourcePicker(
-                            selection: $trackingSource,
+                            selection: trackingSourceBinding,
                             airPodsAvailable: airPodsAvailable
                         )
                         .frame(width: 170)
-                        .onChange(of: trackingSource) { newValue in
-                            if newValue != appDelegate.trackingSource {
-                                Task { @MainActor in
-                                    await appDelegate.switchTrackingSource(to: newValue)
-                                }
-                            }
-                        }
                     }
                     .frame(height: 26)
 
@@ -44,23 +31,16 @@ extension SettingsView {
                         isCalibrated: trackingSource == .camera ? cameraCalibrated : airPodsCalibrated,
                         isConnected: trackingSource == .camera ? !availableCameras.isEmpty : airPodsConnected,
                         isPreferred: false,
-                        isActive: appDelegate.state.isActive,
+                        isActive: isTrackingActive,
                         cameraDropdown: trackingSource == .camera && !availableCameras.isEmpty
                             ? AnyView(
-                                Picker("", selection: $selectedCameraID) {
+                                Picker("", selection: selectedCameraBinding) {
                                     ForEach(availableCameras, id: \.id) { camera in
                                         Text(camera.name).tag(camera.id)
                                     }
                                 }
                                 .labelsHidden()
                                 .frame(minWidth: 130, maxWidth: 220)
-                                .onChange(of: selectedCameraID) { newValue in
-                                    if newValue != appDelegate.selectedCameraID {
-                                        Task { @MainActor in
-                                            await appDelegate.selectCamera(newValue)
-                                        }
-                                    }
-                                }
                             ) : nil,
                         onCalibrate: {
                             appDelegate.startCalibration()
@@ -81,16 +61,10 @@ extension SettingsView {
                             Spacer()
 
                             CompactTrackingSourcePicker(
-                                selection: $preferredSource,
+                                selection: preferredSourceBinding,
                                 airPodsAvailable: true
                             )
                             .frame(width: 170)
-                            .onChange(of: preferredSource) { newValue in
-                                Task { @MainActor in
-                                    await appDelegate.setPreferredSource(newValue)
-                                    activeSource = appDelegate.activeTrackingSource
-                                }
-                            }
                         }
                         .frame(height: 26)
 
@@ -100,24 +74,17 @@ extension SettingsView {
                             isCalibrated: cameraCalibrated,
                             isConnected: !availableCameras.isEmpty,
                             isPreferred: preferredSource == .camera,
-                            isActive: activeSource == .camera && appDelegate.state.isActive,
+                            isActive: activeSource == .camera && isTrackingActive,
                             cameraDropdown: availableCameras.isEmpty
                                 ? nil
                                 : AnyView(
-                                    Picker("", selection: $selectedCameraID) {
+                                    Picker("", selection: selectedCameraBinding) {
                                         ForEach(availableCameras, id: \.id) { camera in
                                             Text(camera.name).tag(camera.id)
                                         }
                                     }
                                     .labelsHidden()
                                     .frame(minWidth: 130, maxWidth: 220)
-                                    .onChange(of: selectedCameraID) { newValue in
-                                        if newValue != appDelegate.selectedCameraID {
-                                            Task { @MainActor in
-                                                await appDelegate.selectCamera(newValue)
-                                            }
-                                        }
-                                    }
                                 ),
                             onCalibrate: {
                                 appDelegate.startCalibration(for: .camera)
@@ -131,7 +98,7 @@ extension SettingsView {
                             isCalibrated: airPodsCalibrated,
                             isConnected: airPodsConnected,
                             isPreferred: preferredSource == .airpods,
-                            isActive: activeSource == .airpods && appDelegate.state.isActive,
+                            isActive: activeSource == .airpods && isTrackingActive,
                             onCalibrate: {
                                 appDelegate.startCalibration(for: .airpods)
                             }
@@ -175,18 +142,13 @@ extension SettingsView {
 
                 Spacer()
 
-                Picker("", selection: $activeDeskID) {
+                Picker("", selection: activeDeskBinding) {
                     ForEach(desks) { desk in
                         Text(desk.name).tag(desk.id)
                     }
                 }
                 .labelsHidden()
                 .frame(width: 130)
-                .onChange(of: activeDeskID) { newValue in
-                    Task { @MainActor in
-                        await appDelegate.selectDesk(id: newValue)
-                    }
-                }
 
                 CompactIconButton(systemName: "pencil", help: L("desk.renameTitle")) {
                     renameDeskName = desks.first(where: { $0.id == activeDeskID })?.name ?? ""
@@ -199,11 +161,5 @@ extension SettingsView {
             }
             .frame(height: 26)
         }
-    }
-
-    func reloadDesks() {
-        let key = DisplayMonitor.getCurrentConfigKey()
-        desks = appDelegate.deskStore.desks(forKey: key)
-        activeDeskID = appDelegate.deskStore.activeDesk(forKey: key)?.id ?? ""
     }
 }

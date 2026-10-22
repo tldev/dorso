@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 // MARK: - Desk
@@ -25,6 +26,8 @@ private struct DeskSet: Codable, Equatable {
 @MainActor
 final class DeskStore {
     private let userDefaults: UserDefaults
+    /// Fires after any save, so observers can refresh
+    let changes = PassthroughSubject<Void, Never>()
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -196,6 +199,7 @@ final class DeskStore {
             unreadableKeys.remove(key)
         }
         userDefaults.set(storedSets, forKey: SettingsKeys.desks)
+        changes.send()
     }
 
     private func uniqueName(for name: String, in desks: [Desk]) -> String {

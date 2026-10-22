@@ -58,9 +58,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         if let window = notification.object as? NSWindow {
             appDelegate?.restoreAccessoryActivationPolicyIfNeeded(excluding: window)
         }
-        appDelegate?.onCalibrationComplete = nil
-        appDelegate?.onActiveSourceChanged = nil
-        appDelegate?.onDesksChanged = nil
     }
 
     func windowDidResize(_ notification: Notification) {

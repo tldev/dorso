@@ -31,9 +31,6 @@ extension AppDelegate {
         } else if oldTrackingState.manualSource != newTrackingState.manualSource {
             syncDetectorToState()
         }
-        if oldTrackingState.activeSource != newTrackingState.activeSource {
-            onActiveSourceChanged?()
-        }
     }
 
     private func handleStateTransition(from oldState: AppState, to newState: AppState) {

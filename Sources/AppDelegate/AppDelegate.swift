@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import Combine
 import ComposableArchitecture
 import Vision
 import os.log
@@ -103,12 +104,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Which source is currently being calibrated (nil when not calibrating)
     var calibratingSource: TrackingSource?
-    /// Called when calibration completes successfully (for UI refresh)
-    var onCalibrationComplete: (() -> Void)?
-    /// Called when active source changes (for UI refresh)
-    var onActiveSourceChanged: (() -> Void)?
-    /// Called when the active desk or the display setup's desks change
-    var onDesksChanged: (() -> Void)?
+    /// Fires when the display setup changes, which changes the current desks
+    let displayChanges = PassthroughSubject<Void, Never>()
 
     var currentCalibration: CalibrationData? {
         trackingStore.withState { $0.calibration(for: $0.activeSource) }

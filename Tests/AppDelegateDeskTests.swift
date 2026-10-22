@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 
 @testable import DorsoCore
@@ -73,17 +74,18 @@ final class AppDelegateDeskTests: XCTestCase {
         XCTAssertNil(appDelegate.cameraCalibration)
     }
 
-    func testSwitchingDeskNotifiesListeners() async {
+    func testSwitchingDeskPublishesDeskChange() async {
         let appDelegate = makeAppDelegate(cameraIDs: ["builtin"])
         let home = appDelegate.deskStore.addDesk(
             named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
         appDelegate.deskStore.addDesk(named: "Uni", profile: profile(goodY: 0.8, cameraID: "builtin"), forKey: key)
-        var notifications = 0
-        appDelegate.onDesksChanged = { notifications += 1 }
+        var changes = 0
+        let subscription = appDelegate.deskStore.changes.sink { changes += 1 }
 
         await appDelegate.selectDesk(id: home.id)
 
-        XCTAssertEqual(notifications, 1)
+        XCTAssertEqual(changes, 1)
+        subscription.cancel()
     }
 
     func testDisplayChangeAppliesProfileCalibrationWhenCameraAlreadySelected() async {
@@ -127,14 +129,15 @@ final class AppDelegateDeskTests: XCTestCase {
         let appDelegate = makeAppDelegate(cameraIDs: ["builtin", "external"])
         let (home, office) = makeTwoCameraDesks(appDelegate)
         appDelegate.state = .calibrating
-        var notifications = 0
-        appDelegate.onDesksChanged = { notifications += 1 }
+        var changes = 0
+        let subscription = appDelegate.deskStore.changes.sink { changes += 1 }
 
         await appDelegate.selectDesk(id: office.id)
 
         XCTAssertEqual(appDelegate.deskStore.activeDesk(forKey: key)?.id, home.id)
         XCTAssertEqual(appDelegate.selectedCameraID, "builtin")
-        XCTAssertEqual(notifications, 1)
+        XCTAssertEqual(changes, 0)
+        subscription.cancel()
     }
 
     func testPickingDeskOnCalibrationScreenLinesUpCameraAndResumes() async {
@@ -205,5 +208,24 @@ final class AppDelegateDeskTests: XCTestCase {
         appDelegate.selectedCameraID = "builtin"
 
         XCTAssertEqual(appDelegate.cameraDetector.selectedCameraID, "builtin")
+    }
+
+    func testSettingsModelFollowsStoreAndDeskChanges() {
+        let appDelegate = makeAppDelegate(cameraIDs: ["builtin"])
+        let home = appDelegate.deskStore.addDesk(
+            named: "Home", profile: profile(goodY: 0.6, cameraID: "builtin"), forKey: key)
+        let model = SettingsModel(appDelegate: appDelegate)
+        XCTAssertEqual(model.activeDeskID, home.id)
+
+        let uni = appDelegate.deskStore.addDesk(
+            named: "Uni", profile: profile(goodY: 0.8, cameraID: "builtin"), forKey: key)
+        XCTAssertEqual(model.desks.map(\.id), [home.id, uni.id])
+        XCTAssertEqual(model.activeDeskID, uni.id)
+
+        appDelegate.displayChanges.send()
+        XCTAssertEqual(model.desks.count, 2)
+
+        appDelegate.cameraCalibration = .valid(cameraID: "builtin")
+        XCTAssertEqual(model.tracking.cameraCalibration, .valid(cameraID: "builtin"))
     }
 }
