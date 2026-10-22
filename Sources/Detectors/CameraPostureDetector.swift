@@ -47,12 +47,15 @@ class CameraPostureDetector: NSObject, PostureDetector {
 
     private(set) var isActive: Bool = false
 
-    /// Camera is always "connected" - no separate connection state like AirPods
-    /// (Camera doesn't have an equivalent to "put in your ears")
-    var isConnected: Bool { true }
+    /// Whether the camera has delivered and analyzed a frame since it was started.
+    /// The capture session starts asynchronously, so this stays false while the
+    /// camera is still warming up (the camera's equivalent of "AirPods in ears").
+    var isConnected: Bool { hasReceivedFrame }
 
-    /// Connection state changes (not used for camera - always connected when active)
+    /// Fires on the main queue when the first frame is analyzed after start, and when the camera stops
     var onConnectionStateChange: ((Bool) -> Void)?
+
+    private var hasReceivedFrame = false
 
     /// Camera permission is handled separately via AVCaptureDevice
     var isAuthorized: Bool { true }
@@ -168,6 +171,7 @@ class CameraPostureDetector: NSObject, PostureDetector {
         }
 
         lifecycleState = .starting
+        resetFrameState()
 
         let status = cameraAuthorizationStatus()
 
@@ -235,6 +239,24 @@ class CameraPostureDetector: NSObject, PostureDetector {
         isMonitoring = false
         consecutiveNoDetectionFrames = 0
         isAway = false
+        resetFrameState()
+    }
+
+    private func resetFrameState() {
+        if hasReceivedFrame {
+            hasReceivedFrame = false
+            onConnectionStateChange?(false)
+        }
+    }
+
+    private func markFrameReceived(from output: AVCaptureOutput) {
+        DispatchQueue.main.async {
+            // Ignore frames from a session that was stopped (or replaced by a newer start)
+            // while this notification was queued
+            guard output === self.videoOutput, !self.hasReceivedFrame else { return }
+            self.hasReceivedFrame = true
+            self.onConnectionStateChange?(true)
+        }
     }
 
     // MARK: - Calibration
@@ -620,5 +642,8 @@ extension CameraPostureDetector: AVCaptureVideoDataOutputSampleBufferDelegate {
         autoreleasepool {
             processFrame(pixelBuffer)
         }
+
+        // Vision runs synchronously, so position data from this frame is already stored
+        markFrameReceived(from: output)
     }
 }

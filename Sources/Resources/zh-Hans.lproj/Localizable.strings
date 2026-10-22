@@ -109,6 +109,7 @@
 "calibration.airpods.putIn" = "请佩戴您的 AirPods";
 "calibration.airpods.autoBegin" = "校准将自动开始";
 "calibration.airpods.escToCancel" = "按 {Esc} 取消";
+"calibration.camera.waiting" = "正在等待摄像头…";
 
 // MARK: - Settings Window (SettingsWindow.swift)
 
