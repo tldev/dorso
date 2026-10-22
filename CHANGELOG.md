@@ -5,6 +5,22 @@ All notable changes to Dorso will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-10-22
+
+### Added
+- Desks: keep a separate calibration for each place you work, even with the same screens (like a laptop at home, at university, and at the office). Press N while calibrating to save a new desk, then switch back from the Recalibrate screen, the menu bar, or Settings without recalibrating
+- Timed pause: pause Dorso for 5, 10, 30, or 60 minutes from the menu bar and it resumes on its own
+- Settings profiles can now be renamed
+
+### Fixed
+- Recalibrating while the camera was off could save an invalid calibration if you moved through the dots before the camera started; calibration now waits for the camera
+- A blur or warning no longer lingers on screen when you start recalibrating
+- Plugging in or unplugging a monitor while using the same camera now restores that setup's saved calibration
+
+### Acknowledgments
+- Thanks to [@LucaL1fe](https://github.com/LucaL1fe) for suggesting desks ([#106](https://github.com/tldev/dorso/issues/106)) and the timed pause ([#105](https://github.com/tldev/dorso/issues/105))
+- Thanks to [@ArnaudDerosin](https://github.com/ArnaudDerosin) for fixing calibration before the camera starts ([#104](https://github.com/tldev/dorso/pull/104))
+
 ## [1.15.1] - 2026-07-19
 
 ### Fixed

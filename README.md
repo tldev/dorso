@@ -242,3 +242,5 @@ Want this on Linux? See [postured](https://github.com/vadi2/postured) or [dorso-
 - [@mattwaler](https://github.com/mattwaler) - Full screen effects toggle
 - [@wensiet](https://github.com/wensiet) - Cmd+Tab visibility bug report and initial fix
 - [@MitchTalmadge](https://github.com/MitchTalmadge) - Pause on battery feature suggestion
+- [@ArnaudDerosin](https://github.com/ArnaudDerosin) - Fix for calibration starting before the camera is ready
+- [@LucaL1fe](https://github.com/LucaL1fe) - Desks and timed pause feature suggestions
