@@ -63,9 +63,7 @@ extension TrackingFeature {
     // MARK: - Automatic Mode Source Resolution
 
     func resolveAutomaticSource(_ state: inout State) -> Effect<Action> {
-        // The battery pause is sticky: source readiness changes must not resume
-        // tracking. AC power, the setting, or a direct user action lifts it.
-        guard state.appState != .paused(.onBattery) else { return .none }
+        guard !state.appState.isStickyPause else { return .none }
 
         let previousSource = state.activeSource
         let previousAppState = state.appState

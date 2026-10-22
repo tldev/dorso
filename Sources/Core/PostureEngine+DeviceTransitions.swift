@@ -79,8 +79,7 @@ extension PostureEngine {
             return CameraConnectedTransitionResult(newState: currentState, shouldSelectAndStartMonitoring: false)
         }
 
-        // The battery pause is only lifted by AC power, the setting, or the user.
-        guard case .paused(let reason) = currentState, reason != .onBattery else {
+        guard case .paused(let reason) = currentState, !reason.isSticky else {
             return CameraConnectedTransitionResult(newState: currentState, shouldSelectAndStartMonitoring: false)
         }
 
@@ -103,7 +102,7 @@ extension PostureEngine {
         hasFallbackCamera: Bool,
         fallbackMatchesProfile: Bool
     ) -> CameraDisconnectedTransitionResult {
-        guard trackingSource == .camera, currentState != .paused(.onBattery) else {
+        guard trackingSource == .camera, !currentState.isStickyPause else {
             return CameraDisconnectedTransitionResult(newState: currentState, action: .none)
         }
 
@@ -134,7 +133,7 @@ extension PostureEngine {
         trackingSource: TrackingSource,
         context: DisplayConfigurationContext
     ) -> DisplayConfigurationTransitionResult {
-        guard currentState != .disabled, currentState != .paused(.onBattery) else {
+        guard currentState != .disabled, !currentState.isStickyPause else {
             return DisplayConfigurationTransitionResult(
                 newState: currentState,
                 shouldSwitchToProfileCamera: false,

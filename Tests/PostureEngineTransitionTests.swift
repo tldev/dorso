@@ -927,4 +927,55 @@ final class PostureEngineTransitionTests: XCTestCase {
         XCTAssertFalse(PostureEngine.shouldDetectorRun(for: .paused(.onBattery), trackingSource: .camera))
         XCTAssertFalse(PostureEngine.shouldDetectorRun(for: .paused(.onBattery), trackingSource: .airpods))
     }
+
+    // MARK: - Sticky Pauses
+
+    func testOnlyTheBatteryPauseIsSticky() {
+        let reasons: [PauseReason] = [
+            .noProfile, .onTheGo, .cameraDisconnected, .screenLocked, .airPodsRemoved, .onBattery,
+            .timed(until: Date(timeIntervalSince1970: 0)),
+        ]
+        for reason in reasons {
+            // Exhaustive on purpose: a new pause reason must decide whether it is sticky
+            switch reason {
+            case .onBattery:
+                XCTAssertTrue(reason.isSticky)
+            case .noProfile, .onTheGo, .cameraDisconnected, .screenLocked, .airPodsRemoved, .timed:
+                XCTAssertFalse(reason.isSticky, "\(reason)")
+            }
+        }
+        XCTAssertTrue(AppState.paused(.onBattery).isStickyPause)
+        XCTAssertFalse(AppState.monitoring.isStickyPause)
+    }
+
+    func testStickyPauseIgnoresDeviceChanges() {
+        let connect = PostureEngine.stateWhenCameraConnects(
+            currentState: .paused(.onBattery),
+            trackingSource: .camera,
+            hasMatchingProfileForConnectedCamera: true
+        )
+        XCTAssertEqual(connect.newState, .paused(.onBattery))
+
+        let disconnect = PostureEngine.stateWhenCameraDisconnects(
+            currentState: .paused(.onBattery),
+            trackingSource: .camera,
+            disconnectedCameraIsSelected: true,
+            hasFallbackCamera: false,
+            fallbackMatchesProfile: false
+        )
+        XCTAssertEqual(disconnect.newState, .paused(.onBattery))
+
+        let display = PostureEngine.stateWhenDisplayConfigurationChanges(
+            currentState: .paused(.onBattery),
+            trackingSource: .camera,
+            context: DisplayConfigurationContext(
+                pauseOnTheGoEnabled: true,
+                isLaptopOnlyConfiguration: true,
+                hasAnyCamera: false,
+                hasMatchingProfileCamera: false,
+                selectedCameraMatchesProfile: false
+            )
+        )
+        XCTAssertEqual(display.newState, .paused(.onBattery))
+    }
 }
