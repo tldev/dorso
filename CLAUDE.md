@@ -176,6 +176,8 @@ pkill -x Dorso; ./build.sh --dev && rm -rf /Applications/Dorso.app && cp -r buil
 
 ## Code Quality Rules
 
+**Formatting and lint:** run `scripts/lint.sh` before committing (CI runs the same check). `scripts/lint.sh --fix` applies swift-format first. Rules live in `.swift-format` and `.swiftlint.yml` (`Tests/.swiftlint.yml` relaxes force unwraps and length limits in tests). Fix violations rather than adding `swiftlint:disable` comments; the codebase has none.
+
 **NEVER use delays/timeouts to solve timing problems.** They are hacks that hide the real issue. Instead:
 - Fix the actual sequencing/state management
 - Use proper callbacks or completion handlers

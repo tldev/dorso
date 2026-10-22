@@ -1,0 +1,9 @@
+# Force unwraps fail loudly in tests, which is what we want, and test
+# classes grow with coverage
+disabled_rules:
+  - force_unwrapping
+  - force_cast
+  - force_try
+  - type_body_length
+  - file_length
+  - function_body_length
