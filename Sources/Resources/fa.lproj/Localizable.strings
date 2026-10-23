@@ -1,0 +1,240 @@
+/* Dorso - English (Base) Localizable Strings */
+
+// MARK: - Menu Bar (MenuBar.swift)
+
+"menu.status.starting" = "Status: Starting...";
+"menu.enable" = "Enable";
+"menu.pause" = "Pause";
+"menu.resumeNow" = "Resume Now";
+"menu.recalibrate" = "Recalibrate";
+"menu.support" = "Support";
+"menu.analytics" = "Analytics";
+"menu.settings" = "Settings";
+"menu.quit" = "Quit";
+"menu.checkForUpdates" = "Check for Updates…";
+
+// MARK: - App Menu (DorsoMain.swift)
+
+"appmenu.quit" = "Quit Dorso";
+"appmenu.closeWindow" = "Close Window";
+"appmenu.file" = "File";
+"appmenu.edit" = "Edit";
+"appmenu.undo" = "Undo";
+"appmenu.redo" = "Redo";
+"appmenu.cut" = "Cut";
+"appmenu.copy" = "Copy";
+"appmenu.paste" = "Paste";
+"appmenu.selectAll" = "Select All";
+
+// MARK: - Status Text (PostureUIState.swift)
+
+"status.disabled" = "Status: Disabled";
+"status.calibrating" = "Status: Calibrating...";
+"status.starting" = "Status: Starting...";
+"status.away" = "Status: Away";
+"status.slouching" = "Status: Slouching";
+"status.goodPosture" = "Status: Good Posture";
+"status.calibrationNeeded" = "Status: Calibration needed";
+"status.pausedOnTheGo" = "Status: Paused (on the go - recalibrate)";
+"status.cameraDisconnected" = "Status: Camera disconnected";
+"status.airPodsDisconnected" = "Status: AirPods disconnected";
+"status.pausedScreenLocked" = "Status: Paused (screen locked)";
+"status.pausedPutInAirPods" = "Status: Paused (put in AirPods)";
+"status.pausedOnBattery" = "Status: Paused (on battery)";
+"status.pausedUntil" = "Status: Paused (until %@)";
+
+// MARK: - Menu Bar Icon Accessibility (Models.swift)
+
+"accessibility.goodPosture" = "Good Posture";
+"accessibility.badPosture" = "Bad Posture";
+"accessibility.away" = "Away";
+"accessibility.paused" = "Paused";
+"accessibility.calibrating" = "Calibrating";
+
+// MARK: - Warning Mode (SettingsWindow.swift)
+
+"warningMode.blur" = "Blur";
+"warningMode.glow" = "Glow";
+"warningMode.border" = "Border";
+"warningMode.solid" = "Solid";
+"warningMode.none" = "None";
+
+// MARK: - Detection Mode (Models.swift)
+
+"detectionMode.responsive" = "Responsive";
+"detectionMode.balanced" = "Balanced";
+"detectionMode.performance" = "Performance";
+
+// MARK: - Tracking Source (PostureDetector.swift)
+
+"trackingSource.camera" = "Camera";
+"trackingSource.airpods" = "AirPods";
+"trackingSource.camera.description" = "Uses your camera to track head position. Works with any Mac camera.";
+"trackingSource.airpods.description" = "Uses motion sensors to detect head tilt. Requires AirPods Pro, Max, 3rd gen, or 4 with ANC.";
+"trackingSource.camera.requirement" = "Requires camera access";
+"trackingSource.airpods.requirement" = "Requires macOS 14+ and compatible AirPods";
+
+// MARK: - AirPods Detector (AirPodsPostureDetector.swift)
+
+"airpods.compatible" = "Compatible";
+"airpods.noMotionSensors" = "No motion sensors";
+"airpods.requiresMacOS14" = "Requires macOS 14.0 or later";
+"airpods.noCompatibleConnected" = "No compatible AirPods connected";
+"airpods.failedCreateManager" = "Failed to create motion manager";
+"airpods.noCompatiblePaired" = "No compatible AirPods paired. Please pair AirPods Pro, Max, 3rd gen, or 4 with ANC.";
+
+// MARK: - Alerts (AppDelegate.swift)
+
+"alert.permissionRequired" = "Permission Required";
+"alert.permissionRequired.airpods" = "Motion & Fitness Activity permission is required for AirPods tracking. Please enable it in System Settings > Privacy & Security > Motion & Fitness Activity.";
+"alert.permissionRequired.camera" = "Camera permission is required. Please enable it in System Settings > Privacy & Security > Camera.";
+"alert.openSettings" = "Open Settings";
+"alert.cameraNotAvailable" = "Camera Not Available";
+"alert.cameraNotAvailable.message" = "Please make sure your camera is connected and camera access is granted.";
+"alert.tryAgain" = "Try Again";
+"support.title" = "Support Dorso";
+"support.message" = "If Dorso has helped you with your posture and you want to show some support, please buy me a coffee.";
+"support.button" = "Buy Me a Coffee";
+
+// MARK: - Calibration (CalibrationWindow.swift)
+
+"calibration.lookAtRing" = "Look at the ring and tap Space";
+"calibration.stepOf" = "Step %d of %d";
+"calibration.lookAtCorner" = "Look at the %@ corner";
+"calibration.lookOtherScreen" = "Look at the other screen";
+"calibration.corner.topLeft" = "top-left";
+"calibration.corner.topRight" = "top-right";
+"calibration.corner.bottomLeft" = "bottom-left";
+"calibration.corner.bottomRight" = "bottom-right";
+/* {BracedText} is rendered as a keyboard keycap — keep the braces and English key name intact */
+"calibration.hint.tapSpace" = "در حالی که به حلقه نگاه می‌کنید، {Space} را فشار دهید";
+"calibration.hint.escToSkip" = "برای رد شدن از کالیبراسیون، {Esc} را بزنید";
+"calibration.airpods.putIn" = "لطفاً AirPods خود را در گوش بگذارید";
+"calibration.airpods.autoBegin" = "کالیبراسیون به‌طور خودکار آغاز خواهد شد";
+"calibration.airpods.escToCancel" = "برای لغو، {Esc} را فشار دهید";
+"calibration.camera.waiting" = "در انتظار دوربین…";
+
+// MARK: - Settings Window (SettingsWindow.swift)
+
+"settings.title" = "تنظیمات";
+"settings.tracking" = "ردیابی";
+"settings.tracking.help" = "حالت «دستی» از یک منبع استفاده می‌کند. حالت «خودکار» بر اساس دردسترس بودن، بین «دوربین» و AirPods جابه‌جا می‌شود و در صورت امکان از منبع ترجیحی شما استفاده می‌کند.";
+"settings.noCameras" = "دوربینی یافت نشد";
+"settings.connected" = "متصل";
+"settings.notConnected" = "متصل نیست";
+"settings.recalibrate" = "کالیبراسیون مجدد";
+"settings.mode.manual" = "دستی";
+"settings.mode.automatic" = "خودکار";
+"settings.preferred" = "ترجیحی";
+"settings.source" = "منبع";
+"settings.section.response" = "واکنش به وضعیت بدن";
+"settings.section.behavior" = "رفتار";
+"settings.appearance" = "ظاهر";
+"settings.appearance.auto" = "خودکار";
+"settings.appearance.light" = "روشن";
+"settings.appearance.dark" = "تیره";
+"settings.active" = "فعال";
+"settings.calibrated" = "کالیبره‌شده";
+"settings.notCalibrated" = "کالیبره‌نشده";
+"settings.preferredNeedsCalibration" = "دستگاه ترجیحی به کالیبراسیون نیاز دارد";
+"settings.calibratePreferred" = "کالیبره کردن";
+"settings.profile" = "پروفایل";
+"settings.profile.help" = "پیکربندی‌های متفاوتی را برای شرایط گوناگون ذخیره کنید. با تغییر پروفایل، تمام تنظیمات زیر فوراً اعمال می‌شوند.";
+"settings.profile.new" = "جدید";
+"settings.profile.newTitle" = "پروفایل جدید";
+"settings.profile.namePrompt" = "برای پروفایل تنظیمات خود نامی انتخاب کنید.";
+"settings.profile.namePlaceholder" = "نام پروفایل";
+"settings.profile.create" = "ایجاد";
+"settings.profile.deleteTitle" = "حذف پروفایل";
+"settings.profile.deleteMessage" = "آیا از حذف این پروفایل اطمینان دارید؟ این عمل غیرقابل‌بازگشت است.";
+"settings.profile.delete" = "حذف";
+"settings.warning" = "هشدار";
+"settings.warning.help" = "گزینهٔ «تار کردن» صفحه را تار می‌کند، «درخشش» هاله‌ای دور لبه‌ها نشان می‌دهد، «حاشیه» کادرهای رنگی نمایش می‌دهد و «یکدست» تمام صفحه را می‌پوشاند. «هیچ‌کدام» هشدارهای بصری را غیرفعال می‌کند.";
+"settings.deadZone" = "محدودهٔ خنثی";
+"settings.deadZone.help" = "میزان حرکتی که پیش از شروع هشدار مجاز است. محدودهٔ خنثیِ آزادتر، امکان حرکت طبیعی‌تری را فراهم می‌کند.";
+"settings.intensity" = "شدت";
+"settings.intensity.help" = "سرعت افزایش هشدار هنگام قوز کردن فراتر از محدودهٔ خنثی.";
+"settings.delay" = "تأخیر";
+"settings.delay.help" = "مهلت زمانی پیش از فعال شدن هشدار. به شما اجازه می‌دهد بدون ایجاد هشدار، نگاهی کوتاه به صفحه‌کلید بیندازید.";
+"settings.detection" = "تشخیص";
+"settings.detection.help" = "ایجاد تعادل بین سرعت پاسخ‌دهی و مصرف باتری. حالت «پاسخ‌گو» سریع تشخیص می‌دهد و حالت «عملکرد» باعث صرفه‌جویی در مصرف باتری می‌شود.";
+"settings.launchAtLogin" = "اجرا هنگام ورود";
+"settings.launchAtLogin.help" = "اجرای خودکار Dorso هنگام ورود به سیستم";
+"settings.autoUpdates" = "به‌روزرسانی خودکار";
+"settings.autoUpdates.help" = "بررسی نسخه‌های جدید در پس‌زمینه و پیشنهاد نصب آن‌ها";
+"settings.showInDock" = "نمایش در Dock";
+"settings.showInDock.help" = "نگه‌داشتن Dorso در Dock و Cmd+Tab";
+"settings.blurWhenAway" = "تار کردن هنگام دور بودن";
+"settings.blurWhenAway.help.camera" = "تار کردن کامل صفحه هنگام دور شدن";
+"settings.blurWhenAway.help.airpods" = "تار کردن کامل صفحه هنگام دور شدن. فقط در صورت استفاده از دوربین برای تشخیص در دسترس است.";
+"settings.pauseOnTheGo" = "توقف موقت در حال حرکت";
+"settings.pauseOnTheGo.help" = "توقف موقت خودکار هنگامی که تنها از نمایشگر لپ‌تاپ استفاده می‌شود";
+"settings.pauseOnBattery" = "توقف موقت هنگام استفاده از باتری";
+"settings.pauseOnBattery.help" = "توقف موقت خودکار برای صرفه‌جویی در مصرف انرژی هنگام استفاده از باتری";
+"settings.fullScreenOverlay" = "پوشش تمام‌صفحه";
+"settings.fullScreenOverlay.help" = "گسترش جلوه‌ها روی Dock و نوار منو";
+"settings.shortcut" = "میانبر";
+"settings.shortcut.help" = "کلید میانبر سراسری برای فعال یا غیرفعال کردن Dorso. روی این قسمت کلیک کنید و کلیدهای ترکیبی موردنظر خود را فشار دهید.";
+"settings.shortcut.press" = "فشار دهید...";
+"settings.compatibilityMode" = "حالت سازگاری";
+"settings.compatibilityMode.help" = "اگر تار شدن صفحه اعمال نمی‌شود، این گزینه را فعال کنید";
+"settings.viewOnGitHub" = "مشاهده در GitHub";
+"settings.joinDiscord" = "پیوستن به Discord";
+
+// Settings slider labels
+"settings.deadZone.strict" = "سخت‌گیرانه";
+"settings.deadZone.tight" = "محدود";
+"settings.deadZone.medium" = "متوسط";
+"settings.deadZone.relaxed" = "آزاد";
+"settings.deadZone.loose" = "بسیار آزاد";
+"settings.intensity.gentle" = "بسیار ملایم";
+"settings.intensity.easy" = "ملایم";
+"settings.intensity.medium" = "متوسط";
+"settings.intensity.firm" = "محکم";
+"settings.intensity.aggressive" = "شدید";
+
+// MARK: - Analytics (AnalyticsWindow.swift)
+
+"analytics.title" = "آمار";
+"analytics.header" = "آمار وضعیت بدن";
+"analytics.tagline" = "عادت‌ها و روند بهبود خود را در طول زمان پیگیری کنید";
+"analytics.todayScore" = "امتیاز امروز";
+"analytics.monitoringTime" = "زمان پایش";
+"analytics.slouchDuration" = "مدت قوز کردن";
+"analytics.slouchEvents" = "دفعات قوز کردن";
+"analytics.last7Days" = "۷ روز گذشته";
+
+// MARK: - Onboarding (OnboardingWindow.swift)
+
+"onboarding.title" = "به Dorso خوش آمدید";
+"onboarding.subtitle" = "نحوهٔ ردیابی وضعیت بدن خود را انتخاب کنید";
+"onboarding.selectCamera" = "انتخاب دوربین";
+"onboarding.pairedAirPods" = "گوشی‌های AirPods جفت‌شده";
+"onboarding.unavailable" = "دردسترس نیست";
+"onboarding.continue" = "ادامه";
+
+// MARK: - Common
+
+"common.cancel" = "لغو";
+
+// MARK: - Desks
+
+"menu.desk" = "میز";
+"menu.manageDesks" = "مدیریت میزها…";
+"desk.defaultName" = "میز %d";
+"desk.namePlaceholder" = "نام میز";
+"desk.renameTitle" = "تغییر نام میز";
+"desk.deleteTitle" = "حذف میز";
+"desk.deleteMessage" = "آیا از حذف این میز و کالیبراسیون آن اطمینان دارید؟ این عمل غیرقابل بازگشت است.";
+"settings.desk" = "میز";
+"settings.desk.help" = "هر میز کالیبراسیون اختصاصی خود را برای این چیدمان نمایشگر حفظ می‌کند. میزها را از اینجا یا از نوار منو تغییر دهید.";
+"settings.profile.renameTitle" = "تغییر نام پروفایل";
+"common.rename" = "تغییر نام";
+"calibration.desk.title" = "پشت کدام میز هستید؟";
+"calibration.desk.subtitle" = "به یکی از میزهای ذخیره‌شده بروید یا میزی جدید را کالیبره کنید.";
+"calibration.desk.current" = "فعلی";
+"calibration.desk.new" = "میز جدید";
+"calibration.desk.recalibrate" = "کالیبراسیون مجدد میز فعلی";
+"calibration.desk.hint.new" = "پشت میز متفاوتی هستید؟ برای ذخیره به‌عنوان میز جدید، {N} را فشار دهید";
+"calibration.desk.hint.newSelected" = "در حال ذخیره به‌عنوان میز جدید. برای بازگردانی، {N} را فشار دهید";
+"calibration.desk.keysHint" = "جابه‌جایی با {↑}{↓}   انتخاب با {↩}   لغو با {Esc}";
