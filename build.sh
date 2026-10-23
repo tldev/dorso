@@ -190,6 +190,7 @@ cat > "$CONTENTS/Info.plist" << EOF
         <string>de</string>
         <string>ja</string>
         <string>zh-Hans</string>
+        <string>fa</string>
     </array>
 </dict>
 </plist>
