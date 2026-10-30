@@ -29,24 +29,24 @@ final class KeycapHintLayoutTests: XCTestCase {
         )
     }
 
-    /// Reading the visual line from its right edge recovers move, then select, then cancel.
+    /// Reading from the right edge gives move, then select, then cancel, with the arrows still drawn ↑ then ↓.
     func testPersianDeskKeysHintVisualOrder() {
         let text = "جابه‌جایی با {↑}{↓}   انتخاب با {↩}   لغو با {Esc}"
         XCTAssertEqual(KeycapHintLayout.direction(of: text), .rightToLeft)
-        let readingOrder = Array(KeycapHintLayout.visualSegments(in: text).reversed())
+        let visual = KeycapHintLayout.visualSegments(in: text)
         XCTAssertEqual(
-            readingOrder.map(\.text),
+            visual.map(\.text),
             [
-                "جابه‌جایی با ",
+                "Esc",
+                "   لغو با ",
+                "↩",
+                "   انتخاب با ",
                 "↑",
                 "↓",
-                "   انتخاب با ",
-                "↩",
-                "   لغو با ",
-                "Esc",
+                "جابه‌جایی با ",
             ]
         )
-        XCTAssertEqual(readingOrder.map(\.isKeycap), [false, true, true, false, true, false, true])
+        XCTAssertEqual(visual.map(\.isKeycap), [true, false, true, false, true, true, false])
     }
 
     func testKeycapsAndStringsWithoutStrongLettersStayLeftToRight() {

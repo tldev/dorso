@@ -10,11 +10,23 @@ enum KeycapHintLayout {
         baseDirection(of: segments(in: text))
     }
 
-    /// Left-to-right drawing order. Right-to-left hints are the logical segments reversed.
+    /// Left-to-right drawing order. Right-to-left hints reverse the logical segments, except that
+    /// adjacent keycaps like `{↑}{↓}` stay in order as one group.
     static func visualSegments(in text: String) -> [(text: String, isKeycap: Bool)] {
         let parsed = segments(in: text)
         guard baseDirection(of: parsed) == .rightToLeft else { return parsed }
-        return Array(parsed.reversed())
+
+        var visual: [(text: String, isKeycap: Bool)] = []
+        var insertionIndex = 0
+        for (index, segment) in parsed.enumerated() {
+            let continuesKeycapGroup = segment.isKeycap && index > 0 && parsed[index - 1].isKeycap
+            if !continuesKeycapGroup {
+                insertionIndex = 0
+            }
+            visual.insert(segment, at: insertionIndex)
+            insertionIndex += 1
+        }
+        return visual
     }
 
     private static let rightToLeftLetters: [ClosedRange<UInt32>] = [
