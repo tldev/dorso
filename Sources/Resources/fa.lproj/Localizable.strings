@@ -1,4 +1,4 @@
-/* Dorso - English (Base) Localizable Strings */
+/* Dorso - Persian (fa) Localizable Strings */
 
 // MARK: - Menu Bar (MenuBar.swift)
 
@@ -33,7 +33,7 @@
 "status.starting" = "وضعیت: در حال راه‌اندازی...";
 "status.away" = "وضعیت: دور بودن";
 "status.slouching" = "وضعیت: در حال قوز کردن";
-"status.goodPosture" = "وضعیت: وضعیت درست بدن";
+"status.goodPosture" = "وضعیت: حالت درست بدن";
 "status.calibrationNeeded" = "وضعیت: نیاز به کالیبراسیون";
 "status.pausedOnTheGo" = "وضعیت: توقف موقت (در حال حرکت - کالیبراسیون مجدد)";
 "status.cameraDisconnected" = "وضعیت: دوربین متصل نیست";
@@ -45,8 +45,8 @@
 
 // MARK: - Menu Bar Icon Accessibility (Models.swift)
 
-"accessibility.goodPosture" = "وضعیت درست بدن";
-"accessibility.badPosture" = "وضعیت نادرست بدن";
+"accessibility.goodPosture" = "حالت درست بدن";
+"accessibility.badPosture" = "حالت نادرست بدن";
 "accessibility.away" = "دور بودن";
 "accessibility.paused" = "توقف موقت";
 "accessibility.calibrating" = "در حال کالیبراسیون";
@@ -72,7 +72,7 @@
 "trackingSource.camera.description" = "از دوربین شما برای ردیابی موقعیت سر استفاده می‌کند. با هر دوربین Mac کار می‌کند.";
 "trackingSource.airpods.description" = "از حسگرهای حرکتی برای تشخیص شیب سر استفاده می‌کند. به AirPods Pro،‏ Max، نسل ۳ یا ۴ با ANC نیاز دارد.";
 "trackingSource.camera.requirement" = "نیازمند دسترسی به دوربین";
-"trackingSource.airpods.requirement" = "نیازمند macOS 14+ و AirPods سازگار";
+"trackingSource.airpods.requirement" = "نیازمند macOS 14 یا جدیدتر و AirPods سازگار";
 
 // MARK: - AirPods Detector (AirPodsPostureDetector.swift)
 
@@ -106,7 +106,7 @@
 "calibration.corner.topRight" = "بالا سمت راست";
 "calibration.corner.bottomLeft" = "پایین سمت چپ";
 "calibration.corner.bottomRight" = "پایین سمت راست";
-/* {BracedText} is rendered as a keyboard keycap — keep the braces and English key name intact */
+/* {BracedText} is rendered as a keyboard keycap; keep the braces and English key name intact */
 "calibration.hint.tapSpace" = "در حالی که به حلقه نگاه می‌کنید، {Space} را فشار دهید";
 "calibration.hint.escToSkip" = "برای رد شدن از کالیبراسیون، {Esc} را بزنید";
 "calibration.airpods.putIn" = "لطفاً AirPods خود را در گوش بگذارید";
