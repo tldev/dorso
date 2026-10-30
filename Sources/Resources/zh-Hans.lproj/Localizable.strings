@@ -106,7 +106,7 @@
 "calibration.corner.topRight" = "右上";
 "calibration.corner.bottomLeft" = "左下";
 "calibration.corner.bottomRight" = "右下";
-/* {BracedText} is rendered as a keyboard keycap — keep the braces and English key name intact */
+/* {BracedText} is rendered as a keyboard keycap; keep the braces and English key name intact */
 "calibration.hint.tapSpace" = "看着圆环时按下 {Space}";
 "calibration.hint.escToSkip" = "{Esc} 跳过校准";
 "calibration.airpods.putIn" = "请佩戴您的 AirPods";

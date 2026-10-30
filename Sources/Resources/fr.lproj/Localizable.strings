@@ -106,7 +106,7 @@
 "calibration.corner.topRight" = "supérieur droit";
 "calibration.corner.bottomLeft" = "inférieur gauche";
 "calibration.corner.bottomRight" = "inférieur droit";
-/* {BracedText} is rendered as a keyboard keycap — keep the braces and English key name intact */
+/* {BracedText} is rendered as a keyboard keycap; keep the braces and English key name intact */
 "calibration.hint.tapSpace" = "Appuyez sur {Space} en regardant l'anneau";
 "calibration.hint.escToSkip" = "{Esc} pour annuler la calibration";
 "calibration.airpods.putIn" = "Mettez vos AirPods";

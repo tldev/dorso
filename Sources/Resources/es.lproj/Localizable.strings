@@ -106,7 +106,7 @@
 "calibration.corner.topRight" = "superior derecha";
 "calibration.corner.bottomLeft" = "inferior izquierda";
 "calibration.corner.bottomRight" = "inferior derecha";
-/* {BracedText} is rendered as a keyboard keycap — keep the braces and English key name intact */
+/* {BracedText} is rendered as a keyboard keycap; keep the braces and English key name intact */
 "calibration.hint.tapSpace" = "Pulsa {Space} mientras miras el anillo";
 "calibration.hint.escToSkip" = "{Esc} para omitir la calibración";
 "calibration.airpods.putIn" = "Ponte los AirPods";

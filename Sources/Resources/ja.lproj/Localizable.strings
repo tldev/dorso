@@ -106,7 +106,7 @@
 "calibration.corner.topRight" = "右上";
 "calibration.corner.bottomLeft" = "左下";
 "calibration.corner.bottomRight" = "右下";
-/* {BracedText} is rendered as a keyboard keycap — keep the braces and English key name intact */
+/* {BracedText} is rendered as a keyboard keycap; keep the braces and English key name intact */
 "calibration.hint.tapSpace" = "リングを見ながら {Space} を押してください";
 "calibration.hint.escToSkip" = "{Esc} でキャリブレーションをスキップ";
 "calibration.airpods.putIn" = "AirPods を装着してください";
