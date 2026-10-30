@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 
 class CalibrationView: NSView {
     var targetPosition: NSPoint = .zero
@@ -169,11 +170,8 @@ class CalibrationView: NSView {
     func drawLocalizedHintWithKeycap(text: String, centerY: CGFloat, textColor: NSColor, fontSize: CGFloat) {
         let font = NSFont.systemFont(ofSize: fontSize, weight: .medium)
         let keycapFont = NSFont.systemFont(ofSize: fontSize - 1, weight: .semibold)
-
-        let textAttrs: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: textColor,
-        ]
+        let rightToLeft = KeycapHintLayout.direction(of: text) == .rightToLeft
+        let textAttrs = hintTextAttributes(font: font, color: textColor, rightToLeft: rightToLeft)
         let keycapTextAttrs: [NSAttributedString.Key: Any] = [
             .font: keycapFont,
             .foregroundColor: NSColor.white,
@@ -191,7 +189,7 @@ class CalibrationView: NSView {
                 let keycapTextSize = (segment.text as NSString).size(withAttributes: keycapTextAttrs)
                 totalWidth += keycapTextSize.width + keycapPaddingH * 2
             } else {
-                totalWidth += (segment.text as NSString).size(withAttributes: textAttrs).width
+                totalWidth += hintTextLayout(segment.text, attributes: textAttrs, rightToLeft: rightToLeft).width
             }
         }
 
@@ -222,39 +220,50 @@ class CalibrationView: NSView {
                     at: NSPoint(x: currentX + keycapPaddingH, y: keycapTextY), withAttributes: keycapTextAttrs)
                 currentX += keycapWidth
             } else {
-                (segment.text as NSString).draw(at: NSPoint(x: currentX, y: centerY), withAttributes: textAttrs)
-                currentX += (segment.text as NSString).size(withAttributes: textAttrs).width
+                let textLayout = hintTextLayout(segment.text, attributes: textAttrs, rightToLeft: rightToLeft)
+                (segment.text as NSString).draw(
+                    at: NSPoint(x: currentX + textLayout.drawOffset, y: centerY), withAttributes: textAttrs)
+                currentX += textLayout.width
             }
         }
+    }
+
+    private func hintTextAttributes(
+        font: NSFont, color: NSColor, rightToLeft: Bool
+    ) -> [NSAttributedString.Key: Any] {
+        var attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color,
+        ]
+        guard rightToLeft else { return attributes }
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.baseWritingDirection = .rightToLeft
+        attributes[.paragraphStyle] = paragraphStyle
+        return attributes
+    }
+
+    /// Width to advance, and how far right of `currentX` to draw.
+    /// An RTL line's logical trailing whitespace is placed left of the Core Text origin, so the draw
+    /// shifts by that width and the gap stays inside the segment, beside the keycap on its left.
+    private func hintTextLayout(
+        _ text: String,
+        attributes: [NSAttributedString.Key: Any],
+        rightToLeft: Bool
+    ) -> (width: CGFloat, drawOffset: CGFloat) {
+        guard rightToLeft else {
+            return ((text as NSString).size(withAttributes: attributes).width, 0)
+        }
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+        let drawOffset = CGFloat(CTLineGetTrailingWhitespaceWidth(line))
+        let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+        return (width, drawOffset)
     }
 
     private func keycapSegments(for text: String) -> [(text: String, isKeycap: Bool)] {
         if let cached = keycapSegmentCache[text] {
             return cached
         }
-
-        var segments: [(text: String, isKeycap: Bool)] = []
-        var remaining = text
-        while let openBrace = remaining.range(of: "{") {
-            let prefix = String(remaining[..<openBrace.lowerBound])
-            if !prefix.isEmpty {
-                segments.append((prefix, false))
-            }
-            remaining = String(remaining[openBrace.upperBound...])
-            if let closeBrace = remaining.range(of: "}") {
-                let keycap = String(remaining[..<closeBrace.lowerBound])
-                segments.append((keycap, true))
-                remaining = String(remaining[closeBrace.upperBound...])
-            } else {
-                segments.append(("{\(remaining)", false))
-                remaining = ""
-                break
-            }
-        }
-        if !remaining.isEmpty {
-            segments.append((remaining, false))
-        }
-
+        let segments = KeycapHintLayout.visualSegments(in: text)
         keycapSegmentCache[text] = segments
         return segments
     }
