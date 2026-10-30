@@ -8,7 +8,7 @@ extension SettingsView {
     var preferredSource: TrackingSource { model.tracking.preferredSource }
     var activeSource: TrackingSource { model.tracking.activeSource }
     var isTrackingActive: Bool { model.tracking.appState.isActive }
-    var cameraCalibrated: Bool { model.tracking.cameraCalibration?.isValid ?? false }
+    var cameraCalibrated: Bool { model.tracking.isCalibrated(.camera) }
     var airPodsCalibrated: Bool { model.tracking.airPodsCalibration?.isValid ?? false }
     var desks: [Desk] { model.desks }
     var activeDeskID: String { model.activeDeskID }
