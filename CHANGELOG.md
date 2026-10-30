@@ -5,6 +5,17 @@ All notable changes to Dorso will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] - 2026-10-30
+
+### Added
+- Persian (Farsi) translation, including the permission prompts
+
+### Fixed
+- Keyboard hints on the calibration screens now read correctly in right-to-left languages, with each label next to the right key
+
+### Acknowledgments
+- Thanks to [@aliafshany](https://github.com/aliafshany) for the Persian translation ([#111](https://github.com/tldev/dorso/pull/111)) and the right-to-left hint fix ([#112](https://github.com/tldev/dorso/pull/112))
+
 ## [1.16.1] - 2026-10-22
 
 ### Fixed

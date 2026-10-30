@@ -244,3 +244,4 @@ Want this on Linux? See [postured](https://github.com/vadi2/postured) or [dorso-
 - [@MitchTalmadge](https://github.com/MitchTalmadge) - Pause on battery feature suggestion
 - [@ArnaudDerosin](https://github.com/ArnaudDerosin) - Fix for calibration starting before the camera is ready
 - [@LucaL1fe](https://github.com/LucaL1fe) - Desks and timed pause feature suggestions
+- [@aliafshany](https://github.com/aliafshany) - Persian translation and right-to-left keycap hints
