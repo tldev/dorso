@@ -1,0 +1,5 @@
+/* Info.plist localized strings */
+
+"NSCameraUsageDescription" = "برنامهٔ Dorso برای پایش وضعیت بدن و تار کردن صفحه هنگام قوز کردن، به دسترسی به دوربین نیاز دارد.";
+"NSMotionUsageDescription" = "برنامهٔ Dorso برای پایش وضعیت بدن با استفاده از AirPods، به دسترسی به داده‌های حرکتی نیاز دارد.";
+"NSBluetoothAlwaysUsageDescription" = "برنامهٔ Dorso از بلوتوث برای شناسایی AirPods جفت‌شده جهت ردیابی حرکت سر استفاده می‌کند.";
